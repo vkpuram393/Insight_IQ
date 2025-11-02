@@ -1,0 +1,24 @@
+# Python 3.11.9
+
+fastapi==0.115.0
+uvicorn[standard]==0.24.0
+
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+langgraph==0.2.45
+langchain==0.3.7
+langchain-core==0.3.18
+langchain-openai==0.2.8
+
+# Telemetry
+langfuse==1.14.0
+
+# HTTP / Utilities (downgraded httpx to satisfy langfuse)
+httpx==0.25.2
+aiofiles==23.2.1
+python-dotenv==1.0.0
+orjson==3.10.12
+
+redis==5.0.4
+pymongo==4.8.0
