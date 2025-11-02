@@ -41,30 +41,61 @@ Check the exact list in `requirements.txt` for drift.
 ---
 ## 3. Clone & Install
 ```bash
-# Clone (using HTTPS – adjust if SSH internally)
+# macOS / Linux
 git clone https://github.com/cvs-health-source-code/PBM-AI-Assist.git
 cd PBM-AI-Assist
-
-# Python version check (must be 3.11)
 python -V  # Expect Python 3.11.x
-
-# Create virtual environment (macOS/Linux)
 python -m venv .venv
 source .venv/bin/activate
-
-# Windows (PowerShell)
-# python -m venv .venv
-# .venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
-Optional upgrade:
+```powershell
+# Windows (PowerShell) – recommend PowerShell 7+, or Git Bash for UNIX tools
+git clone https://github.com/cvs-health-source-code/PBM-AI-Assist.git
+cd PBM-AI-Assist
+py -3.11 -V          # Verify Python 3.11
+py -3.11 -m venv .venv
+# Activate in PowerShell
+.\.venv\Scripts\Activate.ps1
+# (If execution policy blocks activation: Run PowerShell as admin)
+#   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+pip install -r requirements.txt
+```
+```cmd
+REM Windows (CMD classic shell)
+git clone https://github.com/cvs-health-source-code/PBM-AI-Assist.git
+cd PBM-AI-Assist
+py -3.11 -m venv .venv
+\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+Optional upgrade (any platform):
 ```bash
 pip install --upgrade pip
 ```
+> Windows tip: If you lack `curl` and `jq`, install Git Bash or use PowerShell `Invoke-RestMethod` (examples below).
 
-> If corporate SSL intercept causes pip issues, configure internal certs or use an internal artifactory mirror.
+### 3.1 Windows-Specific Notes
+| Topic | Windows Guidance |
+|-------|------------------|
+| Python Install | Use official 3.11 installer. Check "Add Python to PATH". Disable "PATH length limit" if prompted. |
+| Virtual Env Activation | PowerShell requires `RemoteSigned` policy; CMD uses `\.venv\Scripts\activate`. |
+| Line Endings | Git should auto-handle CRLF; keep `core.autocrlf=true`. |
+| Performance | Long paths may need enabling (`git config core.longpaths true`). |
+| WSL Option | For closer parity with Linux tools (make, bash, etc.), you can develop inside WSL and still use PyCharm Remote Interpreter. |
+| SSL / Corporate Proxy | Configure `pip.ini` at `%APPDATA%\pip\pip.ini` with proxy/cert if needed. |
+
+Sample PowerShell request (no jq):
+```powershell
+$body = @{ text = 'why was my claim rejected'; session_id = 'ps-1' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/api/v1/chat' -ContentType 'application/json' -Body $body
+```
+Sample Git Bash request (has curl/jq):
+```bash
+curl -s -X POST http://localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"why was my claim rejected","session_id":"bash-1"}' | jq
+```
 
 ---
 ## 4. Configuration
@@ -85,28 +116,28 @@ Those are presently ignored when mocks are active.
 ---
 ## 5. Run the Server
 ```bash
-# Simple run
+# macOS / Linux
 python main.py
-
-# Or explicit uvicorn entry (no reload preferred while debugging threads/checkpoints)
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-# (If you see thread reuse / checkpoint errors, retry without --reload)
 ```
-Health check:
+```powershell
+# Windows PowerShell
+py -3.11 main.py
+# or
+python main.py
+```
+If you want uvicorn directly:
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+On Windows CMD/PowerShell this is the same; just ensure the virtual env is activated.
+
+Health check (cross‑platform):
 ```bash
 curl -s http://localhost:8000/health
 ```
-Initial chat request:
-```bash
-curl -s -X POST http://localhost:8000/api/v1/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"why was my claim rejected","session_id":"demo-1"}' | jq
-```
-Follow‑up (with claim number):
-```bash
-curl -s -X POST http://localhost:8000/api/v1/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"Claim 987654 was rejected. Why?","session_id":"demo-1"}' | jq
+PowerShell alternative:
+```powershell
+Invoke-RestMethod http://localhost:8000/health
 ```
 
 ---
@@ -161,33 +192,23 @@ To tune:
 
 ---
 ## 10. Debugging in PyCharm (Step‑Through Guide)
-1. Open project folder.
-2. Set interpreter: Preferences → Project → Python Interpreter → select `.venv`.
-3. (Optional) Set breakpoint BEFORE starting debug – recommended list:
-   - `api/routes.py` inside `chat`
-   - `langgraph_agent.py` at `run_graph` call
-   - Each node start & return (`nodes/*`) for first pass
-   - Agents before LLM call and before return
-4. Create a Run/Debug config:
-   - Script path: `python`
-   - Parameters: `main.py`
-   - Working dir: project root
-5. Disable “Reload” while chasing async/thread issues.
-6. Enable async debugging: Settings → Build, Execution, Deployment → Python Debugger → check “Asyncio”.
-7. Use Watches for `state` as it evolves.
-8. Step pattern:
-   - First request without claim number → watch router choose clarification path
-   - Second request with claim number → watch tool + response agent path
-9. Conditional breakpoint example: in router, trigger only when `state['intent'] == 'claim_rejection_reason'`.
-10. Inspect final state keys logged by `api/routes.py` for missing or unexpected fields.
+1. **Interpreter**:
+   - macOS/Linux: Select `./.venv/bin/python`
+   - Windows: Select `./.venv/Scripts/python.exe`
+2. **Environment Variables**: On Windows, set in Run Configuration → Environment (instead of shell export).
+3. **Line Breakpoints**: Same UI; watch for path separators in evaluated expressions.
+4. **Async Debugging**: Enable "Asyncio" in Preferences (Windows: `File > Settings`).
+5. **Port Conflicts**: Windows sometimes leaves a process bound after debug stop; use Task Manager or `Get-Process -Id <PID> | Stop-Process`. On UNIX: `lsof -ti :8000 | xargs kill`.
+6. **Reload Issues**: If `--reload` causes thread errors on Windows, disable and rely on manual restarts.
+7. **Curl vs PowerShell**: If `curl` is missing, use `Invoke-RestMethod` to test endpoints.
+8. **Path Separators**: Code uses forward slashes but Python handles them; no change needed unless doing manual file ops.
+9. **Clipboard JSON**: PowerShell may escape quotes; prefer single quotes around JSON and escape inner quotes.
+10. **Watch Variables**: Add `state`, `intent`, `entities` in debug panel; evaluating dict keys identical across platforms.
 
-Common gotchas we already hit & fixed:
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| KeyError '"intent"' | Unescaped braces in prompt | Escaped JSON braces / replaced formatting |
-| `threads can only be started once` | Improper re‑entry into async checkpointer | Single persistent async saver + no rapid reload |
-| 500 “Expected node … update” | Node returned empty dict | Ensure each node returns at least one changed key |
-| Logger `session_id` arg error | Signature mismatch | Removed kw usage / optionally add adapter later |
+Conditional breakpoint example (cross‑platform): set at the first line inside `confidence_check_router` (file: `nodes/confidence.py`) with condition:
+```
+state.get('intent') == 'claim_rejection_reason' and not state.get('entities', {}).get('claim_number')
+```
 
 ---
 ## 11. Replacing Mocks with Real Code
@@ -225,24 +246,28 @@ git push origin feature/real-llm-integration
 
 ---
 ## 14. API Examples (Postman / curl)
-Initial clarification path:
-```
-POST /api/v1/chat
+**Postman (Windows & macOS)**:
+1. New Request → POST `http://localhost:8000/api/v1/chat`
+2. Headers: `Content-Type: application/json`
+3. Body (raw JSON):
+```json
 {
   "text": "why was my claim rejected",
-  "session_id": "session-123"
+  "session_id": "postman-1"
 }
-→ Response includes: needs_clarification=true, clarifying_question
 ```
-Follow‑up with entity:
-```
-POST /api/v1/chat
+4. Send → Expect `needs_clarification: true`
+5. Follow-up body:
+```json
 {
   "text": "Claim 987654 was rejected. Why?",
-  "session_id": "session-123"
+  "session_id": "postman-1"
 }
-→ Response includes: needs_clarification=false, response (tool-based)
 ```
+
+*Tip:* Use Postman "Examples" or "Collections" to share typical flows with teammates.
+
+Existing bash examples remain valid on macOS/Linux; substitute PowerShell commands where needed for Windows.
 
 ---
 ## 15. Observability & Logging (Starter)
@@ -264,6 +289,14 @@ Before production: Engage security review, threat modeling, privacy compliance.
 
 ---
 ## 17. Troubleshooting Cheat Sheet
+Extra Windows entries:
+| Issue | Windows Quick Fix |
+|-------|--------------------|
+| Activation script blocked | Run PowerShell as admin: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| Port appears busy after stop | `Get-NetTCPConnection -LocalPort 8000` then kill owning process |
+| Missing curl/jq | Install Git for Windows or use PowerShell alternatives |
+| Unicode log chars garbled | Switch to newer Windows Terminal or enable UTF-8 (`chcp 65001`) |
+
 | Issue | Quick Action |
 |-------|--------------|
 | 404 Not Found | Confirm router prefix `/api/v1` + POST method |
@@ -320,17 +353,22 @@ Proceed thoughtfully – and have fun exploring LangGraph.
 
 ---
 ## 22. Quick Copy/Paste Command Bundle
+macOS / Linux:
 ```bash
-# Launch
 python main.py
-
-# Clarification example
 curl -s -X POST http://localhost:8000/api/v1/chat -H 'Content-Type: application/json' \
   -d '{"text":"why was my claim rejected","session_id":"demo"}' | jq
-
-# Follow-up with claim number
-curl -s -X POST http://localhost:8000/api/v1/chat -H 'Content-Type: application/json' \
-  -d '{"text":"Claim 987654 was rejected. Why?","session_id":"demo"}' | jq
+```
+Windows (PowerShell):
+```powershell
+py -3.11 main.py
+$body = @{ text = 'why was my claim rejected'; session_id = 'demo' } | ConvertTo-Json
+Invoke-RestMethod -Uri 'http://localhost:8000/api/v1/chat' -Method Post -ContentType 'application/json' -Body $body
+```
+Follow-up (PowerShell):
+```powershell
+$body = @{ text = 'Claim 987654 was rejected. Why?'; session_id = 'demo' } | ConvertTo-Json
+Invoke-RestMethod -Uri 'http://localhost:8000/api/v1/chat' -Method Post -ContentType 'application/json' -Body $body
 ```
 
 ---
