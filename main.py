@@ -1,16 +1,34 @@
-"""
-LangGraph Multi-Agent Framework
-
-📍 BREAKPOINT: Line 56 - Start debugging
-"""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import sys
+import os
+import asyncio
 
-from api.routes import router as api_router
-from core.config import settings
-from langgraph_agent import init_graph, close_graph
+# BOOT diagnostics -----------------------------------------------------------
+print("[BOOT] __name__ =", __name__)        # Breakpoint candidate
+print("[BOOT] __file__ =", __file__)
+print("[BOOT] executable =", sys.executable)
+print("[BOOT] python version =", sys.version)
+
+# Optional: verify expected env vars
+print("[BOOT] ENVIRONMENT =", os.environ.get("ENVIRONMENT"))
+print("[BOOT] USE_REDIS_MEMORY =", os.environ.get("USE_REDIS_MEMORY"))
+
+def FORCE_BREAKPOINT(): val = 42 # set breakpoint here FORCE_BREAKPOINT()
+
+# Import application components ---------------------------------------------
+try:
+    from api.routes import router as api_router
+    from core.config import settings
+    from langgraph_agent import init_graph, close_graph
+    print("[BOOT] Imports succeeded")
+except Exception as e:
+    import traceback
+    print("[BOOT] IMPORT FAILURE:", e)
+    traceback.print_exc()
+    # Re-raise to fail fast (better than silent)
+    raise
 
 app = FastAPI(
     title="PBM LangGraph Framework",
@@ -29,16 +47,33 @@ app.add_middleware(
 # Startup / Shutdown hooks --------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
-    await init_graph()
+    print("[STARTUP] init_graph begin")      # Breakpoint candidate
+    try:
+        await init_graph()
+        print("[STARTUP] init_graph done")
+    except Exception as e:
+        import traceback
+        print("[STARTUP] init_graph ERROR:", e)
+        traceback.print_exc()
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    await close_graph()
+    print("[SHUTDOWN] close_graph begin")
+    try:
+        await close_graph()
+        print("[SHUTDOWN] close_graph done")
+    except Exception as e:
+        import traceback
+        print("[SHUTDOWN] close_graph ERROR:", e)
+        traceback.print_exc()
 
+# Routes --------------------------------------------------------------------
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
+    # Breakpoint candidate
     return {
         "message": "PBM LangGraph Framework",
         "version": "2.0.0",
@@ -49,14 +84,21 @@ async def root():
 
 @app.get("/health")
 async def health():
+    # Breakpoint candidate
+    x=1
     return {"status": "healthy"}
 
+# Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
     print("🚀 LangGraph Multi-Agent Framework")
     print(f"🤖 Agents: 2 (Intent, Response)")
     print(f"🔧 Nodes: 9 functions")
     print(f"💾 Checkpointing: SQLite")
     print(f"🎯 Mode: {'Mock' if settings.use_mock_llm else 'Real'} LLM")
+    print("[BOOT] about to call uvicorn.run")
 
-    # Run without reload to keep async saver stable while debugging
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    # Run WITHOUT reload for reliable breakpoints
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, log_level="debug")
+
+    # This line executes only when server stops
+    print("[BOOT] uvicorn.run returned (server stopped)")

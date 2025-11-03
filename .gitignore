@@ -1,17 +1,65 @@
+# IDE directories
+.idea/
+.vscode/
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*.so
+*$py.class
+
+# Distribution / packaging
+.build/
+build/
+dist/
 *.egg-info/
-venv/
-.venv/
-.env
-*.log
-.DS_Store
-checkpoints.db
-checkpoints.db-shm
-checkpoints.db-wal
-.mypy_cache/
-.pytest_cache/
-.coverage
+.eggs/
+
+# Unit test / coverage reports
+.coverage*
 htmlcov/
-**/__pycache__/
+.pytest_cache/
+
+# Logs & temp files
+*.log
+logs/
+/tmp/
+*.swp
+.DS_Store
+
+# Checkpoint / state databases
+checkpoints.db*
+
+# Environment & secrets
+.env
+.env.*
+!env.example
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Cache directories
+.cache/
+
+# MyPy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Ruff / lint caches
+.ruff_cache/
+
+# Profiling data
+.prof
+
+# Generated documentation
+site/
+
+# Coverage XML/Reports
+coverage.xml
+
+# Ignore local tooling state
+copilot-*.json
