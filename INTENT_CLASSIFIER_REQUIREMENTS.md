@@ -2,6 +2,12 @@
 
 This document covers ONLY the Intent Classifier component and its integration points with the CortexIQ system.
 
+## 🆕 Recent Updates
+- **Conversation Continuity**: Added comprehensive multi-turn slot filling logic with edge cases and testing requirements
+- **Keyword Weight Tuning**: Added best practices for avoiding score dilution and false positives
+- **Intent Change Detection**: Implemented smart logic to prevent infinite loops when users change topics mid-conversation
+- **Greeting Bypass**: Added special handling for "hi where is my claim" queries (conversation starters)
+
 ---
 
 ## State
@@ -13,7 +19,18 @@ This document covers ONLY the Intent Classifier component and its integration po
 - [ ] Implement whole-word matching using regex word boundaries to avoid substring false positives (e.g., "claim" should not match "exclaim")
 - [ ] Normalize confidence scores by number of MATCHED keywords, not total words in query: `score = sum(keyword_weights) / len(matched_keywords)`
 - [ ] Strip punctuation from queries before matching: `query_cleaned = re.sub(r'[^\w\s]', ' ', query_lower)`
-- [ ] Return top intent with confidence score ≥ 0.6 for direct routing; if < 0.6, route to LLM double-check
+- [ ] Return top intent with confidence score ≥ 0.50 for direct routing; if < 0.50, route to out_of_scope
+
+### Keyword Weight Tuning Best Practices
+- [ ] **Remove overly generic keywords** that appear in many intents: 'is' (0.2), 'my' (0.3), 'claim' (in rejection_reasons), 'why' (0.3)
+  - Problem: Generic keywords with low weights DILUTE the average score when matched alongside strong keywords
+  - Example: `rejection_reasons` matched 'rejected' (1.0) + 'why' (0.3) = 0.65 avg, loses to `claim_status` with 'claim' (0.8) = 0.80 avg
+- [ ] **Use domain-specific keywords** with high weights: 'rejected' (1.0), 'denied' (0.9), 'status' (0.9), 'drug' (0.9)
+- [ ] **Boost location/action keywords** when they're primary indicators: 'where' (0.7), 'track' (0.6), 'check' (0.6)
+- [ ] **Avoid keyword overlap** between similar intents: Don't put 'claim' in both `claim_status` AND `rejection_reasons`
+  - Instead: Use specific differentiators like 'rejected', 'denied' for rejection_reasons; 'status', 'where', 'track' for claim_status
+- [ ] **Test for false positives** after adding new keywords: Run test queries to ensure new keywords don't hijack unrelated intents
+- [ ] **Monitor confidence scores**: If scores cluster around threshold (0.45-0.55), adjust keyword weights to create clearer separation
 
 ## Entity Extraction
 - [ ] Implement regex-based entity extractor in `backend/services/entity_extractor.py`
@@ -94,11 +111,13 @@ This document covers ONLY the Intent Classifier component and its integration po
 - [ ] Track confidence calibration: log (predicted_confidence, actual_correctness) for evaluation
 - [ ] If ambiguous intent detected (top 2 intents have similar scores, diff < 0.1), ask clarifying question: "Did you mean to check claim status or rejection reasons?"
 
-## Error Handling
-- [ ] Implement fallback strategy: keyword matching fails → LLM classification → default to 'general_question'
-- [ ] Define IntentClassificationError exception for intent classifier specific errors
-- [ ] Log classification errors with correlation_id
-
-
-
+## Conversation Continuity & Multi-Turn Slot Filling
+- [ ] Implement session state persistence in `backend/graph/state.py::ChatbotState` with `waiting_for_slot` and `pending_intent` fields
+- [ ] When asking user for missing slot, save continuation state: `waiting_for_slot = 'claim_id'`, `pending_intent = 'claim_status'`
+- [ ] In next turn, check if continuation state exists in `backend/graph/nodes.py::enhanced_intent_classifier_node`
+- [ ] If `waiting_for_slot` is set → skip intent classification, restore `pending_intent`, extract entities from current query
+- [ ] **CRITICAL**: Detect intent change to prevent infinite loops: if user's new query has strong different intent (confidence ≥ 0.70), clear continuation and honor new intent
+- [ ] Clear continuation flags (`waiting_for_slot`, `pending_intent`) when: (1) API call succeeds, (2) user changes intent, or (3) RAG path is taken
+- [ ] Persist continuation state in `session.metadata` in `backend/api/main.py` to survive page refreshes
+- [ ] Pass `waiting_for_slot` and `pending_intent` between `main.py` → `chatbot_graph.py` → `nodes.py` for proper restoration
 
