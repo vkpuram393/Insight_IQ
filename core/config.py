@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     # LLM
     openai_api_key: str = "mock"
     use_mock_llm: bool = True
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.7
+    top_p: float = 0.95
+    max_output_tokens: int = 2048
+    project_id: str = "pbm-poc-coderev-genai-poc"
+    location: str = "us-central1"
 
     # LangSmith (optional)
     langsmith_api_key: str | None = None  # Added to avoid ValidationError when env var is present
