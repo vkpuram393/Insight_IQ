@@ -1,15 +1,3 @@
-# Intent Classifier Implementation Checklist
-
-This document covers ONLY the Intent Classifier component and its integration points with the CortexIQ system.
-
-## 🆕 Recent Updates
-- **Conversation Continuity**: Added comprehensive multi-turn slot filling logic with edge cases and testing requirements
-- **Keyword Weight Tuning**: Added best practices for avoiding score dilution and false positives
-- **Intent Change Detection**: Implemented smart logic to prevent infinite loops when users change topics mid-conversation
-- **Greeting Bypass**: Added special handling for "hi where is my claim" queries (conversation starters)
-
----
-
 ## State
 - [ ] Define Pydantic models for intent classifier outputs (IntentResult, EntityResult, SlotValidation, SuggestedLink)
 
