@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     # LangSmith (optional)
     langsmith_api_key: str | None = None  # Added to avoid ValidationError when env var is present
 
+    # Langfuse (optional)
+    langfuse_secret_key: str | None = None
+    langfuse_public_key: str | None = None
+    langfuse_host: str | None = None
+
+    # SSL Certificates (for CVS proxy/Zscaler)
+    ssl_cert_file: str | None = None
+    requests_ca_bundle: str | None = None
+
     # Agent
     confidence_threshold: float = 0.7
 
@@ -30,6 +39,16 @@ class Settings(BaseSettings):
 
     # Cache
     enable_semantic_cache: bool = True
+
+    # Memory Store (cache and session memory)
+    memory_store_type: str = "inmemory"  # Options: "inmemory", "redis", "memorystore"
+    memory_store_host: str | None = None
+    memory_store_port: int = 6379
+
+    # Persistence Store (telemetry and analytics)
+    persistence_store_type: str = "sqlite"  # Options: "sqlite", "firestore", "bigquery"
+    telemetry_db_path: str = "data/telemetry.db"
+    enable_telemetry: bool = True
 
     # Checkpoint
     checkpoint_db_path: str = "checkpoints.db"

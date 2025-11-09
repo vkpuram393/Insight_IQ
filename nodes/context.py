@@ -4,13 +4,14 @@ Context Building Node - Gather conversation background
 
 from typing import Dict, Any
 from state.schema import AgentState
+from core.config import settings
 from core.logger import get_logger
+from memory import MemoryStoreFactory
 
 logger = get_logger(__name__)
 
-# Simple in-memory storage (production: database)
-_short_term = {}
-_long_term = {}
+# Get memory store instance (facade pattern)
+_memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
 
 async def build_context_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -28,11 +29,11 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
 
     session_id = state["session_id"]
 
-    # Get conversation history
-    history = _short_term.get(session_id, [])
+    # Get conversation history from memory store
+    history = await _memory_store.get_session_history(session_id)
 
-    # Get relevant facts
-    facts = _long_term.get(session_id, [])
+    # Get relevant facts from memory store
+    facts = await _memory_store.get_session_facts(session_id)
 
     logger.debug(f"Context: {len(history)} messages, {len(facts)} facts")
 
@@ -52,34 +53,33 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
 
     session_id = state["session_id"]
 
-    # Update short-term memory
-    if session_id not in _short_term:
-        _short_term[session_id] = []
+    # Append user message to memory store
+    await _memory_store.append_to_session(
+        session_id=session_id,
+        role="user",
+        content=state["text"],
+        max_messages=10
+    )
 
-    # Append latest user and assistant turns
-    _short_term[session_id].append({
-        "role": "user",
-        "content": state["text"]
-    })
-    _short_term[session_id].append({
-        "role": "assistant",
-        "content": state.get("response", "")
-    })
-
-    # Keep only recent 10 messages
-    _short_term[session_id] = _short_term[session_id][-10:]
+    # Append assistant response to memory store
+    await _memory_store.append_to_session(
+        session_id=session_id,
+        role="assistant",
+        content=state.get("response", ""),
+        max_messages=10
+    )
 
     # Update long-term memory (extract important facts)
     if "claim" in state["text"].lower():
-        if session_id not in _long_term:
-            _long_term[session_id] = []
-        _long_term[session_id].append({
-            "type": "claim_mention",
-            "text": state["text"]
-        })
+        await _memory_store.add_session_fact(
+            session_id=session_id,
+            fact_type="claim_mention",
+            data={"text": state["text"]}
+        )
 
-    updated_history = _short_term[session_id]
-    updated_facts = _long_term.get(session_id, [])
+    # Get updated context
+    updated_history = await _memory_store.get_session_history(session_id)
+    updated_facts = await _memory_store.get_session_facts(session_id)
 
     logger.info("✅ Memory updated")
     return {

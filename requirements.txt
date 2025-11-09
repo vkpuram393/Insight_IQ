@@ -7,7 +7,11 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 
 langgraph==0.2.45
+langgraph-checkpoint-sqlite<3.0.0
 langchain==0.3.7
+
+# Async SQLite for telemetry
+aiosqlite==0.21.0
 langchain-core==0.3.18
 langchain-openai==0.2.8
 

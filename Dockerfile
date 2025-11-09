@@ -4,9 +4,13 @@ FROM langchain/langgraph-api:3.11
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# Optional: corporate root CA (uncomment and provide file)
-# COPY corp-root-ca.pem /usr/local/share/ca-certificates/corp-root-ca.crt
-# RUN update-ca-certificates
+# CVS Health Root CA certificate for Zscaler proxy
+COPY certs/CVSHealthRoot.cer /usr/local/share/ca-certificates/CVSHealthRoot.crt
+RUN update-ca-certificates
+
+# Set environment variables for Python SSL certificate handling
+ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
+ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
 
 WORKDIR /api
 

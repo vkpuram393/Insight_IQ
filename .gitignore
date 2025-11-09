@@ -37,7 +37,15 @@ checkpoints.db*
 # Environment & secrets
 .env
 .env.*
-!env.example
+!.env.example
+
+# Certificates (should never be committed)
+certs/
+*.cer
+*.crt
+*.pem
+*.p12
+*.pfx
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/

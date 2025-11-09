@@ -71,6 +71,14 @@ async def shutdown_event():
 # Routes --------------------------------------------------------------------
 app.include_router(api_router, prefix="/api/v1")
 
+# Test/Utils endpoints for individual component testing
+try:
+    from utils.test_endpoints import router as utils_router
+    app.include_router(utils_router)
+    print("[BOOT] Utils test endpoints loaded")
+except Exception as e:
+    print(f"[BOOT] Could not load utils endpoints: {e}")
+
 @app.get("/")
 async def root():
     # Breakpoint candidate

@@ -3,15 +3,17 @@ Cache Nodes - Speed up repeated questions
 """
 
 import hashlib
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
+from memory import MemoryStoreFactory
 
 logger = get_logger(__name__)
 
-# Simple in-memory cache (in production: Redis)
-_cache: Dict[str, Dict[str, Any]] = {}
+# Get memory store instance (facade pattern)
+_memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
 
 def _hash(text: str) -> str:
     """Create hash of text for caching"""
@@ -35,10 +37,13 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
     if not settings.enable_semantic_cache:
         return {"cache_hit": False}
 
-    key = _hash(state["text"])
+    key = f"cache:{_hash(state['text'])}"
 
-    if key in _cache:
-        cached = _cache[key]
+    # Use memory store facade
+    cached_value = await _memory_store.get(key)
+
+    if cached_value:
+        cached = json.loads(cached_value) if isinstance(cached_value, str) else cached_value
         logger.info("🎯 Cache HIT!")
         return {
             "response": cached["response"],
@@ -57,12 +62,15 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
     logger.info("💾 Node: Cache Response")
 
     if settings.enable_semantic_cache:
-        key = _hash(state["text"])
-        _cache[key] = {
+        key = f"cache:{_hash(state['text'])}"
+        cache_data = {
             "response": state.get("response", ""),
             "intent": state.get("intent"),
             "confidence": state.get("confidence")
         }
+
+        # Store in memory store with 1 hour TTL
+        await _memory_store.set(key, json.dumps(cache_data), ttl_seconds=3600)
         logger.info("✅ Response cached")
 
     # Always return metadata to register a change

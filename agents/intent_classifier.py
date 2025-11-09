@@ -317,3 +317,22 @@ def get_intent_classifier() -> IntentClassifier:
         _intent_classifier = IntentClassifier()
     return _intent_classifier
 
+
+# Async wrapper for utils test endpoints
+async def classify_intent(text: str, user_info: Dict) -> Dict[str, Any]:
+    """
+    Async wrapper for intent classification
+    Used by test endpoints and other async code
+    """
+    classifier = get_intent_classifier()
+    result = classifier.classify(text)
+
+    return {
+        "intent": result.get("intent", "unknown"),
+        "confidence": result.get("confidence", 0.0),
+        "reasoning": f"Classified as {result.get('intent')} with confidence {result.get('confidence', 0.0):.2f}",
+        "all_scores": result.get("all_scores", {}),
+        "needs_clarification": result.get("needs_clarification", False)
+    }
+
+
