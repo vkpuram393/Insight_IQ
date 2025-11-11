@@ -24,8 +24,7 @@ import uuid
 from datetime import datetime
 
 from agents.intent_classifier import classify_intent
-from agents.intent_agent import intent_agent_node
-from agents.response_agent import response_agent_node
+from agents import intent_agent_node, response_agent_node  # Use configured classifier based on settings
 from nodes.safety import safety_precheck_node, safety_postcheck_node
 from nodes.confidence import confidence_check_router
 from nodes.clarification import clarification_node
@@ -135,6 +134,10 @@ async def test_intent_agent(request: IntentTestRequest):
             "intent": result.get("intent"),
             "confidence": result.get("confidence"),
             "entities": result.get("entities"),
+            # NEW: Show API routing from config
+            "api_endpoint": result.get("api_endpoint"),
+            "required_entities_list": result.get("required_entities_list"),
+            "requires_llm": result.get("requires_llm"),
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
