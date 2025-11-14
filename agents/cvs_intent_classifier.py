@@ -43,12 +43,15 @@ class CVSIntentClassifier:
         """
         return {
             # ========== GENERAL CLAIM STATUS (maps to: status, statusDescription) ==========
+            # SMART SUMMARY: Moderate weight catches general "claim summary" only
             'claim_status': {
                 'status': 0.9, 'claim': 0.8, 'claims': 0.8, 'check': 0.6,
-                'what': 0.3,  # Removed 'is', 'my' - too generic, dilute score
+                # 'what' removed - too generic, dilutes score
                 'where': 0.7, 'track': 0.6, 'tracking': 0.6,  # 'where' boosted
                 'find': 0.5, 'look': 0.4, 'up': 0.3,
-                'show': 0.7
+                'show': 0.7, 'number': 0.6,  # Added for "claim number"
+                'summary': 0.5, 'summarize': 0.5,  # MODERATE weight - won't override specific summaries
+                'generate': 0.3  # Helper keyword
             },
             
             # ========== REJECTION DETAILS (maps to: statusDetails.rejectDetails[]) ==========
@@ -59,30 +62,33 @@ class CVSIntentClassifier:
                 'reason': 0.9, 'reasons': 0.9,
                 'refused': 0.8, 'decline': 0.7, 'declined': 0.7,
                 # 'claim' removed - too generic, causes false positives for "where is my claim"
-                'not': 0.4, 'approved': 0.4
+                'not': 0.4, 'approved': 0.4,
+                'summary': 0.3, 'summarize': 0.3,  # LOW weight - "reject" keywords dominate
+                'fail': 0.9, 'failed': 0.9, 'edits': 0.8  # UC11: "What edits did the claim fail?"
             },
             
             # ========== DRUG/MEDICATION INFO (maps to: drug{}, submitted{}) ==========
             'drug_info': {
                 'drug': 0.9, 'medication': 0.9, 'medicine': 0.8,
                 'prescription': 0.7, 'pill': 0.7, 'tablet': 0.7,
-                'what': 0.2, 'which': 0.2, 'name': 0.3,
+                'name': 0.3,
                 'taking': 0.5, 'prescribed': 0.3, 'rx': 0.8,
                 'product': 0.5, 'gpi': 0.8
             },
             
             # ========== PHARMACY INFO (maps to: pharmacy{}) ==========
             'pharmacy_info': {
-                'pharmacy': 1.0, 'pharmacies': 0.9, 'store': 0.7,
-                'where': 0.3, 'filled': 0.8, 'dispensed': 0.8,
+                'pharmacy': 0.9, 'pharmacies': 0.9, 'store': 0.7,  # Lowered "pharmacy" to 0.9
+                'where': 0.3, 'filled': 0.8, 'dispensed': 0.7,  # Lowered "dispensed" to 0.7
                 'location': 0.7, 'address': 0.7, 'cvs': 0.6,
-                'picked': 0.6, 'pick': 0.5, 'got': 0.5
+                'picked': 0.6, 'pick': 0.5, 'got': 0.5,
+                'dispense': 1.0  # UC31: "Where did the member dispense this prescription?" - BOOSTED to 1.0
             },
             
             # ========== PRESCRIBER INFO (maps to: prescriber{}) ==========
             'prescriber_info': {
                 'prescriber': 1.0, 'doctor': 0.9, 'dr': 0.9,
-                'physician': 0.9, 'who': 0.3, 'prescribed': 1.0,
+                'physician': 0.9, 'who': 0.7, 'prescribed': 1.0,
                 'wrote': 0.7, 'ordered': 0.6, 'provider': 0.8,
                 'npi': 0.9, 'prescribing': 0.9
             },
@@ -91,41 +97,53 @@ class CVSIntentClassifier:
             'pricing_info': {
                 'cost': 0.9, 'price': 0.9, 'pricing': 0.9, 'pay': 0.8,
                 'paid': 0.8, 'payment': 0.8, 'amount': 0.7,
-                'much': 0.6, 'how': 0.4, 'money': 0.7,
+                'much': 0.8, 'money': 0.7,  # Boosted to 0.8 for consistency with other money intents
                 'copay': 0.9, 'coinsurance': 0.9, 'deductible': 0.9,
                 'patient': 0.5, 'responsibility': 0.6,
-                'owe': 0.7, 'owed': 0.7, 'charge': 0.7
+                'owe': 0.7, 'owed': 0.7, 'charge': 0.7,
+                'summary': 0.5, 'summarize': 0.5,  # BOOSTED - "pricing summary" wins over general summary
+                'generate': 0.3,  # Helper keyword
+                'schedule': 0.9, 'schedules': 0.9,  # UC20: "Explain the pricing schedule"
+                'manufacturer': 0.9, 'discount': 0.9,  # UC22: "What was the manufacturer discount?"
+                'modifier': 0.9, 'modifiers': 0.9  # UC25: "What co-pay modifier applied?"
             },
             
             # ========== RX DETAILS (maps to: submitted{rxNumber, fillNumber, quantity, daysSupply}) ==========
             'rx_details': {
-                'rx': 0.9, 'prescription': 0.8, 'number': 0.7,
-                'quantity': 0.9, 'how': 0.3, 'many': 0.6,
+                'rx': 1.0, 'prescription': 0.9, 'number': 0.3,  # Boosted all
+                'quantity': 0.9, 'many': 0.6,
                 'pills': 0.7, 'tablets': 0.7, 'days': 0.7,
                 'supply': 0.8, 'fill': 0.6, 'refill': 0.6,
-                'dispensed': 0.7
+                'dispensed': 0.7, 'rxnumber': 1.0, 'rx#': 1.0  # Added variants
             },
             
             # ========== PRIOR AUTHORIZATION (maps to: priorAuthorization{}) ==========
             'prior_auth_info': {
-                'prior': 0.9, 'authorization': 1.0, 'pa': 0.9,
+                'prior': 0.9, 'authorization': 1.0, 'pa': 1.0,  # Boosted PA to ensure dominance
                 'auth': 0.8, 'approval': 0.7, 'required': 0.6,
                 'need': 0.5, 'needed': 0.5, 'preauth': 0.9,
-                'precertification': 0.8
+                'precertification': 0.8,
+                'summary': 0.6, 'summarize': 0.6,  # BOOSTED - "PA summary" wins
+                'smart': 0.8, 'member': 0.5,  # LOWERED to 0.5 - only wins when combined with "PA" or "smart"
+                'generate': 0.4  # Helper keyword
             },
             
             # ========== PATIENT/BENEFICIARY INFO (maps to: beneficiary{}) ==========
             'beneficiary_info': {
-                'patient': 0.9, 'member': 0.9, 'beneficiary': 1.0,
-                'my': 0.4, 'info': 0.6, 'information': 0.6,
-                'details': 0.5, 'who': 0.4, 'name': 0.5,
-                'id': 0.7, 'cardholder': 0.8
+                'patient': 0.9, 'member': 0.3, 'beneficiary': 1.0,  # LOWERED "member" to 0.3 - only wins with other beneficiary keywords
+                'my': 0.4, 'info': 0.7, 'information': 0.8,  # Boosted info-related keywords
+                'details': 0.6, 'who': 0.7, 'name': 0.5,
+                'id': 0.7, 'cardholder': 0.8, 'profile': 0.7,
+                'accumulation': 0.9, 'benefit': 0.8, 'phase': 0.9,  # UC18: "Which accumulation benefit phase is member in?"
+                'coverage': 0.9, 'type': 0.5,  # UC28: "What type of coverage does member have?"
+                'medical': 0.7, 'dollars': 0.6,  # UC33: "Does member accumulation consider medical dollars?"
+                'fml': 0.9, 'loe': 0.9, 'loes': 0.9, 'linked': 0.7  # UC34: "Was FML used? What are the linked member LOEs?"
             },
             
             # ========== FILL DATE (maps to: submitted.dateOfFill, submitted.date) ==========
             'fill_date_info': {
                 'when': 0.8, 'date': 0.9, 'filled': 0.9,
-                'dispensed': 0.8, 'got': 0.6, 'picked': 0.7,
+                'dispensed': 0.7, 'got': 0.6, 'picked': 0.7,  # Lowered "dispensed" to 0.7
                 'received': 0.7, 'fill': 0.7, 'time': 0.5,
                 'day': 0.5
             },
@@ -134,13 +152,26 @@ class CVSIntentClassifier:
             'approval_info': {
                 'approved': 1.0, 'approval': 0.9, 'accepted': 0.8,
                 'authorize': 0.7, 'covered': 0.7, 'paid': 0.6,
-                'claim': 0.4, 'status': 0.5
+                'claim': 0.4, 'status': 0.5,
+                'summary': 0.3, 'summarize': 0.3,  # LOW weight
+                'tf': 0.9, 'transition': 0.9,  # For "TF summary", "transition fill summary" - BOOSTED to 0.9
+                'fill': 0.6,  # UC23: for "transition fill"
+                'qualify': 1.0, 'qualified': 1.0,  # UC23: "Did claim qualify for transition fill?" - BOOSTED to 1.0
+                'executed': 1.0, 'options': 0.9, 'plan': 0.6,  # UC32: "Which plan options executed?" - BOOSTED
+                'bypass': 1.0, 'by-pass': 1.0,  # UC41: "Why did claim by-pass accumulations?" - BOOSTED to 1.0
+                'accumulations': 0.9, 'configuration': 0.7, 'setup': 0.7, 'set-up': 0.7, 'lead': 0.6,  # UC41: additional keywords
+                'bpg': 0.9, 'adjudication': 0.9,  # UC44: "What BPG was used for adjudication?"
+                'override': 0.9, 'overrides': 0.9, 'applied': 0.6  # For override queries
             },
             
             # ========== SETTLEMENT CODES (maps to: statusDetails.settlementCodes[]) ==========
             'settlement_info': {
                 'settlement': 1.0, 'code': 0.7, 'codes': 0.7,
-                'payment': 0.6, 'processed': 0.7, 'adjudication': 0.9
+                'payment': 0.6, 'processed': 0.7,
+                'much': 0.8, 'insurance': 0.8, 'paid': 0.8, 'pay': 0.8,  # Money-related keywords
+                'amount': 0.7, 'covered': 0.6,
+                'response': 1.0,  # UC8: "What was the response to the pharmacy?" - BOOSTED to 1.0
+                'summary': 0.3, 'summarize': 0.3  # LOW weight - "settlement" keyword dominates
             },
             
             # ========== DATE RANGE QUERIES (requires dateOfFill filtering) ==========
@@ -149,16 +180,20 @@ class CVSIntentClassifier:
                 'january': 0.9, 'february': 0.9, 'march': 0.9,
                 'april': 0.9, 'may': 0.9, 'june': 0.9,
                 'july': 0.9, 'august': 0.9, 'september': 0.9,
-                'last': 0.7, 'month': 0.8, 'year': 0.7,
-                'between': 0.8, 'from': 0.7, 'to': 0.6,
+                # Removed 'last' - too generic, causes false positives with "last week"
+                'month': 0.8, 'year': 0.7, 'months': 0.8, 'years': 0.7,
+                'between': 0.9, 'from': 0.8, 'to': 0.7,  # Boosted date range indicators
                 'during': 0.7, 'in': 0.4, 'claims': 0.6,
-                'period': 0.8, 'range': 0.8
+                'period': 0.8, 'range': 0.9  # Boosted range
             },
             
             # ========== MULTI-CLAIM SUMMARY (for multiple claim IDs) ==========
+            # This should ONLY match for truly multiple claims: "all my claims", "claims CLM1 and CLM2"
+            # NOT for single claim summaries like "pricing summary for CLM123"
             'multi_claim_summary': {
                 'claims': 0.9, 'all': 0.8, 'multiple': 0.9,
-                'summarize': 0.8, 'summary': 0.8, 'list': 0.7,
+                # REMOVED 'summary' and 'summarize' - they should route to specific intents!
+                'list': 0.7,
                 'show': 0.6, 'my': 0.3, 'both': 0.7,
                 'and': 0.4, 'together': 0.6, 'combined': 0.7
             },
@@ -178,59 +213,77 @@ class CVSIntentClassifier:
             'appeal_info': {
                 'appeal': 1.0, 'dispute': 0.9, 'challenge': 0.8,
                 'disagree': 0.8, 'reconsider': 0.9, 'review': 0.7,
-                'overturn': 0.8, 'resubmit': 0.8
+                'overturn': 0.8, 'resubmit': 0.8,
+                'overcome': 1.0, 'done': 0.6  # UC13: "What can be done to overcome the reject?" - BOOSTED to 1.0
             },
             
             # ========== ADDITIONAL CVS-SPECIFIC FIELDS ==========
             
             # COMPOUND MEDICATIONS (maps to: compound)
             'compound_info': {
-                'compound': 1.0, 'compounded': 0.9, 'custom': 0.7,
-                'mixed': 0.7, 'specially': 0.6, 'prepared': 0.6,
-                'formula': 0.7, 'mixture': 0.7, 'medication': 0.3,
-                'is': 0.2, 'this': 0.2
+                'compound': 1.0, 'compounded': 0.9, 'custom': 0.8,
+                'mixed': 0.8, 'specially': 0.7, 'prepared': 0.7,
+                'formula': 0.8, 'mixture': 0.8,
+                # Removed 'medication' - it was causing drug_info to win over compound_info
+                # "compound" alone is a strong enough indicator
+                'customized': 0.7, 'combination': 0.7,
+                'mic': 1.0, 'ingredients': 0.9, 'ingredient': 0.9  # UC42: "Is this claim for MIC? What are the ingredients?"
             },
             
             # MEDICARE PART D (maps to: medD)
             'medicare_part_d': {
                 'medicare': 1.0, 'part': 0.9, 'd': 0.9,
-                'medD': 1.0, 'government': 0.6, 'federal': 0.6,
-                'cms': 0.8, 'partd': 1.0
+                'medD': 1.0, 'medd': 1.0, 'government': 0.6, 'federal': 0.6,
+                'cms': 0.8, 'partd': 1.0,
+                'summary': 0.5, 'summarize': 0.5,  # BOOSTED - "MEDD summary" wins
+                'pde': 0.9,  # For "PDE summary"
+                'lics': 0.7, 'n1': 0.7,  # For "LICS and N1's"
+                'generate': 0.3  # Helper keyword
             },
             
             # DISPENSE AS WRITTEN / DAW (maps to: dispenseAsWritten, dawproductSelectionCode)
             'daw_info': {
-                'brand': 0.9, 'generic': 0.9, 'substitute': 0.8,
-                'daw': 1.0, 'substitution': 0.8, 'dispense': 0.7,
-                'written': 0.6, 'required': 0.5, 'allowed': 0.5
+                'brand': 0.9, 'generic': 0.8, 'substitute': 0.9,  # Boosted substitute
+                'daw': 1.0, 'substitution': 0.9, 'dispense': 0.8,  # Boosted dispense
+                'dispensed': 0.8, 'written': 0.7, 'required': 0.5, 'allowed': 0.8,  # Added dispensed
+                'as': 0.6, 'prescribed': 0.7  # Boosted context keywords
             },
             
             # COORDINATION OF BENEFITS (maps to: cobClaimIndicator, linkedClaims.stcob)
             'cob_info': {
                 'coordination': 1.0, 'benefits': 0.8, 'cob': 1.0,
                 'other': 0.5, 'insurance': 0.7, 'primary': 0.7,
-                'secondary': 0.8, 'multiple': 0.6, 'plans': 0.6
+                'secondary': 0.8, 'multiple': 0.6, 'plans': 0.6,
+                'much': 0.8, 'paid': 0.7, 'covered': 0.6,  # Money-related keywords
+                'member': 0.6,  # Member with multiple insurance
+                'summary': 0.3, 'summarize': 0.3,  # LOW weight - "cob"/"stcob" dominates
+                'stcob': 1.0,  # For "STCOB summary"
+                'coverage': 0.4  # UC28: LOW weight - beneficiary_info should win for "member coverage type"
             },
             
             # PHARMACY NETWORK (maps to: pharmacyNetwork)
             'network_info': {
-                'network': 1.0, 'in': 0.6, 'out': 0.6,
-                'preferred': 0.8, 'participating': 0.8,
-                'tier': 0.7, 'coverage': 0.5
+                'network': 1.0, 'in-network': 1.0, 'out-of-network': 1.0,  # Hyphenated versions
+                'in': 0.9, 'out': 0.9,  # Boosted to 0.9 to compete with "pharmacy"
+                'preferred': 0.9, 'participating': 0.9,
+                'tier': 0.8, 'coverage': 0.4  # UC28: LOW weight - beneficiary_info should win for "member coverage type"
+                # Removed "pharmacy" - it was causing pharmacy_info to win over network_info
             },
             
             # REIMBURSEMENT TYPE (maps to: reimbursementType)
             'reimbursement_info': {
                 'reimbursement': 1.0, 'reimbursed': 0.9, 'paid': 0.6,
                 'payment': 0.7, 'type': 0.5, 'method': 0.6,
-                'how': 0.4, 'processed': 0.5
+                'processed': 0.5,
+                'much': 0.8, 'back': 0.6, 'refund': 0.7, 'return': 0.6  # Money-related keywords
             },
             
             # GOVERNMENT CLAIM TYPE (maps to: governmentClaimType)
             'government_claim_type': {
                 'government': 1.0, 'medicaid': 0.9, 'medicare': 0.6,
                 'federal': 0.8, 'state': 0.7, 'program': 0.7,
-                'type': 0.5
+                'type': 0.8,  # UC45: BOOSTED - only wins when combined with "government"
+                'claim': 0.3  # UC45: LOW weight - don't catch all "claim" queries, only when "government" present
             },
             
             # MAIL ORDER (maps to: mail)
@@ -242,9 +295,10 @@ class CVSIntentClassifier:
             
             # MULTI-SOURCE INDICATOR (maps to: multiSourceInd)
             'generic_availability': {
-                'generic': 0.9, 'available': 0.8, 'alternative': 0.8,
-                'multi-source': 1.0, 'cheaper': 0.7, 'option': 0.6,
-                'substitute': 0.7, 'equivalent': 0.8
+                'generic': 1.0, 'available': 0.9, 'alternative': 0.9,  # Boosted all keywords
+                'multi-source': 1.0, 'cheaper': 0.8, 'option': 0.7,
+                'substitute': 0.7, 'equivalent': 0.9,
+                'availability': 0.8, 'exist': 0.6, 'other': 0.5  # Added context
             },
             
             # DRUG UTILIZATION REVIEW (maps to: durExistenceStatus)
@@ -259,14 +313,16 @@ class CVSIntentClassifier:
             'reversal_info': {
                 'reversal': 1.0, 'reversed': 0.9, 'reverse': 0.9,
                 'undo': 0.7, 'cancelled': 0.8, 'cancel': 0.7,
-                'voided': 0.8, 'void': 0.7
+                'voided': 0.8, 'void': 0.7,
+                'adjustments': 1.0, 'adjustment': 1.0,  # UC38: "Did this claim have any adjustments?" - BOOSTED to 1.0
+                'r&r': 1.0, 'rnr': 1.0, 'manual': 0.9  # UC38: "R&R, Manual etc." - BOOSTED manual to 0.9
             },
             
             # AUDIT TRAIL (maps to: audit{})
             'audit_info': {
                 'audit': 1.0, 'history': 0.8, 'changes': 0.8,
                 'modified': 0.7, 'updated': 0.7, 'changed': 0.7,
-                'who': 0.5, 'when': 0.5, 'trail': 0.8
+                'who': 0.7, 'when': 0.8, 'trail': 0.8
             },
             
             # OUT OF SCOPE (fallback intent - no keywords, used when no match found)
@@ -415,23 +471,58 @@ class CVSIntentClassifier:
         
         CRITICAL: Even if confidence is HIGH, complex queries should route to Master LLM!
         
+        SMART ROUTING: "summary" keyword is now handled by keyword weights!
+        - "pricing summary" → routes to pricing_info (via weights)
+        - "summarize all my claims" → complex (aggregation)
+        
         Complex queries contain:
-        - Aggregations (sum, average, summarize, total)
-        - Comparisons (more than, less than, most expensive)
-        - Date ranges with filtering
+        - Aggregations (summarize ALL, total, sum, average)
+        - Comparisons (compare, versus, most expensive)
+        - Explanations (explain how, why did)
         - Multiple conditions ("all claims in October over $100")
+        
+        SCANNING METHOD: Uses substring matching for multi-word phrases
+        - Checks if entire phrase exists anywhere in query
+        - E.g., 'summarize all' in 'please summarize all my claims' → True
+        - Works for 1-word, 2-word, 3+ word phrases
         """
-        complexity_indicators = [
-            'summarize', 'summary', 'total', 'sum', 'average',
+        query_lower = query.lower()
+        
+        # Aggregation keywords (truly complex)
+        # Multi-word phrases: 'summarize all', 'all my', etc.
+        aggregation_indicators = [
+            'summarize all', 'summarize my', 'all my', 'all claims', 'every claim',
+            'total', 'sum', 'average', 'count'
+        ]
+        
+        for indicator in aggregation_indicators:
+            if indicator in query_lower:  # Substring search for phrase
+                return True
+        
+        # Comparison keywords (truly complex)
+        # Multi-word phrases: 'more than', 'less than', 'difference between'
+        comparison_indicators = [
+            'compare', 'comparison', 'versus', 'vs', 'difference between',
             'most', 'least', 'expensive', 'cheapest',
-            'compare', 'comparison', 'versus', 'vs',
-            'all', 'every', 'each', 'between',
             'more than', 'less than', 'greater', 'fewer',
             'highest', 'lowest', 'top', 'bottom'
         ]
         
-        for indicator in complexity_indicators:
-            if indicator in query:
+        for indicator in comparison_indicators:
+            if indicator in query_lower:  # Substring search for phrase
+                return True
+        
+        # Explanation/reasoning keywords (truly complex)
+        # Multi-word phrases: 'explain how', 'why did', 'what caused'
+        explanation_indicators = [
+            'explain how', 'explain why', 'how was', 'how did',
+            'why did', 'why was', 'what caused', 'what led to',
+            'which setup', 'which configuration', 'what can be done',
+            'how to', 'what should'
+        ]
+        
+        for indicator in explanation_indicators:
+            if indicator in query_lower:  # Substring search for phrase
                 return True
         
         # Very long queries are often complex
