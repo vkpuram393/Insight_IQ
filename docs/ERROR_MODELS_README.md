@@ -523,18 +523,61 @@ except Exception as e:
     return ErrorResponse(error=error, session_id=session_id)
 ```
 
+## Serialization Helpers
+
+The project provides **generic TypeVar-based serialization helpers** in `utils/serialization.py` that work with ANY Pydantic model (errors, node results, etc.):
+
+```python
+from utils.serialization import (
+    to_dict,           # Works with ANY Pydantic model
+    from_dict,         # Generic model creation
+    to_json,           # Generic JSON conversion
+    from_json,         # Generic JSON parsing
+    copy_model,        # Generic model copying
+    to_dict_list,      # Generic list conversion
+    from_dict_list,    # Generic list parsing
+)
+
+from core.error_models import AgentError, ErrorResponse
+
+# Convert any model to dictionary
+error_dict = to_dict(error)
+response_dict = to_dict(error_response)
+
+# Create model from dictionary (requires model class)
+error = from_dict(AgentError, error_dict)
+response = from_dict(ErrorResponse, response_dict)
+
+# Convert to/from JSON
+json_str = to_json(error)
+error = from_json(AgentError, json_str)
+
+# Copy any model with updates
+new_error = copy_model(original_error, session_id="new-session")
+
+# Work with lists of any models
+error_dicts = to_dict_list([error1, error2, error3])
+errors = from_dict_list(AgentError, error_dicts)
+```
+
+**Why generic helpers?**
+- **One API for all models**: Same functions work with errors, intents, tools, responses, etc.
+- **Type-safe**: TypeVar provides proper type inference and IDE autocomplete
+- **Less code**: 7 generic functions instead of 40+ model-specific ones
+- **Extensible**: New models automatically work with existing helpers
+
+
 ## Additional Resources
 
-- See `core/errors.py` for complete model definitions
-- See `core/errors_example.py` for integration examples
-- See existing nodes for error handling patterns
-- Reference FastAPI documentation for exception handling
+- **Models**: `docs/examples/error_models.py` - Complete model definitions
+- **Integration**: See existing nodes for error handling patterns
+- **FastAPI**: Reference FastAPI documentation for exception handling
 
 ## Support
 
 For questions or issues with error models:
 1. Check this documentation
-2. Review example code in `core/errors_example.py`
+2. Review example code in `docs/examples/errors_example.py`
 3. Look at existing node implementations
 4. Contact the development team
 

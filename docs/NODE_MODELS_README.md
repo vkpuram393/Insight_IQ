@@ -722,12 +722,78 @@ pytest tests/test_node_models.py::TestIntentResult -v
 pytest tests/test_node_models.py -v --log-cli-level=DEBUG
 ```
 
+## Serialization Helpers
+
+The project provides **generic TypeVar-based serialization helpers** in `utils/serialization.py` that work with ANY Pydantic model (errors, node results, etc.):
+
+```python
+from utils.serialization import (
+    to_dict,           # Works with ANY Pydantic model
+    from_dict,         # Generic model creation
+    to_json,           # Generic JSON conversion
+    from_json,         # Generic JSON parsing
+    copy_model,        # Generic model copying
+    to_dict_list,      # Generic list conversion
+    from_dict_list,    # Generic list parsing
+)
+
+from core.node_models import (
+    IntentResult,
+    ToolResult,
+    ResponsePayload,
+    ConversationMessage,
+)
+
+# Convert any model to dictionary
+intent_dict = to_dict(intent_result)
+tool_dict = to_dict(tool_result)
+response_dict = to_dict(response_payload)
+
+# Create model from dictionary (requires model class)
+intent = from_dict(IntentResult, intent_dict)
+tool = from_dict(ToolResult, tool_dict)
+
+# Convert to/from JSON
+intent_json = to_json(intent_result)
+intent = from_json(IntentResult, intent_json)
+
+# Copy any model with updates
+new_intent = copy_model(original_intent, confidence=0.95)
+new_tool = copy_model(original_tool, retry_count=1)
+
+# Work with lists of any models
+intent_dicts = to_dict_list([intent1, intent2, intent3])
+intents = from_dict_list(IntentResult, intent_dicts)
+
+# Conversation messages
+message_dicts = to_dict_list(conversation_history)
+messages = from_dict_list(ConversationMessage, message_dicts)
+```
+
+**Why generic helpers?**
+- **One API for all models**: Same functions work with errors, intents, tools, responses, etc.
+- **Type-safe**: TypeVar provides proper type inference and IDE autocomplete
+- **Less code**: 7 generic functions instead of 40+ model-specific ones
+- **Extensible**: New models automatically work with existing helpers
+
+### Use Cases
+
+1. **Storing in State**: Convert models to dicts for state metadata
+2. **Caching**: Serialize models for cache storage
+3. **Database**: Store model data in databases
+4. **API Responses**: Convert models for JSON responses
+5. **Testing**: Create test data from dictionaries
+6. **Copying**: Clone models with field updates
+
+See `docs/examples/` for complete usage examples.
+
 ## Additional Resources
 
-- **Models**: `core/node_models.py`
-- **Examples**: `core/node_models_example.py`
-- **Tests**: `core/test_node_models.py`
-- **Error Models**: `core/errors.py` (separate error handling)
+- **Models**: `core/node_models.py` - Complete model definitions
+- **Examples**: `docs/examples/serialization_examples.py` - Serialization usage examples
+- **Examples**: `docs/examples/node_models_examples.py` - Node Models usage examples
+- **Tests**: `tests/test_node_models.py` - Model tests
+- **Error Models**: `docs/examples/error_models.py` - Separate error handling
 
 ## Model Summary Table
 
@@ -746,7 +812,7 @@ pytest tests/test_node_models.py -v --log-cli-level=DEBUG
 
 For questions:
 1. Review this documentation
-2. Check examples in `core/node_models_example.py`
+2. Check examples
 3. Run tests: `pytest core/test_node_models.py -v`
 4. Review Pydantic documentation: https://docs.pydantic.dev/
 
