@@ -56,63 +56,6 @@ async def startup_event():
         print("[STARTUP] init_graph ERROR:", e)
         traceback.print_exc()
         raise
-    
-    # Run endpoint tests to verify all endpoints are working (development only)
-    # Run in background task since server only accepts connections after startup completes
-    if settings.environment == "development":
-        async def run_endpoint_tests():
-            await asyncio.sleep(1.0)  # Give server a moment to be ready
-            print("[STARTUP] Running endpoint health checks...")
-            try:
-                import subprocess
-                import socket
-                # Wait for server to be ready to accept requests (check if port 8000 is listening)
-                max_attempts = 15
-                for attempt in range(max_attempts):
-                    try:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(0.3)
-                        result = sock.connect_ex(('127.0.0.1', 8000))
-                        sock.close()
-                        if result == 0:
-                            break
-                    except:
-                        pass
-                    await asyncio.sleep(0.2)
-                else:
-                    print("[STARTUP] ⚠️  Server not ready, skipping endpoint tests")
-                    return
-                
-                result = subprocess.run(
-                    ["python", "test_all_endpoints.py"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                if result.returncode == 0:
-                    # Extract test summary from output
-                    output_lines = result.stdout.split('\n')
-                    summary_line = [line for line in output_lines if "Passed:" in line]
-                    if summary_line:
-                        # Clean up the summary line (remove extra ✅ if present)
-                        summary = summary_line[0].strip().replace("✅ ", "")
-                        print(f"[STARTUP] ✅ {summary}")
-                    else:
-                        print("[STARTUP] ✅ All endpoint tests passed (16/16)")
-                else:
-                    print(f"[STARTUP] ⚠️  Endpoint tests had issues (return code: {result.returncode})")
-                    # Show last few lines of output for debugging
-                    output_lines = result.stdout.split('\n')
-                    error_lines = [line for line in output_lines if "❌" in line or "Failed" in line]
-                    if error_lines:
-                        print(f"[STARTUP] Test errors: {error_lines[-3:]}")
-            except subprocess.TimeoutExpired:
-                print("[STARTUP] ⚠️  Endpoint tests timed out")
-            except Exception as e:
-                print(f"[STARTUP] ⚠️  Could not run endpoint tests: {e}")
-        
-        # Schedule the test task to run after startup
-        asyncio.create_task(run_endpoint_tests())
 
 @app.on_event("shutdown")
 async def shutdown_event():
