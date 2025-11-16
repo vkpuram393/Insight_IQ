@@ -47,6 +47,25 @@ app.add_middleware(
 # Startup / Shutdown hooks --------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
+    # Run endpoint tests in development mode if enabled
+    if settings.environment == "development" and os.environ.get("RUN_TESTS_ON_STARTUP", "false").lower() == "true":
+        print("[STARTUP] Running endpoint tests...")
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["python", "test_all_endpoints.py"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode == 0:
+                print("[STARTUP] ✅ All endpoint tests passed")
+            else:
+                print(f"[STARTUP] ⚠️  Endpoint tests had issues (return code: {result.returncode})")
+                print(f"[STARTUP] Test output: {result.stdout[-500:] if len(result.stdout) > 500 else result.stdout}")
+        except Exception as e:
+            print(f"[STARTUP] ⚠️  Could not run tests: {e}")
+    
     print("[STARTUP] init_graph begin")      # Breakpoint candidate
     try:
         await init_graph()

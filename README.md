@@ -115,6 +115,8 @@ Those are presently ignored when mocks are active.
 
 ---
 ## 5. Run the Server
+
+### Option 1: Direct Python (Simple)
 ```bash
 # macOS / Linux
 python main.py
@@ -125,11 +127,50 @@ py -3.11 main.py
 # or
 python main.py
 ```
-If you want uvicorn directly:
+
+### Option 2: Using Makefile (Runs Tests First)
+```bash
+# Run tests then start server (recommended for local builds)
+make build
+
+# Or just run tests
+make test
+
+# Or just start server
+make run
+```
+
+### Option 3: Using Build Script
+```bash
+# macOS / Linux
+./build.sh
+
+# This will:
+# 1. Run all endpoint tests
+# 2. If tests pass, start the server
+# 3. If tests fail, exit without starting server
+```
+
+### Option 4: Uvicorn Directly
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-On Windows CMD/PowerShell this is the same; just ensure the virtual env is activated.
+
+### Option 5: Auto-Run Tests on Startup (Development Only)
+Set environment variable to automatically run tests when server starts:
+```bash
+# macOS / Linux
+RUN_TESTS_ON_STARTUP=true python main.py
+
+# Windows PowerShell
+$env:RUN_TESTS_ON_STARTUP="true"; python main.py
+```
+
+**Note:** Tests run automatically on startup only if:
+- `ENVIRONMENT=development` (in config or .env)
+- `RUN_TESTS_ON_STARTUP=true` (environment variable)
+
+On Windows CMD/PowerShell, ensure the virtual env is activated for all options.
 
 Health check (cross‑platform):
 ```bash

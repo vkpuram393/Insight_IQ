@@ -92,16 +92,16 @@ def main():
     )))
     print()
     
-    # 5. Cache Operations
-    print("5. Testing Cache Operations")
+    # 5. Cache Operations (2 tests: Set and Get)
+    print("5. Testing Cache Operations (2 tests)")
     results.append(("Test Cache Set", test_endpoint(
-        "Test Cache Set",
+        "Test Cache Set (5a)",
         "POST",
         f"{BASE_URL}/utils/test-cache",
         {"key": "test_key_123", "value": {"data": "test value", "number": 42}, "ttl_seconds": 3600}
     )))
     results.append(("Test Cache Get", test_endpoint(
-        "Test Cache Get",
+        "Test Cache Get (5b)",
         "POST",
         f"{BASE_URL}/utils/test-cache",
         {"key": "test_key_123"}
