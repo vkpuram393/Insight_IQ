@@ -1,8 +1,28 @@
 {
   "confidence_threshold": 0.7,
+  "conversation_history_window": 5,
   "clarification_messages": {
     "low_confidence": "I'm not quite sure what you're asking. Could you rephrase your question?",
     "missing_entity_template": "Could you provide your {missing_entity}?"
+  },
+  "required_slots_by_intent": {
+    "claim_status": ["claim_number"],
+    "claim_rejection_reason": ["claim_number"],
+    "claim_details": ["claim_number"],
+    "claim_pending": ["claim_number"],
+    "claim_list": [],
+    "claim_summary": [],
+    "rejection_reasons": ["claim_number"],
+    "member_info": ["member_id"],
+    "benefits_info": [],
+    "copay_info": [],
+    "deductible_info": [],
+    "find_pharmacy": [],
+    "check_coverage": ["medication_name"],
+    "greeting": [],
+    "help": [],
+    "appeal_info": ["claim_number"],
+    "unknown": []
   }
 }
 

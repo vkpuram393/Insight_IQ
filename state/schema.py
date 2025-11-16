@@ -53,6 +53,9 @@ class AgentState(TypedDict):
     intent: Optional[str]                        # What user wants
     confidence: Optional[float]                  # How sure we are (0-1)
     entities: Optional[Dict[str, Any]]           # Extracted info
+    slots: Optional[Dict[str, Any]]              # API parameters (from intent classifier)
+    required_slots: Optional[List[str]]          # Required slots for this intent (from intent classifier)
+    missing_slots: Optional[List[str]]           # Required slots that are missing (from intent classifier)
 
     # === CLARIFICATION ===
     needs_clarification: bool                    # Ask user question?
@@ -61,6 +64,8 @@ class AgentState(TypedDict):
     # === CONTEXT ===
     conversation_history: List[Dict[str, str]]   # Recent messages
     relevant_facts: List[Dict[str, Any]]         # Important facts
+    extracted_slots: Optional[Dict[str, Any]]     # Slots extracted from conversation history (from context builder)
+    planner_context: Optional[Dict[str, Any]]    # Complete context object for planner/executor (from context builder)
 
     # === TOOL RESULTS ===
     tool_results: Optional[Dict[str, Any]]       # API call results
@@ -101,10 +106,15 @@ def create_initial_state(
         intent=None,
         confidence=None,
         entities=None,
+        slots=None,
+        required_slots=None,
+        missing_slots=None,
         needs_clarification=False,
         clarifying_question=None,
         conversation_history=[],
         relevant_facts=[],
+        extracted_slots=None,
+        planner_context=None,
         tool_results=None,
         safety_precheck_passed=False,
         safety_postcheck_passed=False,

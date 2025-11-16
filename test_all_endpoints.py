@@ -135,7 +135,19 @@ def main():
         "Test Context Building",
         "POST",
         f"{BASE_URL}/utils/test-context-building",
-        {"session_id": session_id, "text": "What was my claim number?"}
+        {
+            "text": "What's my claim status?",
+            "intent": "claim_status",
+            "confidence": 0.92,
+            "entities": {"claim_number": "12345678"},
+            "slots": {"claim_number": "12345678"},
+            "required_slots": ["claim_number"],
+            "missing_slots": [],
+            "session_id": session_id,
+            "uuid": "req-uuid-context-test",
+            "domain": "claims",
+            "user_info": {"user_id": "member_222"}
+        }
     )))
     print()
     

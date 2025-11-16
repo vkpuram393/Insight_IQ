@@ -44,23 +44,22 @@ def _load_config() -> Dict[str, Any]:
         }
 
 def confidence_check_router(state: AgentState) -> Literal["clarification", "tool_call"]:
-    """Route based on confidence and entity completeness (kept for backward compatibility).
+    """Route based on confidence and slot completeness (kept for backward compatibility).
 
     Rules:
-      - If intent needs a claim_number and it's missing -> clarification
+      - If required slots are missing -> clarification
       - Else if confidence < threshold -> clarification
       - Else -> tool_call
     """
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
     
-    intent = state.get("intent")
-    entities = state.get("entities") or {}
     confidence = state.get("confidence", 0.0)
+    missing_slots = state.get("missing_slots") or []
 
-    # Entity completeness rule for claim rejection intent
-    if intent == "claim_rejection_reason" and not entities.get("claim_number"):
-        logger.info("⚠️ Missing claim_number for rejection intent -> Clarification")
+    # Check for missing required slots (from intent classifier)
+    if missing_slots:
+        logger.info(f"⚠️ Missing required slots: {missing_slots} -> Clarification")
         return "clarification"
 
     if confidence < threshold:
@@ -97,14 +96,13 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # Get state values
         intent = state.get("intent")
         entities = state.get("entities") or {}
+        slots = state.get("slots") or {}
+        required_slots = state.get("required_slots") or []
+        missing_slots = state.get("missing_slots") or []
         confidence = state.get("confidence", 0.0)
         
         logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}")
-        
-        # Check for missing entities
-        missing_entities = []
-        if intent == "claim_rejection_reason" and not entities.get("claim_number"):
-            missing_entities.append("claim_number")
+        logger.info(f"   Required slots: {required_slots}, Missing slots: {missing_slots}")
         
         # Determine if confidence is low
         confidence_low = confidence < threshold
@@ -112,17 +110,17 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # Get persistence store for logging
         persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
         
-        if confidence_low or missing_entities:
-            # Low confidence or missing entities -> clarification
-            logger.info(f"⚠️ Low confidence or missing entities -> Clarification")
+        if confidence_low or missing_slots:
+            # Low confidence or missing slots -> clarification
+            logger.info(f"⚠️ Low confidence or missing slots -> Clarification")
             
             # Determine clarification reason
-            if missing_entities:
+            if missing_slots:
                 clarification_reason = "missing_entity"
-                # Use template for missing entity
+                # Use template for missing slot
                 template = clarification_messages.get("missing_entity_template", "Could you provide your {missing_entity}?")
-                missing_entity_name = missing_entities[0].replace("_", " ")
-                clarifying_question = template.format(missing_entity=missing_entity_name)
+                missing_slot_name = missing_slots[0].replace("_", " ")
+                clarifying_question = template.format(missing_entity=missing_slot_name)
             else:
                 clarification_reason = "low_confidence"
                 clarifying_question = clarification_messages.get("low_confidence", "I'm not quite sure what you're asking. Could you rephrase your question?")
@@ -136,7 +134,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                     **state.get("metadata", {}),
                     "clarification": True,
                     "clarification_reason": clarification_reason,
-                    "missing_entities": missing_entities,
+                    "missing_slots": missing_slots,
                     "confidence": confidence,
                     "threshold": threshold
                 }
@@ -151,7 +149,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                     "decision": "clarification",
                     "confidence": confidence,
                     "threshold": threshold,
-                    "missing_entities": missing_entities,
+                    "missing_slots": missing_slots,
                     "reason": clarification_reason
                 },
                 request_id=request_id,
@@ -174,7 +172,10 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                 "intent": intent,
                 "confidence": confidence,
                 "entities": entities,
-                "domain": state.get("domain", "claims"),  # Placeholder
+                "slots": slots,
+                "required_slots": required_slots,
+                "missing_slots": missing_slots,
+                "domain": state.get("domain"),  # Domain from orchestrator
                 "uuid": request_id,
                 "user_profile": {
                     "user_id": user_id or state.get("user_info", {}).get("user_id")

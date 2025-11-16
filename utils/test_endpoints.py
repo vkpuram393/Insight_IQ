@@ -323,28 +323,81 @@ async def test_get_session_history(session_id: str):
 
 # ==================== Context Building Tests ====================
 
-@router.post("/test-context-building")
-async def test_context_building(request: ContextTestRequest):
-    """
-    Test context building node
+class ContextBuilderTestRequest(BaseModel):
+    """Request for context builder test endpoint - simulates what confidence checker passes"""
+    text: str
+    intent: str
+    confidence: float
+    entities: Optional[Dict[str, Any]] = None
+    slots: Optional[Dict[str, Any]] = None
+    required_slots: Optional[List[str]] = None
+    missing_slots: Optional[List[str]] = None
+    session_id: Optional[str] = None
+    uuid: Optional[str] = None
+    domain: Optional[str] = None
+    user_info: Optional[Dict[str, Any]] = None
 
-    Tests: nodes/context.py
+@router.post("/test-context-building")
+async def test_context_building(request: ContextBuilderTestRequest):
+    """
+    Test context building node with full payload from confidence checker
+
+    Tests: nodes/context.py - build_context_node
+    
+    This endpoint simulates what confidence checker passes to context builder:
+    - Intent, confidence, entities, slots from intent classifier
+    - Required slots and missing slots
+    - Session ID, UUID, domain, user info
+    
+    Returns:
+    - Conversation history (last N messages, configurable)
+    - Relevant facts from session
+    - Extracted slots from conversation history
+    - Complete planner_context object for planner/executor
     """
     try:
+        from nodes.context import build_context_node
+        
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        # Create state as confidence checker would pass it
         state = AgentState(
             text=request.text,
-            session_id=request.session_id,
-            user_info={},
+            session_id=session_id,
+            user_info=request.user_info or {},
+            uuid=request.uuid,
+            domain=request.domain,
+            intent=request.intent,
+            confidence=request.confidence,
+            entities=request.entities or {},
+            slots=request.slots or {},
+            required_slots=request.required_slots or [],
+            missing_slots=request.missing_slots or [],
+            needs_clarification=False,
+            clarifying_question=None,
             conversation_history=[],
-            relevant_facts=[]
+            relevant_facts=[],
+            tool_results=None,
+            safety_precheck_passed=True,
+            safety_postcheck_passed=True,
+            safety_block_reason=None,
+            response="",
+            metadata={},
+            cache_hit=False,
+            error=None,
+            messages=[],
+            extracted_slots=None,
+            planner_context=None
         )
 
         result = await build_context_node(state)
 
         return {
-            "session_id": request.session_id,
+            "session_id": session_id,
             "conversation_history": result.get("conversation_history", []),
             "relevant_facts": result.get("relevant_facts", []),
+            "extracted_slots": result.get("extracted_slots", {}),
+            "planner_context": result.get("planner_context", {}),
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
