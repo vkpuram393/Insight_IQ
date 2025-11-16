@@ -124,6 +124,8 @@ async def test_intent_agent(request: IntentTestRequest):
             text=request.text,
             session_id=str(uuid.uuid4()),
             user_info=request.user_info or {},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[]
         )
@@ -364,6 +366,8 @@ async def test_safety_precheck(request: SafetyTestRequest):
             text=request.text,
             session_id=request.session_id or str(uuid.uuid4()),
             user_info={},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[]
         )
@@ -394,6 +398,8 @@ async def test_safety_postcheck(request: SafetyTestRequest):
             text=request.text,
             session_id=request.session_id or str(uuid.uuid4()),
             user_info={},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[],
             response="This is a test response"
@@ -426,6 +432,8 @@ async def test_clarification(request: IntentTestRequest):
             text=request.text,
             session_id=str(uuid.uuid4()),
             user_info=request.user_info or {},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[],
             intent="claim_status",
@@ -446,6 +454,121 @@ async def test_clarification(request: IntentTestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Confidence Checker Tests ====================
+
+class ConfidenceCheckRequest(BaseModel):
+    """Request for confidence checker endpoint"""
+    text: str
+    intent: str
+    confidence: float
+    entities: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None
+    uuid: Optional[str] = None
+    domain: Optional[str] = None
+    user_info: Optional[Dict[str, Any]] = None
+
+@router.post("/test-confidence-checker")
+async def test_confidence_checker(request: ConfidenceCheckRequest):
+    """
+    Test confidence checker node
+
+    Tests: nodes/confidence.py - confidence_checker_node
+    
+    This endpoint:
+    - Takes intent classifier output (intent, confidence, entities)
+    - Checks confidence against threshold from config
+    - If low confidence: returns clarification object
+    - If high confidence: calls context builder and logs to SQLite, returns context builder output
+    """
+    try:
+        from nodes.confidence import confidence_checker_node
+        from nodes.context import build_context_node
+        
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        # Create state from intent classifier output
+        state = AgentState(
+            text=request.text,
+            session_id=session_id,
+            user_info=request.user_info or {},
+            uuid=request.uuid,
+            domain=request.domain or "claims",
+            intent=request.intent,
+            confidence=request.confidence,
+            entities=request.entities or {},
+            conversation_history=[],
+            relevant_facts=[],
+            needs_clarification=False,
+            clarifying_question=None,
+            tool_results=None,
+            safety_precheck_passed=True,
+            safety_postcheck_passed=False,
+            safety_block_reason=None,
+            response="",
+            metadata={},
+            cache_hit=False,
+            error=None,
+            messages=[]
+        )
+        
+        # Call confidence checker node
+        result = await confidence_checker_node(state)
+        
+        # Check if clarification needed
+        if result.get("needs_clarification"):
+            return {
+                "decision": "clarification",
+                "needs_clarification": True,
+                "clarifying_question": result.get("clarifying_question"),
+                "response": result.get("response"),
+                "metadata": result.get("metadata", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # High confidence - call context builder
+        if result.get("metadata", {}).get("confidence_check_passed"):
+            context_builder_input = result.get("metadata", {}).get("context_builder_input")
+            
+            # Update state with context builder input
+            state.update({
+                "conversation_history": context_builder_input.get("chat_history", []) if context_builder_input else []
+            })
+            
+            # Call context builder
+            context_result = await build_context_node(state)
+            
+            # Log context builder output
+            persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+            await persistence_store.log_audit(
+                session_id=session_id,
+                node_name="confidence_checker",
+                event_type="context_builder_output",
+                data=context_result,
+                request_id=request.uuid,
+                user_id=request.user_info.get("user_id") if request.user_info else None
+            )
+            
+            return {
+                "decision": "proceed",
+                "confidence_check_passed": True,
+                "context_builder_input": context_builder_input,
+                "context_builder_output": context_result,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Error case
+        return {
+            "decision": "error",
+            "error": result.get("error"),
+            "metadata": result.get("metadata", {}),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Confidence checker test failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Claims API Tests ====================
 
 @router.post("/test-claims-api")
@@ -460,6 +583,8 @@ async def test_claims_api(request: Dict[str, Any]):
             text=request.get("text", ""),
             session_id=str(uuid.uuid4()),
             user_info={},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[],
             intent=request.get("intent", "claim_status"),
@@ -492,12 +617,14 @@ async def test_response_agent(request: IntentTestRequest):
             text=request.text,
             session_id=str(uuid.uuid4()),
             user_info=request.user_info or {},
+            uuid=None,
+            domain=None,
             conversation_history=[],
             relevant_facts=[],
             intent="claim_status",
             confidence=0.9,
             entities={"claim_number": "12345"},
-            tool_result={"status": "approved", "amount": "$500"}
+            tool_results={"status": "approved", "amount": "$500"}
         )
 
         result = await response_agent_node(state)
@@ -510,6 +637,165 @@ async def test_response_agent(request: IntentTestRequest):
         }
     except Exception as e:
         logger.error(f"Response agent test failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Exception Handling Tests ====================
+
+class ExceptionTestRequest(BaseModel):
+    """Request for exception handling test"""
+    node_name: str
+    error_type: Optional[str] = "generic"  # "generic", "llm", "api"
+    session_id: Optional[str] = None
+    uuid: Optional[str] = None
+
+@router.post("/test-exception-handling")
+async def test_exception_handling(request: ExceptionTestRequest):
+    """
+    Test exception handling in specific nodes
+    
+    This endpoint intentionally triggers exceptions to test:
+    1. Exception catching
+    2. Exception logging to SQLite
+    3. Graceful error responses
+    
+    Node names: safety_precheck, safety_postcheck, check_cache, cache_response,
+                build_context, update_memory, clarification, confidence_checker,
+                intent_agent, response_agent, call_claims_tool
+    """
+    try:
+        from nodes.safety import safety_precheck_node, safety_postcheck_node
+        from nodes.cache import check_cache_node, cache_response_node
+        from nodes.context import build_context_node, update_memory_node
+        from nodes.clarification import clarification_node
+        from nodes.confidence import confidence_checker_node
+        from agents.intent_agent import intent_agent_node
+        from agents.response_agent import response_agent_node
+        from tools.claims_api import call_claims_tool_node
+        
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        # Create a state that will trigger an exception based on node type
+        # For most nodes, we'll use a state that causes errors in processing
+        # We'll use a dict that's missing required fields or has invalid data
+        problematic_state_dict = {
+            "text": "",  # Empty text - valid but might cause issues
+            "session_id": session_id,
+            "user_info": {},
+            "uuid": request.uuid,
+            "domain": None,
+            "intent": None,
+            "confidence": None,
+            "entities": None,
+            "needs_clarification": False,
+            "clarifying_question": None,
+            "conversation_history": [],
+            "relevant_facts": [],
+            "tool_results": None,
+            "safety_precheck_passed": False,
+            "safety_postcheck_passed": False,
+            "safety_block_reason": None,
+            "response": "",
+            "metadata": {},
+            "cache_hit": False,
+            "error": None,
+            "messages": []
+        }
+        
+        # For specific nodes, modify state to trigger errors
+        if request.node_name == "check_cache":
+            # Use a state that will cause error when hashing
+            problematic_state_dict["text"] = object()  # Can't hash object
+        elif request.node_name in ["build_context", "update_memory"]:
+            # Use invalid session_id that might cause memory store errors
+            problematic_state_dict["session_id"] = None  # None session_id
+        elif request.node_name == "safety_precheck":
+            # Use state without text field (will cause KeyError)
+            problematic_state_dict.pop("text", None)
+        elif request.node_name == "safety_postcheck":
+            # Use state without response field
+            problematic_state_dict.pop("response", None)
+        elif request.node_name == "call_claims_tool":
+            # Use state without intent field
+            problematic_state_dict.pop("intent", None)
+        
+        # Convert to AgentState (this might fail for invalid states, which is fine)
+        try:
+            problematic_state = AgentState(**problematic_state_dict)
+        except (TypeError, KeyError):
+            # If we can't create valid AgentState, create a dict that will cause errors
+            problematic_state = problematic_state_dict
+        
+        # Map node names to their functions
+        node_map = {
+            "safety_precheck": safety_precheck_node,
+            "safety_postcheck": safety_postcheck_node,
+            "check_cache": check_cache_node,
+            "cache_response": cache_response_node,
+            "build_context": build_context_node,
+            "update_memory": update_memory_node,
+            "clarification": clarification_node,
+            "confidence_checker": confidence_checker_node,
+            "intent_agent": intent_agent_node,
+            "response_agent": response_agent_node,
+            "call_claims_tool": call_claims_tool_node
+        }
+        
+        if request.node_name not in node_map:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown node name: {request.node_name}. Available: {list(node_map.keys())}"
+            )
+        
+        node_func = node_map[request.node_name]
+        
+        # Call the node - this should trigger an exception
+        result = await node_func(problematic_state)
+        
+        # Check if exception was handled
+        exception_occurred = result.get("error") is not None or result.get("error_occurred", False)
+        
+        # Check database for logged exception
+        from persistence import PersistenceStoreFactory
+        from core.config import settings
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        
+        # Get recent exceptions for this node
+        import aiosqlite
+        async with aiosqlite.connect(settings.telemetry_db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT * FROM exceptions 
+                WHERE node_name = ? 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+                """,
+                (request.node_name,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                logged_exception = dict(row) if row else None
+        
+        return {
+            "node_name": request.node_name,
+            "exception_handled": exception_occurred,
+            "error_in_response": result.get("error") is not None,
+            "error_message": result.get("error"),
+            "exception_logged": logged_exception is not None,
+            "logged_exception": {
+                "error_code": logged_exception.get("error_code") if logged_exception else None,
+                "category": logged_exception.get("category") if logged_exception else None,
+                "severity": logged_exception.get("severity") if logged_exception else None,
+                "message": logged_exception.get("message")[:200] if logged_exception else None
+            } if logged_exception else None,
+            "result_metadata": result.get("metadata", {}),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Exception handling test failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -530,8 +816,10 @@ async def utils_health():
             "/utils/test-safety-precheck",
             "/utils/test-safety-postcheck",
             "/utils/test-clarification",
+            "/utils/test-confidence-checker",
             "/utils/test-claims-api",
-            "/utils/test-response-agent"
+            "/utils/test-response-agent",
+            "/utils/test-exception-handling"
         ],
         "timestamp": datetime.now().isoformat()
     }

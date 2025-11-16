@@ -4,10 +4,13 @@ Cache Nodes - Speed up repeated questions
 
 import hashlib
 import json
+import traceback
 from typing import Dict, Any
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
+from core.error_models import create_internal_error
+from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
 
 logger = get_logger(__name__)
@@ -31,47 +34,129 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         Cache HIT → Return cached response, end graph
         Cache MISS → Continue to next node
     """
+    node_name = "check_cache"
+    session_id = state.get("session_id", "unknown")
+    request_id = state.get("uuid")
+    user_id = state.get("user_info", {}).get("user_id")
+    
+    try:
+        logger.info("💾 Node: Check Cache")
 
-    logger.info("💾 Node: Check Cache")
+        if not settings.enable_semantic_cache:
+            return {"cache_hit": False}
 
-    if not settings.enable_semantic_cache:
-        return {"cache_hit": False}
+        key = f"cache:{_hash(state['text'])}"
 
-    key = f"cache:{_hash(state['text'])}"
+        # Use memory store facade
+        cached_value = await _memory_store.get(key)
 
-    # Use memory store facade
-    cached_value = await _memory_store.get(key)
+        if cached_value:
+            cached = json.loads(cached_value) if isinstance(cached_value, str) else cached_value
+            logger.info("🎯 Cache HIT!")
+            return {
+                "response": cached["response"],
+                "intent": cached["intent"],
+                "confidence": cached["confidence"],
+                "cache_hit": True,
+                "metadata": {**state.get("metadata", {}), "cache": "hit"}
+            }
 
-    if cached_value:
-        cached = json.loads(cached_value) if isinstance(cached_value, str) else cached_value
-        logger.info("🎯 Cache HIT!")
+        logger.info("💨 Cache MISS")
+        return {"cache_hit": False, "metadata": {**state.get("metadata", {}), "cache": "miss"}}
+        
+    except Exception as e:
+        tb = traceback.format_exc()
+        error = create_internal_error(
+            error_message=f"Cache check failed: {str(e)}",
+            stacktrace=tb,
+            session_id=session_id,
+            node_name=node_name
+        )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=session_id,
+            request_id=request_id,
+            node_name=node_name,
+            stacktrace=error.stacktrace,
+            metadata=error.metadata,
+            user_id=user_id
+        )
+        
+        logger.error(f"🚨 Exception in cache check: {e}\n{tb}")
+        
         return {
-            "response": cached["response"],
-            "intent": cached["intent"],
-            "confidence": cached["confidence"],
-            "cache_hit": True,
-            "metadata": {**state.get("metadata", {}), "cache": "hit"}
+            "error": error.user_message,
+            "cache_hit": False,
+            "metadata": {
+                **state.get("metadata", {}),
+                "error_occurred": True,
+                "error_code": error.error_code.value
+            }
         }
-
-    logger.info("💨 Cache MISS")
-    return {"cache_hit": False, "metadata": {**state.get("metadata", {}), "cache": "miss"}}
 
 async def cache_response_node(state: AgentState) -> Dict[str, Any]:
     """Store response in cache for future"""
+    node_name = "cache_response"
+    session_id = state.get("session_id", "unknown")
+    request_id = state.get("uuid")
+    user_id = state.get("user_info", {}).get("user_id")
+    
+    try:
+        logger.info("💾 Node: Cache Response")
 
-    logger.info("💾 Node: Cache Response")
+        if settings.enable_semantic_cache:
+            key = f"cache:{_hash(state['text'])}"
+            cache_data = {
+                "response": state.get("response", ""),
+                "intent": state.get("intent"),
+                "confidence": state.get("confidence")
+            }
 
-    if settings.enable_semantic_cache:
-        key = f"cache:{_hash(state['text'])}"
-        cache_data = {
-            "response": state.get("response", ""),
-            "intent": state.get("intent"),
-            "confidence": state.get("confidence")
+            # Store in memory store with 1 hour TTL
+            await _memory_store.set(key, json.dumps(cache_data), ttl_seconds=3600)
+            logger.info("✅ Response cached")
+
+        # Always return metadata to register a change
+        return {"metadata": {**state.get("metadata", {}), "cached": settings.enable_semantic_cache}}
+        
+    except Exception as e:
+        tb = traceback.format_exc()
+        error = create_internal_error(
+            error_message=f"Cache response failed: {str(e)}",
+            stacktrace=tb,
+            session_id=session_id,
+            node_name=node_name
+        )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=session_id,
+            request_id=request_id,
+            node_name=node_name,
+            stacktrace=error.stacktrace,
+            metadata=error.metadata,
+            user_id=user_id
+        )
+        
+        logger.error(f"🚨 Exception in cache response: {e}\n{tb}")
+        
+        return {
+            "error": error.user_message,
+            "metadata": {
+                **state.get("metadata", {}),
+                "error_occurred": True,
+                "error_code": error.error_code.value,
+                "cached": False
+            }
         }
-
-        # Store in memory store with 1 hour TTL
-        await _memory_store.set(key, json.dumps(cache_data), ttl_seconds=3600)
-        logger.info("✅ Response cached")
-
-    # Always return metadata to register a change
-    return {"metadata": {**state.get("metadata", {}), "cached": settings.enable_semantic_cache}}

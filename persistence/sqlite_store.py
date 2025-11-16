@@ -77,6 +77,41 @@ class SQLitePersistenceStore(PersistenceStore):
             )
         """)
 
+        # Logs table for audit logging
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS logs (
+                log_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                request_id TEXT,
+                node_name TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                user_id TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # Exceptions table for error logging
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS exceptions (
+                exception_id TEXT PRIMARY KEY,
+                error_code TEXT NOT NULL,
+                category TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                message TEXT NOT NULL,
+                user_message TEXT NOT NULL,
+                session_id TEXT,
+                request_id TEXT,
+                node_name TEXT,
+                stacktrace TEXT,
+                metadata TEXT,
+                timestamp TEXT NOT NULL,
+                user_id TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
         # Create indexes for performance
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)")
@@ -84,6 +119,14 @@ class SQLitePersistenceStore(PersistenceStore):
         await db.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_requests_user ON requests(user_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_request ON logs(request_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_node ON logs(node_name)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_session ON exceptions(session_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_request ON exceptions(request_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_node ON exceptions(node_name)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_timestamp ON exceptions(timestamp)")
 
         await db.commit()
         logger.info("✅ Database schema initialized")
@@ -353,6 +396,92 @@ class SQLitePersistenceStore(PersistenceStore):
                 }
                 for row in rows
             ]
+
+    async def log_audit(
+        self,
+        session_id: str,
+        node_name: str,
+        event_type: str,
+        data: Dict[str, Any],
+        request_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> str:
+        """Log an audit event to the logs table"""
+        db = await self._get_connection()
+
+        log_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+
+        await db.execute(
+            """
+            INSERT INTO logs (log_id, session_id, request_id, node_name, event_type, data, timestamp, user_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                log_id,
+                session_id,
+                request_id,
+                node_name,
+                event_type,
+                json.dumps(data),
+                now,
+                user_id,
+                now
+            )
+        )
+        await db.commit()
+
+        logger.debug(f"📝 Audit log: {event_type} from {node_name} for session {session_id}")
+        return log_id
+
+    async def log_exception(
+        self,
+        error_code: str,
+        category: str,
+        severity: str,
+        message: str,
+        user_message: str,
+        session_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        node_name: Optional[str] = None,
+        stacktrace: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None
+    ) -> str:
+        """Log an exception to the exceptions table"""
+        db = await self._get_connection()
+
+        exception_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+
+        await db.execute(
+            """
+            INSERT INTO exceptions 
+            (exception_id, error_code, category, severity, message, user_message,
+             session_id, request_id, node_name, stacktrace, metadata, timestamp, user_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                exception_id,
+                error_code,
+                category,
+                severity,
+                message,
+                user_message,
+                session_id,
+                request_id,
+                node_name,
+                stacktrace,
+                json.dumps(metadata) if metadata else None,
+                now,
+                user_id,
+                now
+            )
+        )
+        await db.commit()
+
+        logger.error(f"🚨 Exception logged: {error_code} in {node_name} for session {session_id}")
+        return exception_id
 
     async def close(self) -> None:
         """Close database connection"""

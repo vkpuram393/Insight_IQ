@@ -6,12 +6,15 @@ It generates natural, helpful responses.
 """
 
 import asyncio
+import traceback
 from typing import Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
+from core.error_models import create_internal_error, create_llm_error
+from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
 
@@ -71,39 +74,87 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
     OUTPUT (to state):
         - response: The final answer
     """
+    node_name = "response_agent"
+    session_id = state.get("session_id", "unknown")
+    request_id = state.get("uuid")
+    user_id = state.get("user_info", {}).get("user_id")
+    
+    try:
+        logger.info("🤖 AGENT 2: Response Generation")
 
-    logger.info("🤖 AGENT 2: Response Generation")
+        intent = state.get("intent", "unknown")  # guard
+        tool_results = state.get("tool_results", {})
+        history = state.get("conversation_history", [])
 
-    intent = state.get("intent", "unknown")  # guard
-    tool_results = state.get("tool_results", {})
-    history = state.get("conversation_history", [])
+        # Create LLM
+        if settings.use_mock_llm:
+            llm = MockLLM()
+        else:
+            llm = ChatOpenAI(
+                model=settings.llm_model,
+                temperature=settings.llm_temperature,
+                openai_api_key=settings.openai_api_key
+            )
 
-    # Create LLM
-    if settings.use_mock_llm:
-        llm = MockLLM()
-    else:
-        llm = ChatOpenAI(
-            model=settings.llm_model,
-            temperature=settings.llm_temperature,
-            openai_api_key=settings.openai_api_key
+        # Create prompt
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful pharmacy benefits assistant."),
+            ("user", "Intent: {intent}\nTool Results: {tool_results}\nConversation History: {history}\n\nGenerate a helpful response:")
+        ])
+
+        # Call LLM
+        messages = prompt.format_messages(
+            intent=intent,
+            tool_results=tool_results,
+            history=history
         )
+        response = await llm.ainvoke(messages)
 
-    # Create prompt
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful pharmacy benefits assistant."),
-        ("user", "Intent: {intent}\nTool Results: {tool_results}\nConversation History: {history}\n\nGenerate a helpful response:")
-    ])
+        response_text = response.content
 
-    # Call LLM
-    messages = prompt.format_messages(
-        intent=intent,
-        tool_results=tool_results,
-        history=history
-    )
-    response = await llm.ainvoke(messages)
+        logger.info(f"💬 Generated: {response_text[:50]}...")
 
-    response_text = response.content
-
-    logger.info(f"💬 Generated: {response_text[:50]}...")
-
-    return {"response": response_text}
+        return {"response": response_text}
+        
+    except Exception as e:
+        tb = traceback.format_exc()
+        # Check if it's an LLM-related error
+        if "openai" in str(e).lower() or "llm" in str(e).lower() or "api" in str(e).lower():
+            error = create_llm_error(
+                error_message=str(e),
+                session_id=session_id
+            )
+        else:
+            error = create_internal_error(
+                error_message=f"Response generation failed: {str(e)}",
+                stacktrace=tb,
+                session_id=session_id,
+                node_name=node_name
+            )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=session_id,
+            request_id=request_id,
+            node_name=node_name,
+            stacktrace=error.stacktrace or tb,
+            metadata=error.metadata,
+            user_id=user_id
+        )
+        
+        logger.error(f"🚨 Exception in response agent: {e}\n{tb}")
+        
+        return {
+            "error": error.user_message,
+            "response": error.user_message,
+            "metadata": {
+                **state.get("metadata", {}),
+                "error_occurred": True,
+                "error_code": error.error_code.value
+            }
+        }

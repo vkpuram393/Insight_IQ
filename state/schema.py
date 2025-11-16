@@ -46,6 +46,8 @@ class AgentState(TypedDict):
     text: str                                    # User's message
     session_id: str                              # Conversation ID
     user_info: Dict[str, Any]                    # User metadata
+    uuid: Optional[str]                          # Request UUID from orchestrator
+    domain: Optional[str]                        # Domain (e.g., "claims", "prescriptions")
 
     # === INTENT & ENTITIES (from intent_agent) ===
     intent: Optional[str]                        # What user wants
@@ -94,6 +96,8 @@ def create_initial_state(
         text=text,
         session_id=session_id,
         user_info=user_info or {},
+        uuid=None,
+        domain=None,
         intent=None,
         confidence=None,
         entities=None,

@@ -473,6 +473,102 @@ curl -X POST http://localhost:8000/utils/test-clarification \
 
 ---
 
+## 7.5. Confidence Checker
+
+### Test Confidence Checker
+**Endpoint**: `POST /utils/test-confidence-checker`
+
+**What it tests**: `nodes/confidence.py` - `confidence_checker_node`
+
+**Purpose**: Test confidence checking and routing logic. Takes intent classifier output, checks confidence against threshold from config, and either returns clarification or calls context builder.
+
+**🔴 Breakpoints to set:**
+1. `utils/test_endpoints.py` - `async def test_confidence_checker(request: ConfidenceCheckRequest):`
+2. `nodes/confidence.py` - `async def confidence_checker_node(state: AgentState)`
+3. `nodes/confidence.py` - Confidence check decision logic
+4. `nodes/context.py` - `async def build_context_node(state: AgentState)` (if high confidence)
+
+**Request Payload (Low Confidence Example)**:
+```bash
+curl -X POST http://localhost:8000/utils/test-confidence-checker \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "text": "why was my claim rejected",
+    "intent": "claim_rejection_reason",
+    "confidence": 0.45,
+    "entities": {},
+    "session_id": "test-session-123",
+    "uuid": "req-uuid-456",
+    "domain": "claims",
+    "user_info": {"user_id": "member_222"}
+  }'
+```
+
+**Expected Response (Low Confidence)**:
+```json
+{
+  "decision": "clarification",
+  "needs_clarification": true,
+  "clarifying_question": "I'\''m not quite sure what you'\''re asking. Could you rephrase your question?",
+  "response": "I'\''m not quite sure what you'\''re asking. Could you rephrase your question?",
+  "metadata": {
+    "clarification": true,
+    "clarification_reason": "low_confidence",
+    "missing_entities": [],
+    "confidence": 0.45,
+    "threshold": 0.7
+  },
+  "timestamp": "2025-01-09T..."
+}
+```
+
+**Request Payload (High Confidence Example)**:
+```bash
+curl -X POST http://localhost:8000/utils/test-confidence-checker \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "text": "what is the status of claim 12345678",
+    "intent": "claim_status",
+    "confidence": 0.92,
+    "entities": {"claim_number": "12345678"},
+    "session_id": "test-session-123",
+    "uuid": "req-uuid-456",
+    "domain": "claims",
+    "user_info": {"user_id": "member_222"}
+  }'
+```
+
+**Expected Response (High Confidence)**:
+```json
+{
+  "decision": "proceed",
+  "confidence_check_passed": true,
+  "context_builder_input": {
+    "intent": "claim_status",
+    "confidence": 0.92,
+    "entities": {"claim_number": "12345678"},
+    "domain": "claims",
+    "uuid": "req-uuid-456",
+    "user_profile": {"user_id": "member_222"},
+    "chat_history": []
+  },
+  "context_builder_output": {
+    "conversation_history": [],
+    "relevant_facts": []
+  },
+  "timestamp": "2025-01-09T..."
+}
+```
+
+**Notes**:
+- Confidence threshold is loaded from `config/domain_config.json`
+- If confidence < threshold OR missing required entities → returns clarification
+- If confidence >= threshold → calls context builder, logs to SQLite, returns context builder output
+- All decisions and context builder input/output are logged to `logs` table in SQLite
+- UUID ties all related logs together for audit trail
+
+---
+
 ## 8. Claims API
 
 ### Test Claims API Mock

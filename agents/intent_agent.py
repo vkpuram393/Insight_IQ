@@ -8,12 +8,15 @@ It understands natural language and classifies intent.
 import asyncio
 import re
 import json
+import traceback
 from typing import Dict, Any, List
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
+from core.error_models import create_internal_error, create_llm_error
+from persistence import PersistenceStoreFactory
 
 # Use base logger
 logger = get_logger(__name__)
@@ -70,79 +73,130 @@ class MockLLM:
 
 async def intent_agent_node(state: AgentState) -> Dict[str, Any]:
     """Classify user intent and extract entities."""
-    logger.info("🤖 AGENT 1: Intent Classification")
+    node_name = "intent_agent"
+    session_id = state.get("session_id", "unknown")
+    request_id = state.get("uuid")
+    user_id = state.get("user_info", {}).get("user_id")
+    
+    try:
+        logger.info("🤖 AGENT 1: Intent Classification")
 
-    text = state["text"]
-    history = state.get("conversation_history", [])
+        text = state["text"]
+        history = state.get("conversation_history", [])
 
-    # Normalize history into readable string
-    if isinstance(history, list):
-        if history and isinstance(history[0], dict):
-            history_str = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in history)
+        # Normalize history into readable string
+        if isinstance(history, list):
+            if history and isinstance(history[0], dict):
+                history_str = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in history)
+            else:
+                history_str = "\n".join(str(h) for h in history)
         else:
-            history_str = "\n".join(str(h) for h in history)
-    else:
-        history_str = str(history)
+            history_str = str(history)
 
-    # Select LLM (mock vs real)
-    if settings.use_mock_llm:
-        llm = MockLLM()
-    else:
-        llm = ChatOpenAI(
-            model=settings.llm_model,
-            temperature=settings.llm_temperature,
-            openai_api_key=settings.openai_api_key,
+        # Select LLM (mock vs real)
+        if settings.use_mock_llm:
+            llm = MockLLM()
+        else:
+            llm = ChatOpenAI(
+                model=settings.llm_model,
+                temperature=settings.llm_temperature,
+                openai_api_key=settings.openai_api_key,
+            )
+
+        # Build raw system prompt then escape braces to avoid KeyError during format
+        raw_system_prompt = (
+            "You are an intent classification agent for a pharmacy benefits system.\n\n"
+            "Your job: Classify the user's intent and extract entities.\n\n"
+            "Available intents:\n"
+            "- claim_status: User wants to check claim status\n"
+            "- claim_rejection_reason: User wants to know why claim was rejected\n"
+            "- find_pharmacy: User wants to find a pharmacy\n"
+            "- check_coverage: User wants to check medication coverage\n"
+            "- unknown: Cannot determine intent\n\n"
+            "Respond ONLY with JSON like:\n"
+            '{"intent": "claim_status", "confidence": 0.95, "entities": {"claim_number": "12345"}}\n\n'
+            "Be conservative with confidence; if unsure use lower confidence."
+        )
+        # Escape braces for Python .format safety
+        system_prompt = raw_system_prompt.replace('{', '{{').replace('}', '}}')
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("user", (
+                "User message: {user_text}\n\n"
+                "Conversation history:\n{conversation_history}\n\n"
+                "Classify this."
+            )),
+        ])
+
+        # Format messages
+        messages = prompt.format_messages(
+            user_text=text,
+            conversation_history=history_str if history_str.strip() else "(none)"
         )
 
-    # Build raw system prompt then escape braces to avoid KeyError during format
-    raw_system_prompt = (
-        "You are an intent classification agent for a pharmacy benefits system.\n\n"
-        "Your job: Classify the user's intent and extract entities.\n\n"
-        "Available intents:\n"
-        "- claim_status: User wants to check claim status\n"
-        "- claim_rejection_reason: User wants to know why claim was rejected\n"
-        "- find_pharmacy: User wants to find a pharmacy\n"
-        "- check_coverage: User wants to check medication coverage\n"
-        "- unknown: Cannot determine intent\n\n"
-        "Respond ONLY with JSON like:\n"
-        '{"intent": "claim_status", "confidence": 0.95, "entities": {"claim_number": "12345"}}\n\n'
-        "Be conservative with confidence; if unsure use lower confidence."
-    )
-    # Escape braces for Python .format safety
-    system_prompt = raw_system_prompt.replace('{', '{{').replace('}', '}}')
+        # Invoke LLM
+        response = await llm.ainvoke(messages)
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", (
-            "User message: {user_text}\n\n"
-            "Conversation history:\n{conversation_history}\n\n"
-            "Classify this."
-        )),
-    ])
+        # Parse JSON safely
+        try:
+            result = json.loads(response.content)
+        except Exception:
+            result = {"intent": "unknown", "confidence": 0.1, "entities": {}}
 
-    # Format messages
-    messages = prompt.format_messages(
-        user_text=text,
-        conversation_history=history_str if history_str.strip() else "(none)"
-    )
+        intent = result.get("intent", "unknown")
+        confidence = float(result.get("confidence", 0.1))
+        entities = result.get("entities") or {}
 
-    # Invoke LLM
-    response = await llm.ainvoke(messages)
+        logger.info(f"🎯 Intent: {intent} ({confidence:.2f}) | Entities: {entities}")
 
-    # Parse JSON safely
-    try:
-        result = json.loads(response.content)
-    except Exception:
-        result = {"intent": "unknown", "confidence": 0.1, "entities": {}}
-
-    intent = result.get("intent", "unknown")
-    confidence = float(result.get("confidence", 0.1))
-    entities = result.get("entities") or {}
-
-    logger.info(f"🎯 Intent: {intent} ({confidence:.2f}) | Entities: {entities}")
-
-    return {
-        "intent": intent,
-        "confidence": confidence,
-        "entities": entities,
-    }
+        return {
+            "intent": intent,
+            "confidence": confidence,
+            "entities": entities,
+        }
+        
+    except Exception as e:
+        tb = traceback.format_exc()
+        # Check if it's an LLM-related error
+        if "openai" in str(e).lower() or "llm" in str(e).lower() or "api" in str(e).lower():
+            error = create_llm_error(
+                error_message=str(e),
+                session_id=session_id
+            )
+        else:
+            error = create_internal_error(
+                error_message=f"Intent classification failed: {str(e)}",
+                stacktrace=tb,
+                session_id=session_id,
+                node_name=node_name
+            )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=session_id,
+            request_id=request_id,
+            node_name=node_name,
+            stacktrace=error.stacktrace or tb,
+            metadata=error.metadata,
+            user_id=user_id
+        )
+        
+        logger.error(f"🚨 Exception in intent agent: {e}\n{tb}")
+        
+        return {
+            "error": error.user_message,
+            "intent": "unknown",
+            "confidence": 0.0,
+            "entities": {},
+            "metadata": {
+                **state.get("metadata", {}),
+                "error_occurred": True,
+                "error_code": error.error_code.value
+            }
+        }

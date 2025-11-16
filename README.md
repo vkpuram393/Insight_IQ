@@ -270,12 +270,195 @@ git push origin feature/real-llm-integration
 Existing bash examples remain valid on macOS/Linux; substitute PowerShell commands where needed for Windows.
 
 ---
-## 15. Observability & Logging (Starter)
-Current logging: simple stdout with timestamps.
+## 15. Observability & Logging
+
+### Current Logging
+- **Stdout logging**: Simple timestamps and messages to console
+- **SQLite audit logs**: All state transitions, decisions, and API calls logged to `data/telemetry.db`
+- **SQLite exceptions**: All exceptions logged to `data/telemetry.db` with full stack traces
+
+### Database Schema
+
+The application uses SQLite (`data/telemetry.db`) with three main tables:
+
+1. **`logs`** - Audit trail of all operations
+   - `log_id`, `session_id`, `request_id`, `node_name`, `event_type`, `data`, `timestamp`, `user_id`
+
+2. **`exceptions`** - All exceptions and errors
+   - `exception_id`, `error_code`, `category`, `severity`, `message`, `user_message`, `session_id`, `request_id`, `node_name`, `stacktrace`, `metadata`, `timestamp`, `user_id`
+
+3. **`requests`** - Complete request-response cycles
+   - `request_id`, `session_id`, `user_id`, `user_text`, `intent`, `confidence`, `response`, `metadata`, `duration_ms`, `timestamp`
+
+### Querying Logs
+
+#### View All Recent Logs
+```bash
+sqlite3 data/telemetry.db "SELECT * FROM logs ORDER BY timestamp DESC LIMIT 20;"
+```
+
+#### View Logs for a Specific Request (by UUID)
+```bash
+# Replace 'your-uuid-here' with actual request UUID
+sqlite3 data/telemetry.db "SELECT * FROM logs WHERE request_id = 'your-uuid-here' ORDER BY timestamp;"
+```
+
+#### View Logs for a Specific Session
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, event_type, timestamp, SUBSTR(data, 1, 100) as data_preview FROM logs WHERE session_id = 'your-session-id' ORDER BY timestamp;"
+```
+
+#### View Logs by Node
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, event_type, COUNT(*) as count FROM logs GROUP BY node_name, event_type ORDER BY count DESC;"
+```
+
+#### View Confidence Check Decisions
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, timestamp, json_extract(data, '$.decision') as decision, json_extract(data, '$.confidence') as confidence FROM logs WHERE event_type = 'confidence_check_decision' ORDER BY timestamp DESC LIMIT 10;"
+```
+
+#### View Context Builder Input/Output
+```bash
+# View context builder inputs
+sqlite3 data/telemetry.db "SELECT timestamp, json_extract(data, '$.intent') as intent, json_extract(data, '$.domain') as domain FROM logs WHERE event_type = 'context_builder_input' ORDER BY timestamp DESC LIMIT 10;"
+
+# View context builder outputs
+sqlite3 data/telemetry.db "SELECT timestamp, json_extract(data, '$.history_length') as history_length, json_extract(data, '$.facts_count') as facts_count FROM logs WHERE event_type = 'context_builder_output' ORDER BY timestamp DESC LIMIT 10;"
+```
+
+### Querying Exceptions
+
+#### View All Recent Exceptions
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, error_code, category, severity, SUBSTR(message, 1, 80) as message_preview, timestamp FROM exceptions ORDER BY timestamp DESC LIMIT 20;"
+```
+
+#### View Exceptions by Node
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, COUNT(*) as count, MAX(timestamp) as latest FROM exceptions GROUP BY node_name ORDER BY count DESC;"
+```
+
+#### View Exceptions by Severity
+```bash
+sqlite3 data/telemetry.db "SELECT severity, COUNT(*) as count FROM exceptions GROUP BY severity;"
+```
+
+#### View Exceptions for a Specific Request (by UUID)
+```bash
+sqlite3 data/telemetry.db "SELECT node_name, error_code, category, severity, message, timestamp FROM exceptions WHERE request_id = 'your-uuid-here' ORDER BY timestamp;"
+```
+
+#### View Exception Details with Stack Trace
+```bash
+# View full exception details including stack trace
+sqlite3 data/telemetry.db "SELECT exception_id, node_name, error_code, message, stacktrace FROM exceptions WHERE node_name = 'safety_precheck' ORDER BY timestamp DESC LIMIT 1;" | python -m json.tool
+```
+
+#### View Exceptions by Error Code
+```bash
+sqlite3 data/telemetry.db "SELECT error_code, COUNT(*) as count, category FROM exceptions GROUP BY error_code, category ORDER BY count DESC;"
+```
+
+### Advanced Queries
+
+#### Find All Logs and Exceptions for a Request (Full Audit Trail)
+```bash
+# Get all logs for a request UUID
+sqlite3 data/telemetry.db "
+SELECT 'LOG' as type, node_name, event_type, timestamp, data 
+FROM logs 
+WHERE request_id = 'your-uuid-here'
+UNION ALL
+SELECT 'EXCEPTION' as type, node_name, error_code, timestamp, message 
+FROM exceptions 
+WHERE request_id = 'your-uuid-here'
+ORDER BY timestamp;
+"
+```
+
+#### Count Logs and Exceptions by Node (Health Check)
+```bash
+sqlite3 data/telemetry.db "
+SELECT 
+    node_name,
+    (SELECT COUNT(*) FROM logs WHERE logs.node_name = nodes.node_name) as log_count,
+    (SELECT COUNT(*) FROM exceptions WHERE exceptions.node_name = nodes.node_name) as exception_count
+FROM (
+    SELECT DISTINCT node_name FROM logs
+    UNION
+    SELECT DISTINCT node_name FROM exceptions
+) as nodes
+ORDER BY exception_count DESC, log_count DESC;
+"
+```
+
+#### View Exception Rate Over Time
+```bash
+sqlite3 data/telemetry.db "
+SELECT 
+    DATE(timestamp) as date,
+    COUNT(*) as exception_count,
+    COUNT(DISTINCT node_name) as affected_nodes
+FROM exceptions 
+GROUP BY DATE(timestamp)
+ORDER BY date DESC
+LIMIT 7;
+"
+```
+
+### Using SQLite Browser Tools
+
+For a GUI experience, you can use:
+- **DB Browser for SQLite** (cross-platform): https://sqlitebrowser.org/
+- **VS Code Extension**: SQLite Viewer
+- **DBeaver** (cross-platform database tool)
+
+Open `data/telemetry.db` in any of these tools to browse tables visually.
+
+### Example: Complete Request Audit Trail
+
+To see everything that happened for a specific request:
+
+```bash
+REQUEST_UUID="your-request-uuid-here"
+
+echo "=== LOGS ==="
+sqlite3 data/telemetry.db "SELECT node_name, event_type, timestamp, data FROM logs WHERE request_id = '$REQUEST_UUID' ORDER BY timestamp;"
+
+echo -e "\n=== EXCEPTIONS ==="
+sqlite3 data/telemetry.db "SELECT node_name, error_code, severity, message FROM exceptions WHERE request_id = '$REQUEST_UUID' ORDER BY timestamp;"
+
+echo -e "\n=== REQUEST SUMMARY ==="
+sqlite3 data/telemetry.db "SELECT user_text, intent, confidence, response, duration_ms FROM requests WHERE request_id = '$REQUEST_UUID';"
+```
+
+### Quick Reference: Most Common Queries
+
+```bash
+# View recent exceptions
+sqlite3 data/telemetry.db "SELECT node_name, error_code, severity, timestamp FROM exceptions ORDER BY timestamp DESC LIMIT 10;"
+
+# View recent logs
+sqlite3 data/telemetry.db "SELECT node_name, event_type, timestamp FROM logs ORDER BY timestamp DESC LIMIT 10;"
+
+# Count exceptions by node
+sqlite3 data/telemetry.db "SELECT node_name, COUNT(*) FROM exceptions GROUP BY node_name;"
+
+# View all logs for a session
+sqlite3 data/telemetry.db "SELECT * FROM logs WHERE session_id = 'your-session-id' ORDER BY timestamp;"
+
+# View all exceptions for a session
+sqlite3 data/telemetry.db "SELECT * FROM exceptions WHERE session_id = 'your-session-id' ORDER BY timestamp;"
+```
+
+### Production Considerations
 Ideas to upgrade:
-- Add correlation IDs (already have `session_id` concept)
+- Add correlation IDs (already have `session_id` and `request_id`/`uuid` concept)
 - Ship logs to ELK / Splunk / OpenTelemetry
 - Add latency metrics per node (LangGraph hooks or decorators)
+- Migrate from SQLite to MongoDB/Firestore for production scale
+- Add log retention policies and archival
 
 ---
 ## 16. Security & Compliance Placeholders
