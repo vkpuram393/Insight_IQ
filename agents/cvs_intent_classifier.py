@@ -71,7 +71,7 @@ class CVSIntentClassifier:
             'drug_info': {
                 'drug': 0.9, 'medication': 0.9, 'medicine': 0.8,
                 'prescription': 0.7, 'pill': 0.7, 'tablet': 0.7,
-                'name': 0.3,
+                'name': 0.3, 
                 'taking': 0.5, 'prescribed': 0.3, 'rx': 0.8,
                 'product': 0.5, 'gpi': 0.8
             },
