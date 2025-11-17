@@ -379,3 +379,71 @@ def create_internal_error(
         is_retryable=False
     )
 
+
+# ============================================================================
+# Orchestrator-Specific Error Helpers
+# ============================================================================
+
+def create_orchestrator_empty_input_error(
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> AgentError:
+    """Create error for empty input in orchestrator"""
+    return AgentError(
+        error_code=ErrorCode.INVALID_INPUT,
+        category=ErrorCategory.VALIDATION,
+        severity=ErrorSeverity.LOW,
+        message="Orchestrator received empty input text",
+        user_message="Please provide a message to continue.",
+        session_id=session_id,
+        user_id=user_id,
+        node_name="orchestrator",
+        is_retryable=False,
+        metadata={"error_type": "empty_input"}
+    )
+
+
+def create_orchestrator_invalid_type_error(
+    input_type: type,
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> AgentError:
+    """Create error for invalid input type in orchestrator"""
+    return AgentError(
+        error_code=ErrorCode.INVALID_FORMAT,
+        category=ErrorCategory.VALIDATION,
+        severity=ErrorSeverity.LOW,
+        message=f"Orchestrator received invalid input type: {input_type.__name__}",
+        user_message="I received an invalid input format. Please try again.",
+        session_id=session_id,
+        user_id=user_id,
+        node_name="orchestrator",
+        is_retryable=False,
+        metadata={"error_type": "invalid_type", "received_type": input_type.__name__}
+    )
+
+
+def create_orchestrator_normalization_error(
+    exception: Exception,
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    stacktrace: Optional[str] = None
+) -> AgentError:
+    """Create error for normalization failure in orchestrator"""
+    return AgentError(
+        error_code=ErrorCode.INTERNAL_ERROR,
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.MEDIUM,
+        message=f"Orchestrator normalization failed: {str(exception)}",
+        user_message="I encountered an issue processing your input. Please try again.",
+        session_id=session_id,
+        user_id=user_id,
+        node_name="orchestrator",
+        is_retryable=True,
+        stacktrace=stacktrace,
+        metadata={
+            "error_type": "normalization_failure",
+            "exception_type": type(exception).__name__,
+            "exception_message": str(exception)
+        }
+    )

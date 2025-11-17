@@ -39,6 +39,9 @@ class Settings(BaseSettings):
 
     # Cache
     enable_semantic_cache: bool = True
+    
+    # Orchestrator
+    remove_punctuation_in_normalization: bool = True
 
     # Memory Store (cache and session memory)
     memory_store_type: str = "inmemory"  # Options: "inmemory", "redis", "memorystore"

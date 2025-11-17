@@ -10,6 +10,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from state.schema import AgentState
 from nodes import (
+    orchestrator_node,
     safety_precheck_node,
     check_cache_node,
     build_context_node,
@@ -62,6 +63,8 @@ def should_continue_after_cache(state: AgentState) -> str:
 
 def _build_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
+
+    workflow.add_node("orchestrator", orchestrator_node)
     workflow.add_node("safety_precheck", safety_precheck_node)
     workflow.add_node("safety_postcheck", safety_postcheck_node)
     workflow.add_node("check_cache", check_cache_node)
@@ -73,7 +76,10 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
-    workflow.set_entry_point("safety_precheck")
+    # Set orchestrator as entry point
+    workflow.set_entry_point("orchestrator")
+    # Connect orchestrator to safety_precheck
+    workflow.add_edge("orchestrator", "safety_precheck")
     workflow.add_conditional_edges(
         "safety_precheck", should_continue_after_precheck, {"check_cache": "check_cache", END: END}
     )
