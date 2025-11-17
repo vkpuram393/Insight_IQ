@@ -85,6 +85,11 @@ class ContextTestRequest(BaseModel):
     session_id: str
     text: str
 
+class OrchestratorTestRequest(BaseModel):
+    text: str
+    session_id: Optional[str] = None
+    user_info: Optional[Dict[str, Any]] = None
+
 # ==================== Intent Classifier Tests ====================
 
 @router.post("/test-intent", response_model=IntentTestResponse)
@@ -403,6 +408,92 @@ async def test_context_building(request: ContextBuilderTestRequest):
     except Exception as e:
         logger.error(f"Context building test failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Orchestrator Tests ====================
+
+@router.post("/test-orchestrator")
+async def test_orchestrator(request: OrchestratorTestRequest):
+    """
+    Test orchestrator node normalization
+    
+    Tests: nodes/orchestrator.py
+    
+    This endpoint tests the orchestrator's input normalization logic without
+    running the full LangGraph workflow. Useful for verifying text processing.
+    
+    Example cURL command:
+    ```bash
+    curl -X POST "http://localhost:8000/utils/test-orchestrator" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "text": "  Why was MY claim REJECTED?  ",
+        "session_id": "test-orch-1"
+      }'
+    ```
+    
+    Example PowerShell command (Windows):
+    ```powershell
+    Invoke-RestMethod -Uri "http://localhost:8000/utils/test-orchestrator" `
+      -Method POST `
+      -ContentType "application/json" `
+      -Body '{"text": "  Why was MY claim REJECTED?  ", "session_id": "ps-test-1"}'
+    ```
+    """
+    try:
+        from nodes.orchestrator import orchestrator_node
+        
+        logger.info(f"🧪 TEST ORCHESTRATOR: Received test request with {len(request.text)} chars")
+        
+        # Create initial state (mimics what comes from api/routes.py)
+        # Use create_initial_state helper for consistency with orchestrator requirements
+        from state.schema import create_initial_state
+        
+        state = create_initial_state(
+            text=request.text,
+            session_id=request.session_id or str(uuid.uuid4()),
+            user_info=request.user_info or {}
+        )
+        
+        # Run orchestrator node
+        result = await orchestrator_node(state)
+        
+        # Extract orchestrator metadata
+        orchestrator_meta = result.get("metadata", {}).get("orchestrator_metadata", {})
+        original_text = result.get("metadata", {}).get("original_text", request.text)
+        
+        return {
+            "success": not orchestrator_meta.get("error", False),
+            "input": {
+                "raw_text": request.text,
+                "length": len(request.text),
+                "session_id": request.session_id or str(uuid.uuid4())
+            },
+            "output": {
+                "normalized_text": result.get("text", ""),
+                "original_text": original_text,
+                "length": len(result.get("text", "")),
+                "metadata": orchestrator_meta
+            },
+            "comparison": {
+                "chars_removed": len(request.text) - len(result.get("text", "")),
+                "was_normalized": orchestrator_meta.get("normalization_applied", False)
+            },
+            "error": {
+                "occurred": orchestrator_meta.get("error", False),
+                "type": orchestrator_meta.get("error_type"),
+                "message": orchestrator_meta.get("error_message")
+            } if orchestrator_meta.get("error") else None,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"🧪 TEST ORCHESTRATOR ERROR: {str(e)}")
+        import traceback
+        logger.error(f"🔍 STACK TRACE:\n{traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Orchestrator test failed: {str(e)}"
+        )
+
 
 
 # ==================== Safety Tests ====================
@@ -866,6 +957,7 @@ async def utils_health():
             "/utils/test-persistence",
             "/utils/test-session-history",
             "/utils/test-context-building",
+            "/utils/test-orchestrator",
             "/utils/test-safety-precheck",
             "/utils/test-safety-postcheck",
             "/utils/test-clarification",

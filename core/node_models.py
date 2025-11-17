@@ -708,6 +708,70 @@ class CacheResult(BaseModel):
 
 
 # ============================================================================
+# ORCHESTRATOR MODELS
+# ============================================================================
+
+class OrchestratorResult(BaseModel):
+    """
+    Result from orchestrator node
+    
+    Contains normalized text, original text, normalization metadata,
+    and any errors that occurred during processing.
+    """
+    # Core output
+    normalized_text: str = Field(..., description="Normalized text for downstream processing")
+    original_text: str = Field(..., description="Original user input (preserved)")
+    normalization_applied: bool = Field(..., description="Whether normalization was successful")
+    
+    # Normalization metadata
+    original_length: int = Field(..., description="Length of original text")
+    normalized_length: int = Field(..., description="Length of normalized text")
+    chars_removed: int = Field(default=0, description="Number of characters removed")
+    normalization_steps: List[str] = Field(
+        default_factory=list,
+        description="List of normalization steps applied"
+    )
+    
+    # Error information (if any)
+    error: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Structured error information (serialized AgentError)"
+    )
+    
+    # Processing metadata
+    processing_time_ms: Optional[float] = Field(
+        None,
+        description="Time taken for normalization"
+    )
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        description="Processing timestamp"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "normalized_text": "what is my claim status",
+                "original_text": "What is my claim status?",
+                "normalization_applied": True,
+                "original_length": 25,
+                "normalized_length": 22,
+                "chars_removed": 3,
+                "normalization_steps": [
+                    "lowercase",
+                    "collapse_spaces",
+                    "unicode_nfd",
+                    "remove_zero_width",
+                    "remove_punctuation",
+                    "strip_whitespace"
+                ],
+                "error": None,
+                "processing_time_ms": 2.5,
+                "timestamp": "2025-01-15T10:30:45.123456Z"
+            }
+        }
+
+# ============================================================================
 # CONFIDENCE CHECK MODELS
 # ============================================================================
 
@@ -832,3 +896,18 @@ def create_response_payload(
         **kwargs
     )
 
+
+
+def create_orchestrator_result(
+    normalized_text: str,
+    original_text: str,
+    normalization_applied: bool = True,
+    **kwargs
+) -> OrchestratorResult:
+    """Helper to create OrchestratorResult with defaults"""
+    return OrchestratorResult(
+        normalized_text=normalized_text,
+        original_text=original_text,
+        normalization_applied=normalization_applied,
+        **kwargs
+    )

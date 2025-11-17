@@ -37,11 +37,14 @@ from core.node_models import (
     # Confidence models
     ConfidenceCheckResult,
     ConfidenceCheckDecision,
+    # Orchestrator models
+    OrchestratorResult,
     # Helper functions
     create_intent_result,
     create_safety_result,
     create_tool_result,
     create_response_payload,
+    create_orchestrator_result,
 )
 from core.logger import get_logger
 
@@ -535,6 +538,128 @@ class TestConfidenceCheckResult:
         assert result.passed_threshold is False
         assert "claim_number" in result.missing_entities
         assert result.entities_complete is False
+
+
+class TestOrchestratorResult:
+    """Tests for OrchestratorResult model"""
+    
+    def test_create_basic_orchestrator_result(self):
+        """Test creating basic orchestrator result"""
+        result = OrchestratorResult(
+            normalized_text="hello world",
+            original_text="Hello World!",
+            normalization_applied=True,
+            original_length=12,
+            normalized_length=11
+        )
+        
+        assert result.normalized_text == "hello world"
+        assert result.original_text == "Hello World!"
+        assert result.normalization_applied is True
+        assert result.original_length == 12
+        assert result.normalized_length == 11
+        assert result.chars_removed == 0  # default
+        assert result.error is None
+    
+    def test_orchestrator_result_with_normalization_steps(self):
+        """Test orchestrator result with normalization steps"""
+        result = OrchestratorResult(
+            normalized_text="whats my claim status",
+            original_text="What's my claim status?",
+            normalization_applied=True,
+            original_length=25,
+            normalized_length=22,
+            chars_removed=3,
+            normalization_steps=[
+                "strip_whitespace",
+                "lowercase",
+                "collapse_spaces",
+                "unicode_nfd",
+                "remove_zero_width",
+                "remove_punctuation"
+            ]
+        )
+        
+        assert result.chars_removed == 3
+        assert len(result.normalization_steps) == 6
+        assert "lowercase" in result.normalization_steps
+        assert "remove_punctuation" in result.normalization_steps
+    
+    def test_orchestrator_result_with_error(self):
+        """Test orchestrator result with error"""
+        error_dict = {
+            "error_code": "E1001",
+            "category": "validation",
+            "severity": "low",
+            "message": "Empty input"
+        }
+        
+        result = OrchestratorResult(
+            normalized_text="",
+            original_text="",
+            normalization_applied=False,
+            original_length=0,
+            normalized_length=0,
+            error=error_dict
+        )
+        
+        assert result.normalization_applied is False
+        assert result.error is not None
+        assert result.error["error_code"] == "E1001"
+        assert result.error["category"] == "validation"
+    
+    def test_orchestrator_result_serialization(self):
+        """Test orchestrator result serialization"""
+        result = OrchestratorResult(
+            normalized_text="test",
+            original_text="Test",
+            normalization_applied=True,
+            original_length=4,
+            normalized_length=4,
+            processing_time_ms=2.5
+        )
+        
+        result_dict = result.model_dump(mode="json")
+        
+        assert isinstance(result_dict, dict)
+        assert result_dict["normalized_text"] == "test"
+        assert result_dict["original_text"] == "Test"
+        assert result_dict["processing_time_ms"] == 2.5
+        assert "timestamp" in result_dict
+    
+    def test_create_orchestrator_result_helper(self):
+        """Test create_orchestrator_result helper function"""
+        result = create_orchestrator_result(
+            normalized_text="hello",
+            original_text="Hello",
+            normalization_applied=True,
+            original_length=5,
+            normalized_length=5
+        )
+        
+        assert isinstance(result, OrchestratorResult)
+        assert result.normalized_text == "hello"
+        assert result.normalization_applied is True
+    
+    def test_orchestrator_result_with_all_fields(self):
+        """Test orchestrator result with all fields"""
+        result = OrchestratorResult(
+            normalized_text="normalized",
+            original_text="Original",
+            normalization_applied=True,
+            original_length=8,
+            normalized_length=10,
+            chars_removed=0,
+            normalization_steps=["step1", "step2"],
+            error=None,
+            processing_time_ms=3.2,
+            timestamp="2025-01-15T10:30:00Z"
+        )
+        
+        assert result.normalized_length == 10
+        assert result.processing_time_ms == 3.2
+        assert result.timestamp == "2025-01-15T10:30:00Z"
+        assert len(result.normalization_steps) == 2
 
 
 class TestIntegrationScenarios:

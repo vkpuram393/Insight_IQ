@@ -20,6 +20,10 @@ from core.error_models import (
     create_llm_error,
     create_session_error,
     create_internal_error,
+    # Orchestrator-specific helpers
+    create_orchestrator_empty_input_error,
+    create_orchestrator_invalid_type_error,
+    create_orchestrator_normalization_error,
 )
 from core.logger import get_logger
 
@@ -338,6 +342,69 @@ class TestHelperFunctions:
         assert error.stacktrace == "Traceback: ..."
         assert error.node_name == "intent_agent"
         assert error.is_retryable is False
+
+    
+    def test_create_orchestrator_empty_input_error(self):
+        """Test orchestrator empty input error helper"""
+        error = create_orchestrator_empty_input_error(
+            session_id="test-session-123",
+            user_id="user-456"
+        )
+        
+        assert error.error_code == ErrorCode.INVALID_INPUT
+        assert error.category == ErrorCategory.VALIDATION
+        assert error.severity == ErrorSeverity.LOW
+        assert error.message == "Orchestrator received empty input text"
+        assert error.user_message == "Please provide a message to continue."
+        assert error.session_id == "test-session-123"
+        assert error.user_id == "user-456"
+        assert error.node_name == "orchestrator"
+        assert error.is_retryable is False
+        assert error.metadata["error_type"] == "empty_input"
+    
+    def test_create_orchestrator_invalid_type_error(self):
+        """Test orchestrator invalid type error helper"""
+        error = create_orchestrator_invalid_type_error(
+            input_type=int,
+            session_id="test-session-123",
+            user_id="user-456"
+        )
+        
+        assert error.error_code == ErrorCode.INVALID_FORMAT
+        assert error.category == ErrorCategory.VALIDATION
+        assert error.severity == ErrorSeverity.LOW
+        assert "invalid input type: int" in error.message.lower()
+        assert "invalid input format" in error.user_message.lower()
+        assert error.session_id == "test-session-123"
+        assert error.user_id == "user-456"
+        assert error.node_name == "orchestrator"
+        assert error.is_retryable is False
+        assert error.metadata["error_type"] == "invalid_type"
+        assert error.metadata["received_type"] == "int"
+    
+    def test_create_orchestrator_normalization_error(self):
+        """Test orchestrator normalization error helper"""
+        test_exception = ValueError("Unicode normalization failed")
+        error = create_orchestrator_normalization_error(
+            exception=test_exception,
+            session_id="test-session-123",
+            user_id="user-456",
+            stacktrace="Traceback: ..."
+        )
+        
+        assert error.error_code == ErrorCode.INTERNAL_ERROR
+        assert error.category == ErrorCategory.SYSTEM
+        assert error.severity == ErrorSeverity.MEDIUM
+        assert "normalization failed" in error.message.lower()
+        assert "processing your input" in error.user_message.lower()
+        assert error.session_id == "test-session-123"
+        assert error.user_id == "user-456"
+        assert error.node_name == "orchestrator"
+        assert error.is_retryable is True
+        assert error.stacktrace == "Traceback: ..."
+        assert error.metadata["error_type"] == "normalization_failure"
+        assert error.metadata["exception_type"] == "ValueError"
+        assert error.metadata["exception_message"] == "Unicode normalization failed"
 
 
 class TestErrorCodes:
