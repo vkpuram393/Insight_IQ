@@ -22,6 +22,7 @@ async def call_claims_tool_node(state: AgentState) -> Dict[str, Any]:
     In production, this would be a real HTTP call.
 
     INPUT (from state):
+        - api_endpoint: Which API endpoint to call (NEW - from config!)
         - intent: What data to fetch
         - entities: Parameters (e.g., claim_number)
 
@@ -36,9 +37,18 @@ async def call_claims_tool_node(state: AgentState) -> Dict[str, Any]:
     try:
         logger.info("🔧 Node: Call Claims Tool")
 
+        # ========== NEW: Read API endpoint from state ==========
+        api_endpoint = state.get("api_endpoint")
         intent = state["intent"]
         entities = state.get("entities", {})
         claim_number = entities.get("claim_number", "12345")  # fallback
+        
+        # If no API needed (greeting, help, etc.), skip
+        if not api_endpoint:
+            logger.info(f"💬 No API call needed for intent '{intent}'")
+            return {"tool_results": None, "api_error": None}
+        
+        logger.info(f"🔗 API Endpoint: {api_endpoint}")
 
         # Simulate API call
         await asyncio.sleep(0.2)
@@ -59,24 +69,33 @@ async def call_claims_tool_node(state: AgentState) -> Dict[str, Any]:
                 "action_needed": "Doctor must submit documentation"
             }
         else:
-            results = {}
+            # Default mock for other intents
+            # Team will replace with real API calls
+            results = {
+                "claim_id": claim_number,
+                "message": f"Mock data for intent: {intent}",
+                "api_endpoint": api_endpoint
+            }
 
         logger.info(f"✅ Tool results: {results}")
-
-        return {"tool_results": results}
+        
+        # Clear error on success
+        return {"tool_results": results, "api_error": None}
         
     except Exception as e:
         tb = traceback.format_exc()
+        error_msg = str(e)
+        
         # Check if it's an API-related error
         if "api" in str(e).lower() or "http" in str(e).lower() or "connection" in str(e).lower():
             error = create_api_error(
                 api_name="claims_api",
-                error_message=str(e),
+                error_message=error_msg,
                 session_id=session_id
             )
         else:
             error = create_internal_error(
-                error_message=f"Claims API call failed: {str(e)}",
+                error_message=f"Claims API call failed: {error_msg}",
                 stacktrace=tb,
                 session_id=session_id,
                 node_name=node_name
@@ -99,9 +118,11 @@ async def call_claims_tool_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in claims tool: {e}\n{tb}")
         
+        # Return error for fallback routing
         return {
             "error": error.user_message,
             "tool_results": {},
+            "api_error": error_msg,
             "metadata": {
                 **state.get("metadata", {}),
                 "error_occurred": True,

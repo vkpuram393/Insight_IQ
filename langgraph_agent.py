@@ -15,9 +15,11 @@ from nodes import (
     build_context_node,
     clarification_node,
     confidence_check_router,
+    route_after_api_call,  # NEW: API error fallback routing
     safety_postcheck_node,
     update_memory_node,
-    cache_response_node
+    cache_response_node,
+    master_llm_agent_node  # NEW: Master LLM Agent (Stage 2)
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
@@ -68,6 +70,7 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("build_context", build_context_node)
     workflow.add_node("intent_agent", intent_agent_node)
+    workflow.add_node("master_llm", master_llm_agent_node)  # NEW: Master LLM Agent (Stage 2)
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
     workflow.add_node("clarification", clarification_node)
@@ -81,11 +84,57 @@ def _build_workflow() -> StateGraph:
         "check_cache", should_continue_after_cache, {"build_context": "build_context", END: END}
     )
     workflow.add_edge("build_context", "intent_agent")
+    
+    # NEW: Three-way routing from intent_agent
+    # - tool_call: Stage 1 caught API query → go to API
+    # - master_llm: Stage 1 uncertain → go to Master LLM Agent (Stage 2)
+    # - clarification: Stage 1 knows we need clarification
     workflow.add_conditional_edges(
-        "intent_agent", confidence_check_router, {"clarification": "clarification", "tool_call": "call_claims_tool"}
+        "intent_agent", 
+        confidence_check_router, 
+        {
+            "clarification": "clarification", 
+            "tool_call": "call_claims_tool",
+            "master_llm": "master_llm"  # NEW: Route to Master LLM Agent
+        }
     )
+    
+    # NEW: Master LLM Agent can reroute to API or respond directly
+    def route_after_master_llm(state: AgentState) -> str:
+        """Route after Master LLM Agent decision"""
+        if state.get("needs_api_reroute"):
+            logger.info("🔄 Master LLM rerouting to API path!")
+            return "call_claims_tool"
+        elif state.get("response"):
+            # LLM provided a direct response (greeting, clarification, etc.)
+            logger.info("💬 Master LLM provided direct response → skipping to postcheck")
+            return "safety_postcheck"
+        else:
+            # Default: go to response agent
+            return "response_agent"
+    
+    workflow.add_conditional_edges(
+        "master_llm",
+        route_after_master_llm,
+        {
+            "call_claims_tool": "call_claims_tool",
+            "response_agent": "response_agent",
+            "safety_postcheck": "safety_postcheck"
+        }
+    )
+    
     workflow.add_edge("clarification", "update_memory")  # CHANGED: clarification no longer ends graph directly
-    workflow.add_edge("call_claims_tool", "response_agent")
+    
+    # NEW: API error handling with LLM fallback (CRITICAL for multiple APIs!)
+    workflow.add_conditional_edges(
+        "call_claims_tool",
+        route_after_api_call,
+        {
+            "master_llm": "master_llm",          # LLM fallback on API failure
+            "response_agent": "response_agent"   # Success
+        }
+    )
+    
     workflow.add_edge("response_agent", "safety_postcheck")
     workflow.add_edge("safety_postcheck", "update_memory")
     workflow.add_edge("update_memory", "cache_response")

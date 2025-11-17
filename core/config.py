@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     requests_ca_bundle: str | None = None
 
     # Agent
-    confidence_threshold: float = 0.7
+    confidence_threshold: float = 0.6  # Lowered to route more uncertain queries to Master LLM Agent
+    use_cvs_intent_classifier: bool = True  # Set to True to use Ahmed's production-ready CVS classifier (28+ intents)
 
     # Safety
     enable_safety_precheck: bool = True
