@@ -1,4 +1,4 @@
-# Intent Classifier Explained - For 18-Year-Olds with ML Knowledge
+# Intent Classifier Explained
 
 ## 🎯 What is Intent Classification?
 
