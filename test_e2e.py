@@ -31,12 +31,10 @@ DB_PATH = "data/telemetry.db"
 # Expected logging events by node
 EXPECTED_LOG_EVENTS = {
     "confidence_checker": [
-        "confidence_check_decision",
-        "context_builder_input"
+        "state_snapshot"
     ],
     "build_context": [
-        "context_builder_output",
-        "planner_context"
+        "state_snapshot"
     ],
     # Other nodes may not have explicit audit logs, but exceptions should be logged
 }

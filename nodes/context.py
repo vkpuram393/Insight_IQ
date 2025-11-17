@@ -12,7 +12,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
 
@@ -174,40 +174,18 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
         logger.info(f"📊 Context built: {len(conversation_history)} messages, {len(relevant_facts)} facts, {len(extracted_slots)} slots")
         logger.debug(f"   Extracted slots from history: {planner_context['slots']['extracted_from_history']}")
 
-        # Log context builder output
-        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
-        await persistence_store.log_audit(
-            session_id=log_ctx["session_id"],
-            node_name=node_name,
-            event_type="context_builder_output",
-            data={
-                "history_length": len(conversation_history),
-                "facts_count": len(relevant_facts),
-                "slots_count": len(extracted_slots),
-                "missing_slots": missing_slots,
-                "intent": intent
-            },
-            request_id=log_ctx["request_id"],
-            user_id=log_ctx["user_id"]
-        )
-        
-        # Log full planner context (for debugging/audit)
-        await persistence_store.log_audit(
-            session_id=log_ctx["session_id"],
-            node_name=node_name,
-            event_type="planner_context",
-            data=planner_context,
-            request_id=log_ctx["request_id"],
-            user_id=log_ctx["user_id"]
-        )
-
         # Return multiple fields (following existing pattern)
-        return {
+        result = {
             "conversation_history": conversation_history,
             "relevant_facts": relevant_facts,
             "extracted_slots": extracted_slots,
             "planner_context": planner_context
         }
+        
+        # Log full AgentState snapshot after this node
+        await log_state_snapshot(state, node_name, result)
+        
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

@@ -17,7 +17,7 @@ from core.error_models import (
     create_low_confidence_error,
     create_internal_error
 )
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
@@ -106,9 +106,6 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # Determine if confidence is low
         confidence_low = confidence < threshold
         
-        # Get persistence store for logging
-        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
-        
         if confidence_low or missing_slots:
             # Low confidence or missing slots -> clarification
             logger.info(f"⚠️ Low confidence or missing slots -> Clarification")
@@ -139,21 +136,8 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                 }
             }
             
-            # Log confidence check decision
-            await persistence_store.log_audit(
-                session_id=log_ctx["session_id"],
-                node_name=node_name,
-                event_type="confidence_check_decision",
-                data={
-                    "decision": "clarification",
-                    "confidence": confidence,
-                    "threshold": threshold,
-                    "missing_slots": missing_slots,
-                    "reason": clarification_reason
-                },
-                request_id=log_ctx["request_id"],
-                user_id=log_ctx["user_id"]
-            )
+            # Log full AgentState snapshot after this node
+            await log_state_snapshot(state, node_name, clarification_result)
             
             return clarification_result
         
@@ -166,55 +150,18 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
             chat_history = await memory_store.get_session_history(log_ctx["session_id"])
             
-            # Construct context builder input object
-            context_builder_input = {
-                "intent": intent,
-                "confidence": confidence,
-                "entities": entities,
-                "slots": slots,
-                "required_slots": required_slots,
-                "missing_slots": missing_slots,
-                "domain": state.get("domain"),  # Domain from orchestrator
-                "uuid": log_ctx["request_id"],
-                "user_profile": {
-                    "user_id": log_ctx["user_id"] or state.get("user_info", {}).get("user_id")
-                },
-                "chat_history": chat_history
-            }
-            
-            # Log confidence check decision
-            await persistence_store.log_audit(
-                session_id=log_ctx["session_id"],
-                node_name=node_name,
-                event_type="confidence_check_decision",
-                data={
-                    "decision": "proceed",
-                    "confidence": confidence,
-                    "threshold": threshold,
-                    "intent": intent
-                },
-                request_id=log_ctx["request_id"],
-                user_id=log_ctx["user_id"]
-            )
-            
-            # Log context builder input
-            await persistence_store.log_audit(
-                session_id=log_ctx["session_id"],
-                node_name=node_name,
-                event_type="context_builder_input",
-                data=context_builder_input,
-                request_id=log_ctx["request_id"],
-                user_id=log_ctx["user_id"]
-            )
-            
             # Return state to proceed (context builder will be called next)
-            return {
+            proceed_result = {
                 "metadata": {
                     **state.get("metadata", {}),
-                    "confidence_check_passed": True,
-                    "context_builder_input": context_builder_input
+                    "confidence_check_passed": True
                 }
             }
+            
+            # Log full AgentState snapshot after this node
+            await log_state_snapshot(state, node_name, proceed_result)
+            
+            return proceed_result
             
     except Exception as e:
         # Log exception
