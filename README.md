@@ -359,6 +359,143 @@ sqlite3 data/telemetry.db "SELECT node_name, event_type, COUNT(*) as count FROM 
 sqlite3 data/telemetry.db "SELECT node_name, timestamp, json_extract(data, '$.decision') as decision, json_extract(data, '$.confidence') as confidence FROM logs WHERE event_type = 'confidence_check_decision' ORDER BY timestamp DESC LIMIT 10;"
 ```
 
+### SQLite UI Viewers
+
+Instead of using terminal commands, you can use GUI tools to view your SQLite database:
+
+#### 1. **DB Browser for SQLite** (Recommended - Free, Cross-platform)
+- **Download**: https://sqlitebrowser.org/
+- **Features**: 
+  - Visual table browser
+  - SQL query editor
+  - Data export/import
+  - Schema visualization
+- **Usage**: 
+  1. Install DB Browser
+  2. Open `data/telemetry.db`
+  3. Browse tables, run queries, export data
+
+#### 2. **TablePlus** (macOS/Windows - Free tier available)
+- **Download**: https://tableplus.com/
+- **Features**: Modern UI, multiple database support
+- **Usage**: Connect to SQLite file, browse visually
+
+#### 3. **DBeaver** (Free, Cross-platform)
+- **Download**: https://dbeaver.io/
+- **Features**: 
+  - Universal database tool
+  - SQL editor with syntax highlighting
+  - Data visualization
+- **Usage - Step by Step**:
+  1. Open DBeaver
+  2. Click **"New Database Connection"** (plug icon) or go to `Database` → `New Database Connection`
+  3. In the connection wizard, select **"SQLite"** from the list
+  4. Click **Next**
+  5. In the **"Path"** field, click the folder icon and navigate to your project directory
+  6. Select `data/telemetry.db` file
+  7. Click **Test Connection** to verify it works
+  8. Click **Finish**
+  9. The database will appear in the Database Navigator panel on the left
+  10. Expand it to see tables: `logs`, `exceptions`, `requests`
+  11. Right-click any table → **"View Data"** to browse records
+  12. Right-click any table → **"SQL Editor"** → **"New SQL Script"** to run queries
+
+**Troubleshooting: SQLite JDBC Driver Error**
+
+If you get an error like "can't load driver class 'org.sqlite.JDBC'":
+
+**Solution 1: Download Driver Automatically (Easiest)**
+1. When creating the connection, if you see a driver download prompt, click **"Download"**
+2. DBeaver will automatically download the SQLite JDBC driver
+
+**Solution 2: Configure Driver Manually**
+1. Go to `Database` → `Driver Manager` (or `Window` → `Driver Manager`)
+2. Find **"SQLite"** in the list and select it
+3. Click **"Edit"** button
+4. Go to **"Libraries"** tab
+5. Click **"Download/Update"** button
+6. Wait for download to complete
+7. Click **"OK"** to save
+8. Try creating the connection again
+
+**Solution 3: Manual Driver Download**
+1. Download SQLite JDBC driver from: https://github.com/xerial/sqlite-jdbc/releases
+2. Download the latest `sqlite-jdbc-X.X.X.jar` file (e.g., `sqlite-jdbc-3.44.1.0.jar`)
+3. In DBeaver: `Database` → `Driver Manager` → Select "SQLite" → `Edit` → `Libraries` tab
+4. Click **"Add File"** and select the downloaded `.jar` file
+5. Click **"OK"** to save
+6. Try creating the connection again
+
+**Solution 4: Use Native SQLite (Alternative)**
+If JDBC continues to cause issues, you can use DBeaver's native SQLite connection:
+1. When creating connection, look for **"SQLite (Native)"** option instead of "SQLite"
+2. This uses the system's SQLite installation instead of JDBC driver
+
+#### 4. **VS Code Extension** (Recommended for VS Code users)
+
+**Option A: SQLite Extension by Alex Covizzi** (Most Popular - Recommended)
+- **Extension**: **"SQLite"** by Alex Covizzi (alexcvzz)
+- **Installation**:
+  1. Open VS Code
+  2. Press `Ctrl+Shift+X` (or `Cmd+Shift+X` on Mac) to open Extensions
+  3. Search for "SQLite"
+  4. Click **Install** on "SQLite" by Alex Covizzi
+- **Usage**:
+  1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) to open Command Palette
+  2. Type "SQLite: Open Database" and select it
+  3. Navigate to `data/telemetry.db` and select it
+  4. The database will open in the sidebar showing all tables
+- **Note**: Requires SQLite command-line tool installed on your system
+  - **macOS**: Usually pre-installed. Verify with `sqlite3 --version` in terminal
+  - **Windows**: Download from https://www.sqlite.org/download.html and add to PATH
+  - **Linux**: `sudo apt install sqlite3` (Debian/Ubuntu)
+
+**Option B: SQLite Viewer by qwtel** (Alternative)
+- **Extension**: **"SQLite Viewer"** by Florian Klampfer (qwtel)
+- **Installation**: Same as above, search for "SQLite Viewer"
+- **Usage**:
+  1. Right-click on `data/telemetry.db` in VS Code's file explorer
+  2. Look for "Open with SQLite Viewer" or similar option
+  3. Or use Command Palette: `Ctrl+Shift+P` → type "SQLite Viewer"
+
+**Option C: DevDB** (Full Database GUI Client)
+- **Extension**: **"DevDB"** - Full database GUI client
+- Supports SQLite, MySQL, PostgreSQL
+- Provides visual database browser with query editor
+- Search for "DevDB" in Extensions marketplace
+
+**Troubleshooting**:
+- If "Open Database" command doesn't appear:
+  1. **Restart VS Code** after installing extension
+  2. **Check SQLite installation**: Run `sqlite3 --version` in terminal
+  3. **Try right-clicking** the `.db` file in VS Code file explorer
+  4. **Check extension settings**: `Ctrl+,` (or `Cmd+,` on Mac) → search "sqlite" → configure SQLite path if needed
+  5. **Alternative**: Use DB Browser for SQLite (Option 1 above) - it's more reliable
+
+#### Quick Query Examples for UI Tools
+
+**View all logs for a request (by UUID):**
+```sql
+SELECT * FROM logs 
+WHERE request_id = 'your-uuid-here' 
+ORDER BY timestamp;
+```
+
+**View all exceptions:**
+```sql
+SELECT node_name, error_code, severity, message, timestamp 
+FROM exceptions 
+ORDER BY timestamp DESC;
+```
+
+**View logs by node:**
+```sql
+SELECT node_name, event_type, COUNT(*) as count 
+FROM logs 
+GROUP BY node_name, event_type 
+ORDER BY count DESC;
+```
+
 #### View Context Builder Input/Output
 ```bash
 # View context builder inputs
@@ -491,6 +628,204 @@ sqlite3 data/telemetry.db "SELECT * FROM logs WHERE session_id = 'your-session-i
 
 # View all exceptions for a session
 sqlite3 data/telemetry.db "SELECT * FROM exceptions WHERE session_id = 'your-session-id' ORDER BY timestamp;"
+```
+
+### Node Input/Output Documentation
+
+Each node in the LangGraph receives the full `AgentState` and returns a partial update dictionary. Here's what each node reads from state and what it writes back:
+
+#### Graph Flow Overview
+```
+START
+  ↓
+safety_precheck → check_cache → build_context → intent_agent
+  ↓ (conditional routing)
+confidence_check_router
+  ↓                    ↓
+[low]              [high]
+  ↓                    ↓
+clarification    call_claims_tool → response_agent
+  ↓                    ↓
+update_memory ← safety_postcheck
+  ↓
+cache_response
+  ↓
+END
+```
+
+#### 1. **safety_precheck_node** (`nodes/safety.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message
+  - `session_id`: Session identifier
+  - `uuid`: Request UUID (for logging)
+  - `user_info`: User metadata (for logging)
+- **Output (writes to state)**:
+  - `safety_precheck_passed`: `bool` - Whether input passed safety checks
+  - `safety_block_reason`: `Optional[str]` - Reason if blocked
+  - `response`: `str` - Error message if blocked
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Routes to `check_cache` if passed, or `END` if blocked
+
+#### 2. **check_cache_node** (`nodes/cache.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message (hashed for cache key)
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `cache_hit`: `bool` - Whether cache was found
+  - `response`: `str` - Cached response (if cache hit)
+  - `intent`: `Optional[str]` - Cached intent (if cache hit)
+  - `confidence`: `Optional[float]` - Cached confidence (if cache hit)
+  - `metadata`: Updated with cache status
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Routes to `END` if cache hit, or `build_context` if cache miss
+
+#### 3. **build_context_node** (`nodes/context.py`)
+- **Input (reads from state)**:
+  - `session_id`: To fetch conversation history
+  - `slots`: Current slots from intent classifier
+  - `required_slots`: Required slots for intent
+  - `missing_slots`: Missing required slots
+  - `domain`: Domain context
+  - `uuid`: Request UUID
+  - `user_info`: User information
+- **Output (writes to state)**:
+  - `conversation_history`: `List[Dict[str, str]]` - Last N messages (configurable)
+  - `relevant_facts`: `List[Dict[str, Any]]` - Important facts from session
+  - `extracted_slots`: `Dict[str, Any]` - Slots extracted from conversation history
+  - `planner_context`: `Dict[str, Any]` - Complete context object for planner/executor
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `intent_agent`
+
+#### 4. **intent_agent_node** (`agents/intent_agent.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message
+  - `conversation_history`: Recent conversation context
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `intent`: `str` - Detected intent (e.g., "claim_status", "claim_rejection_reason")
+  - `confidence`: `float` - Confidence score (0.0 to 1.0)
+  - `entities`: `Dict[str, Any]` - Extracted entities (e.g., `{"claim_number": "12345"}`)
+  - `slots`: `Dict[str, Any]` - API parameters (from intent classifier)
+  - `required_slots`: `List[str]` - Required slots for this intent
+  - `missing_slots`: `List[str]` - Required slots that are missing
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Routes via `confidence_check_router` to either `clarification` or `call_claims_tool`
+
+#### 5. **confidence_check_router** (`nodes/confidence.py`)
+- **Input (reads from state)**:
+  - `confidence`: Confidence score from intent agent
+  - `missing_slots`: Missing required slots
+- **Output**: Returns routing decision (not state update)
+  - `"clarification"` if confidence < threshold OR missing slots exist
+  - `"tool_call"` if confidence >= threshold AND no missing slots
+- **Next Node**: Routes to `clarification` or `call_claims_tool`
+
+#### 6. **clarification_node** (`nodes/clarification.py`)
+- **Input (reads from state)**:
+  - `intent`: Detected intent
+  - `needs_clarification`: Whether clarification is needed
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `needs_clarification`: `bool` - Set to `True`
+  - `clarifying_question`: `str` - The question to ask user
+  - `response`: `str` - Same as clarifying_question (for UI)
+  - `metadata`: Updated with clarification flag
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Goes to `update_memory` (then END)
+
+#### 7. **call_claims_tool_node** (`tools/claims_api.py`)
+- **Input (reads from state)**:
+  - `intent`: What data to fetch
+  - `entities`: Parameters (e.g., `{"claim_number": "12345"}`)
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `tool_results`: `Dict[str, Any]` - API response data
+    - Example: `{"claim_id": "12345", "status": "processing", "submitted_date": "2025-01-10"}`
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `response_agent`
+
+#### 8. **response_agent_node** (`agents/response_agent.py`)
+- **Input (reads from state)**:
+  - `intent`: Detected intent
+  - `tool_results`: Data from API calls
+  - `conversation_history`: Context for response generation
+  - `entities`: Extracted entities
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `response`: `str` - The final natural language response to user
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `safety_postcheck`
+
+#### 9. **safety_postcheck_node** (`nodes/safety.py`)
+- **Input (reads from state)**:
+  - `response`: Generated response to validate
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `safety_postcheck_passed`: `bool` - Whether response passed safety checks
+  - `response`: `str` - Sanitized response if blocked
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `update_memory`
+
+#### 10. **update_memory_node** (`nodes/context.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message
+  - `response`: Assistant's response
+  - `session_id`: To store in memory
+  - `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `conversation_history`: `List[Dict[str, str]]` - Updated history after adding user/assistant messages
+  - `relevant_facts`: `List[Dict[str, Any]]` - Updated facts after extracting important information
+  - `metadata`: Updated with `memory_updated: True`
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `cache_response`
+
+#### 11. **cache_response_node** (`nodes/cache.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message (hashed for cache key)
+  - `response`: Generated response to cache
+  - `intent`: Detected intent to cache
+  - `confidence`: Confidence score to cache
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `metadata`: Updated with `cached: bool` flag
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `END`
+
+### State Flow Example
+
+**Initial State:**
+```python
+{
+    "text": "What's my claim status?",
+    "session_id": "session-123",
+    "intent": None,
+    "confidence": None,
+    "response": ""
+}
+```
+
+**After intent_agent_node:**
+```python
+{
+    "text": "What's my claim status?",
+    "session_id": "session-123",
+    "intent": "claim_status",
+    "confidence": 0.92,
+    "entities": {"claim_number": "12345"},
+    "response": ""
+}
+```
+
+**After response_agent_node:**
+```python
+{
+    "text": "What's my claim status?",
+    "session_id": "session-123",
+    "intent": "claim_status",
+    "confidence": 0.92,
+    "entities": {"claim_number": "12345"},
+    "response": "Your claim #12345 is currently being processed..."
+}
 ```
 
 ### Production Considerations

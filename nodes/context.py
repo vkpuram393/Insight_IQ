@@ -12,6 +12,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
+from core.logging_context import extract_logging_context
 from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
 
@@ -105,9 +106,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
     understand what API to call and what parameters to use.
     """
     node_name = "build_context"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("🧠 Node: Build Context")
@@ -143,13 +142,13 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
         # Build comprehensive planner context object
         planner_context = {
             "request_metadata": {
-                "request_id": request_id,
-                "session_id": session_id,
+                "request_id": log_ctx["request_id"],
+                "session_id": log_ctx["session_id"],
                 "timestamp": datetime.now().isoformat(),
                 "domain": state.get("domain")  # Domain from orchestrator, no default
             },
             "user": {
-                "user_id": user_id or state.get("user_info", {}).get("user_id"),
+                "user_id": log_ctx["user_id"] or state.get("user_info", {}).get("user_id"),
                 "profile": {}  # Placeholder for future user profile data
             },
             "intent": {
@@ -178,7 +177,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
         # Log context builder output
         persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
         await persistence_store.log_audit(
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name,
             event_type="context_builder_output",
             data={
@@ -188,18 +187,18 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
                 "missing_slots": missing_slots,
                 "intent": intent
             },
-            request_id=request_id,
-            user_id=user_id
+            request_id=log_ctx["request_id"],
+            user_id=log_ctx["user_id"]
         )
         
         # Log full planner context (for debugging/audit)
         await persistence_store.log_audit(
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name,
             event_type="planner_context",
             data=planner_context,
-            request_id=request_id,
-            user_id=user_id
+            request_id=log_ctx["request_id"],
+            user_id=log_ctx["user_id"]
         )
 
         # Return multiple fields (following existing pattern)
@@ -215,7 +214,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Context building failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -226,12 +225,12 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in context building: {e}\n{tb}")
@@ -256,9 +255,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
     After generating response, save it so we remember next time.
     """
     node_name = "update_memory"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("💾 Node: Update Memory")
@@ -305,7 +302,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Memory update failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -316,12 +313,12 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in memory update: {e}\n{tb}")

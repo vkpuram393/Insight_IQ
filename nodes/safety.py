@@ -11,6 +11,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
+from core.logging_context import extract_logging_context
 from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
@@ -42,9 +43,7 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         If passed → Graph continues to next node
     """
     node_name = "safety_precheck"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("🔒 Node: Safety Precheck")
@@ -82,7 +81,7 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Safety precheck failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -93,12 +92,12 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in safety precheck: {e}\n{tb}")
@@ -125,9 +124,7 @@ async def safety_postcheck_node(state: AgentState) -> Dict[str, Any]:
     Ensures AI doesn't say anything harmful.
     """
     node_name = "safety_postcheck"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("🔒 Node: Safety Postcheck")
@@ -155,7 +152,7 @@ async def safety_postcheck_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Safety postcheck failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -166,12 +163,12 @@ async def safety_postcheck_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in safety postcheck: {e}\n{tb}")

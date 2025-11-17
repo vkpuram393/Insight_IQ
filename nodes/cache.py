@@ -10,6 +10,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
+from core.logging_context import extract_logging_context
 from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
 
@@ -35,9 +36,7 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         Cache MISS → Continue to next node
     """
     node_name = "check_cache"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("💾 Node: Check Cache")
@@ -69,7 +68,7 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Cache check failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -80,12 +79,12 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in cache check: {e}\n{tb}")
@@ -103,9 +102,7 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
 async def cache_response_node(state: AgentState) -> Dict[str, Any]:
     """Store response in cache for future"""
     node_name = "cache_response"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         logger.info("💾 Node: Cache Response")
@@ -130,7 +127,7 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Cache response failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -141,12 +138,12 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in cache response: {e}\n{tb}")

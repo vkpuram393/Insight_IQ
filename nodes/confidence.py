@@ -17,6 +17,7 @@ from core.error_models import (
     create_low_confidence_error,
     create_internal_error
 )
+from core.logging_context import extract_logging_context
 from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
@@ -83,9 +84,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         - Returns state to proceed to context builder
     """
     node_name = "confidence_checker"
-    session_id = state.get("session_id", "unknown")
-    request_id = state.get("uuid")
-    user_id = state.get("user_info", {}).get("user_id")
+    log_ctx = extract_logging_context(state)
     
     try:
         # Load config
@@ -142,7 +141,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             
             # Log confidence check decision
             await persistence_store.log_audit(
-                session_id=session_id,
+                session_id=log_ctx["session_id"],
                 node_name=node_name,
                 event_type="confidence_check_decision",
                 data={
@@ -152,8 +151,8 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                     "missing_slots": missing_slots,
                     "reason": clarification_reason
                 },
-                request_id=request_id,
-                user_id=user_id
+                request_id=log_ctx["request_id"],
+                user_id=log_ctx["user_id"]
             )
             
             return clarification_result
@@ -165,7 +164,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             # Get conversation history from memory store
             from memory import MemoryStoreFactory
             memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
-            chat_history = await memory_store.get_session_history(session_id)
+            chat_history = await memory_store.get_session_history(log_ctx["session_id"])
             
             # Construct context builder input object
             context_builder_input = {
@@ -176,16 +175,16 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                 "required_slots": required_slots,
                 "missing_slots": missing_slots,
                 "domain": state.get("domain"),  # Domain from orchestrator
-                "uuid": request_id,
+                "uuid": log_ctx["request_id"],
                 "user_profile": {
-                    "user_id": user_id or state.get("user_info", {}).get("user_id")
+                    "user_id": log_ctx["user_id"] or state.get("user_info", {}).get("user_id")
                 },
                 "chat_history": chat_history
             }
             
             # Log confidence check decision
             await persistence_store.log_audit(
-                session_id=session_id,
+                session_id=log_ctx["session_id"],
                 node_name=node_name,
                 event_type="confidence_check_decision",
                 data={
@@ -194,18 +193,18 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                     "threshold": threshold,
                     "intent": intent
                 },
-                request_id=request_id,
-                user_id=user_id
+                request_id=log_ctx["request_id"],
+                user_id=log_ctx["user_id"]
             )
             
             # Log context builder input
             await persistence_store.log_audit(
-                session_id=session_id,
+                session_id=log_ctx["session_id"],
                 node_name=node_name,
                 event_type="context_builder_input",
                 data=context_builder_input,
-                request_id=request_id,
-                user_id=user_id
+                request_id=log_ctx["request_id"],
+                user_id=log_ctx["user_id"]
             )
             
             # Return state to proceed (context builder will be called next)
@@ -223,7 +222,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         error = create_internal_error(
             error_message=f"Confidence checker failed: {str(e)}",
             stacktrace=tb,
-            session_id=session_id,
+            session_id=log_ctx["session_id"],
             node_name=node_name
         )
         
@@ -234,12 +233,12 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=session_id,
-            request_id=request_id,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
             node_name=node_name,
             stacktrace=error.stacktrace,
             metadata=error.metadata,
-            user_id=user_id
+            user_id=log_ctx["user_id"]
         )
         
         logger.error(f"🚨 Exception in confidence checker: {e}\n{tb}")
