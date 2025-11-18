@@ -728,7 +728,7 @@ async def test_claims_api(request: ClaimsAPITestRequest):
             "performance": {
                 "total_time_ms": elapsed_ms,
                 "api_time_ms": tool_results.get("execution_time_ms") if isinstance(tool_results, dict) else None,
-                "overhead_ms": elapsed_ms - (tool_results.get("execution_time_ms", 0) if isinstance(tool_results, dict) else 0)
+                "overhead_ms": elapsed_ms - ((tool_results.get("execution_time_ms") or 0) if isinstance(tool_results, dict) else 0)
             }
         }
         
