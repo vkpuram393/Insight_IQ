@@ -463,6 +463,7 @@ async def test_orchestrator(request: OrchestratorTestRequest):
         
         return {
             "success": not orchestrator_meta.get("error", False),
+            "uuid": result.get("uuid"),
             "input": {
                 "raw_text": request.text,
                 "length": len(request.text),
@@ -472,6 +473,7 @@ async def test_orchestrator(request: OrchestratorTestRequest):
                 "normalized_text": result.get("text", ""),
                 "original_text": original_text,
                 "length": len(result.get("text", "")),
+                "uuid": result.get("uuid"),
                 "metadata": orchestrator_meta
             },
             "comparison": {

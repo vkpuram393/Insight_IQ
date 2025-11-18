@@ -21,6 +21,7 @@ import re
 import unicodedata
 import time
 import traceback
+import uuid
 from typing import Dict, Any, List, Tuple
 from datetime import datetime, timezone
 from state.schema import AgentState
@@ -162,6 +163,7 @@ async def _handle_empty_input(
     
     return {
         "text": "",  # CRITICAL: safety_precheck expects string
+        "uuid": state["uuid"],
         "error": error.error_code.value,
         "metadata": {
             **original_metadata,
@@ -286,6 +288,7 @@ async def _handle_normalization_error(
     
     return {
         "text": fallback_text,
+        "uuid": state["uuid"],
         "error": error.error_code.value,
         "metadata": {
             **original_metadata,
@@ -336,6 +339,11 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
     """
     
     logger.info("🎯 Node: Orchestrator")
+    
+    # Generate UUID first (before extracting logging context)
+    # This ensures log_ctx["request_id"] will have the UUID
+    request_uuid = state.get("uuid") or str(uuid.uuid4())
+    state["uuid"] = request_uuid
     
     # Extract logging context (consistent with other nodes)
     node_name = "orchestrator"
@@ -404,6 +412,7 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
         # Return partial state update (LangGraph will merge with existing state)
         return {
             "text": normalized,  # CRITICAL: safety_precheck_node expects this as string
+            "uuid": state["uuid"],
             "metadata": {
                 **original_metadata,
                 "orchestrator_metadata": to_dict(result),  # Use serialization helper for consistency

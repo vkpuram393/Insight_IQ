@@ -25,6 +25,7 @@ The **Orchestrator Node** is the **initial entry point** for all user inputs in 
 
 - ✅ **Entry Point**: First node in the workflow
 - ✅ **Pure Processing**: No LLM calls (pure text processing)
+- ✅ **UUID Generation**: Creates request UUID for end-to-end tracing
 - ✅ **6-Step Normalization**: Comprehensive text cleaning pipeline
 - ✅ **Structured Error Handling**: Pydantic-based error models
 - ✅ **Telemetry Integration**: Automatic error logging
@@ -62,14 +63,21 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 ┌─────────────────────────────────────────────────────────────┐
 │                  ORCHESTRATOR NODE                          │
 │  ┌───────────────────────────────────────────────────┐     │
-│  │  1. Input Validation                              │     │
+│  │  1. UUID Generation                               │     │
+│  │     - Generate if not present                     │     │
+│  │     - Preserve if provided                        │     │
+│  └───────────────────────────────────────────────────┘     │
+│                          │                                  │
+│                          ▼                                  │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │  2. Input Validation                              │     │
 │  │     - Empty check                                 │     │
 │  │     - Type check                                  │     │
 │  └───────────────────────────────────────────────────┘     │
 │                          │                                  │
 │                          ▼                                  │
 │  ┌───────────────────────────────────────────────────┐     │
-│  │  2. Normalization Pipeline                        │     │
+│  │  3. Normalization Pipeline                        │     │
 │  │     - Lowercase                                   │     │
 │  │     - Collapse spaces                             │     │
 │  │     - Unicode normalization (NFD)                 │     │
@@ -80,7 +88,7 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 │                          │                                  │
 │                          ▼                                  │
 │  ┌───────────────────────────────────────────────────┐     │
-│  │  3. Create OrchestratorResult                     │     │
+│  │  4. Create OrchestratorResult                     │     │
 │  │     - Structured Pydantic model                   │     │
 │  │     - Normalized & original text                  │     │
 │  │     - Metadata & statistics                       │     │
@@ -89,9 +97,9 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 │                          │                                  │
 │                          ▼                                  │
 │  ┌───────────────────────────────────────────────────┐     │
-│  │  4. Error Handling (if exception)                 │     │
+│  │  5. Error Handling (if exception)                 │     │
 │  │     - Create AgentError                           │     │
-│  │     - Log to telemetry                            │     │
+│  │     - Log to telemetry with UUID                  │     │
 │  │     - Graceful fallback                           │     │
 │  └───────────────────────────────────────────────────┘     │
 └─────────────────────────┬───────────────────────────────────┘
@@ -100,6 +108,7 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 ┌─────────────────────────────────────────────────────────────┐
 │                   State Update                              │
 │  text: "whats my claim"                                     │
+│  uuid: "550e8400-e29b-41d4-a716-446655440000"              │
 │  metadata:                                                  │
 │    orchestrator_metadata: <OrchestratorResult>             │
 │    original_text: "What's my claim?"                       │
@@ -119,6 +128,7 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 {
     "text": str,              # User's raw input - REQUIRED
     "session_id": str,        # Session identifier - REQUIRED
+    "uuid": Optional[str],    # Request UUID (generated if not provided)
     "user_info": Dict,        # Optional user metadata
     "metadata": Dict          # Optional existing metadata
 }
@@ -130,6 +140,7 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 |-------|------|----------|-------------|
 | `text` | `str` | Yes | User's raw input message |
 | `session_id` | `str` | Yes | Unique session identifier |
+| `uuid` | `Optional[str]` | No | Request UUID (orchestrator generates if not present) |
 | `user_info` | `Dict[str, Any]` | No | User metadata (contains `user_id` if available) |
 | `metadata` | `Dict[str, Any]` | No | Existing metadata from previous processing |
 
@@ -138,6 +149,7 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 ```python
 {
     "text": str,              # Normalized text - REQUIRED for safety_precheck
+    "uuid": str,              # Request UUID for end-to-end tracing
     "error": Optional[str],   # Error code (e.g., "E1001") - backward compatible
     "metadata": {
         "orchestrator_metadata": {
@@ -161,10 +173,11 @@ User Request → API Routes → Orchestrator → Safety Precheck → Cache → C
 **Output Guarantees:**
 
 1. ✅ `text` field is **always a string** (required by safety_precheck_node)
-2. ✅ State schema **unchanged** (no breaking changes)
-3. ✅ Full structured result in `metadata["orchestrator_metadata"]`
-4. ✅ Backward compatible `error` field for legacy code
-5. ✅ Graceful fallback on errors (never breaks workflow)
+2. ✅ `uuid` field is **always generated** (for request tracing)
+3. ✅ State schema **unchanged** (no breaking changes)
+4. ✅ Full structured result in `metadata["orchestrator_metadata"]`
+5. ✅ Backward compatible `error` field for legacy code
+6. ✅ Graceful fallback on errors (never breaks workflow)
 
 ---
 
@@ -222,6 +235,168 @@ Step 6: "whats my claim status"          # Strip whitespace (FINAL)
 - Original length: 30 characters
 - Normalized length: 21 characters
 - Characters removed: 9
+
+---
+
+## UUID Generation
+
+### Overview
+
+The orchestrator is responsible for generating a unique UUID (Universally Unique Identifier) for each request that enters the system. This UUID is used for end-to-end request tracing across all nodes, agents, and tools.
+
+### UUID Generation Strategy
+
+**Industry-Standard Approach:**
+The orchestrator generates the UUID at the **very beginning** of execution and immediately stores it in state. This ensures all subsequent operations (logging, error handling, returns) can access the UUID through the standard `extract_logging_context()` pattern.
+
+```python
+# At the START of orchestrator_node():
+async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
+    logger.info("🎯 Node: Orchestrator")
+    
+    # 1. Generate UUID first (before extracting logging context)
+    request_uuid = state.get("uuid") or str(uuid.uuid4())
+    state["uuid"] = request_uuid
+    
+    # 2. Now extract logging context (which will have the UUID)
+    node_name = "orchestrator"
+    log_ctx = extract_logging_context(state)
+    
+    # 3. All logging operations use log_ctx["request_id"]
+    await persistence_store.log_exception(
+        request_id=log_ctx["request_id"],  # Same pattern as all nodes
+        ...
+    )
+```
+
+**Execution Flow:**
+1. Check if UUID already exists in state (`state.get("uuid")`)
+2. If yes: Preserve existing UUID (for external orchestration)
+3. If no: Generate new UUID using `uuid.uuid4()`
+4. **Immediately update state** with UUID
+5. Extract logging context (now contains the UUID as `request_id`)
+6. All error handlers and returns use `log_ctx["request_id"]` or `state["uuid"]`
+
+**Why This Pattern?**
+- ✅ **Consistency**: Same pattern as all other nodes (safety, cache, context)
+- ✅ **Early availability**: UUID available for all operations
+- ✅ **Single source of truth**: State contains UUID, no local variables needed
+- ✅ **Standard logging**: Uses `log_ctx["request_id"]` like every other node
+
+### When UUID is Generated
+
+The UUID is generated **ONCE at the beginning** of the orchestrator node execution, regardless of success or error paths. This ensures:
+
+1. ✅ **Consistent**: Single point of UUID generation
+2. ✅ **Early**: Available for all logging operations
+3. ✅ **Standard**: Same pattern as all other nodes (safety, cache, context)
+
+The UUID is then available in all code paths:
+- **Success Path**: Normal normalization completion
+- **Empty Input Error**: When input text is empty
+- **Normalization Error**: When normalization fails
+
+### UUID Usage Across System
+
+Once generated by the orchestrator, the UUID flows through the entire system:
+
+#### 1. Logging Context
+```python
+# In core/logging_context.py
+def extract_logging_context(state: AgentState) -> Dict[str, Optional[str]]:
+    return {
+        "session_id": state.get("session_id", "unknown"),
+        "request_id": state.get("uuid"),  # UUID used as request_id
+        "user_id": state.get("user_info", {}).get("user_id")
+    }
+```
+
+#### 2. All Nodes
+All nodes that use `extract_logging_context()` automatically get the UUID:
+- `nodes/safety.py`
+- `nodes/cache.py`
+- `nodes/context.py`
+- `nodes/confidence.py`
+- `nodes/clarification.py`
+
+#### 3. All Agents
+```python
+# In agents/intent_agent.py and agents/response_agent.py
+request_id = state.get("uuid")
+```
+
+#### 4. Tool Calls
+```python
+# In tools/claims_api.py
+request_id = state.get("uuid")
+```
+
+#### 5. Persistence Store
+All logs and exceptions are stored with the UUID:
+```python
+# Orchestrator (like all other nodes)
+log_ctx = extract_logging_context(state)
+await persistence_store.log_exception(
+    session_id=log_ctx["session_id"],
+    request_id=log_ctx["request_id"],  # UUID from state
+    user_id=log_ctx["user_id"],
+    node_name="orchestrator",
+    ...
+)
+```
+
+**Pattern Consistency**: The orchestrator uses `log_ctx["request_id"]` just like all other nodes (safety, cache, context), ensuring uniform logging practices across the entire system.
+
+### Benefits of UUID Generation
+
+1. **End-to-End Tracing**: Track a single request through all nodes
+2. **Error Debugging**: Identify which request caused an error
+3. **Performance Analysis**: Measure processing time per request
+4. **Audit Trail**: Complete history of request lifecycle
+5. **Cross-Session Analysis**: Analyze user behavior across sessions
+
+### Database Queries with UUID
+
+```sql
+-- Trace complete request lifecycle
+SELECT node_name, event_type, timestamp, data
+FROM logs
+WHERE request_id = '550e8400-e29b-41d4-a716-446655440000'
+ORDER BY timestamp;
+
+-- Find all errors for a specific request
+SELECT error_code, message, stacktrace
+FROM exceptions
+WHERE request_id = '550e8400-e29b-41d4-a716-446655440000';
+
+-- Analyze request distribution across sessions
+SELECT session_id, COUNT(DISTINCT request_id) as request_count
+FROM logs
+GROUP BY session_id;
+```
+
+### External UUID Support
+
+The orchestrator supports receiving UUID from external systems:
+
+```python
+# API can optionally provide UUID
+initial_state = create_initial_state(
+    text="User query",
+    session_id="session-123",
+    user_info={}
+)
+initial_state["uuid"] = "external-uuid-from-upstream-system"
+
+# Orchestrator will preserve this UUID
+result = await orchestrator_node(initial_state)
+assert result["uuid"] == "external-uuid-from-upstream-system"
+```
+
+This is useful for:
+- Integration with upstream orchestrators
+- Multi-system request tracing
+- External monitoring systems
 
 ---
 
@@ -501,9 +676,10 @@ result = create_orchestrator_result(
 # Serialize for state
 result_dict = result.model_dump(mode="json")
 
-# Return in state update
+# Return in state update (UUID already in state from start of function)
 return {
     "text": result.normalized_text,
+    "uuid": state["uuid"],
     "metadata": {
         "orchestrator_metadata": result_dict,
         "original_text": result.original_text
@@ -520,19 +696,30 @@ from persistence import EventType
 
 # Detect empty input
 if not raw_text:
+    # Note: UUID already generated at start of function and in state
+    # Extract logging context (contains UUID)
+    log_ctx = extract_logging_context(state)
+    
     # Create structured error
-    user_id = state.get("user_info", {}).get("user_id")
     error = create_orchestrator_empty_input_error(
-        session_id=session_id,
-        user_id=user_id
+        session_id=log_ctx["session_id"],
+        user_id=log_ctx["user_id"]
     )
     
-    # Log to telemetry
-    await log_event(
-        EventType.ERROR_OCCURRED,
-        session_id,
-        {"error": error.model_dump(mode="json")},
-        user_id
+    # Log to persistence store (consistent with all other nodes)
+    persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+    await persistence_store.log_exception(
+        error_code=error.error_code.value,
+        category=error.category.value,
+        severity=error.severity.value,
+        message=error.message,
+        user_message=error.user_message,
+        session_id=log_ctx["session_id"],
+        request_id=log_ctx["request_id"],  # UUID from state
+        node_name="orchestrator",
+        stacktrace=error.stacktrace,
+        metadata=error.metadata,
+        user_id=log_ctx["user_id"]
     )
     
     # Create result with error
@@ -548,6 +735,7 @@ if not raw_text:
     
     return {
         "text": "",
+        "uuid": state["uuid"],  # Already in state
         "error": error.error_code.value,  # "E1001"
         "metadata": {
             "orchestrator_metadata": result.model_dump(mode="json"),
@@ -589,20 +777,32 @@ try:
     normalized = raw_text.strip().lower()
     # ... more steps ...
 except Exception as e:
+    # Note: UUID already generated at start of function and in state
+    # Extract logging context (contains UUID)
+    log_ctx = extract_logging_context(state)
+    
     # Create structured error
     error = create_orchestrator_normalization_error(
         exception=e,
-        session_id=session_id,
-        user_id=user_id,
+        session_id=log_ctx["session_id"],
+        user_id=log_ctx["user_id"],
         stacktrace=traceback.format_exc()
     )
     
-    # Log to telemetry
-    await log_event(
-        EventType.ERROR_OCCURRED,
-        session_id,
-        {"error": error.model_dump(mode="json")},
-        user_id
+    # Log to persistence store (consistent with all other nodes)
+    persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+    await persistence_store.log_exception(
+        error_code=error.error_code.value,
+        category=error.category.value,
+        severity=error.severity.value,
+        message=error.message,
+        user_message=error.user_message,
+        session_id=log_ctx["session_id"],
+        request_id=log_ctx["request_id"],  # UUID from state
+        node_name="orchestrator",
+        stacktrace=error.stacktrace,
+        metadata=error.metadata,
+        user_id=log_ctx["user_id"]
     )
     
     # Graceful fallback
@@ -620,6 +820,7 @@ except Exception as e:
     
     return {
         "text": fallback_text,
+        "uuid": state["uuid"],  # Already in state
         "error": error.error_code.value,
         "metadata": {
             "orchestrator_metadata": result.model_dump(mode="json"),
@@ -674,13 +875,56 @@ ENABLE_TELEMETRY=false
 
 ### Unit Test Cases
 
-#### Test 1: Empty Input
+#### Test 1: UUID Generation
 
 ```python
 import pytest
 from nodes.orchestrator import orchestrator_node
 from state.schema import create_initial_state
 
+@pytest.mark.asyncio
+async def test_orchestrator_uuid_generation():
+    state = create_initial_state(
+        text="Test input",
+        session_id="test-session-123",
+        user_info={}
+    )
+    
+    result = await orchestrator_node(state)
+    
+    # Assertions
+    assert "uuid" in result
+    assert result["uuid"] is not None
+    assert isinstance(result["uuid"], str)
+    
+    # Verify UUID format
+    import uuid as uuid_lib
+    try:
+        uuid_lib.UUID(result["uuid"])
+        assert True
+    except ValueError:
+        assert False, "Invalid UUID format"
+
+@pytest.mark.asyncio
+async def test_orchestrator_uuid_preservation():
+    """Test that existing UUID is preserved"""
+    existing_uuid = "550e8400-e29b-41d4-a716-446655440000"
+    state = create_initial_state(
+        text="Test input",
+        session_id="test-session-123",
+        user_info={}
+    )
+    state["uuid"] = existing_uuid
+    
+    result = await orchestrator_node(state)
+    
+    # Should preserve existing UUID
+    assert result["uuid"] == existing_uuid
+```
+
+#### Test 2: Empty Input
+
+```python
 @pytest.mark.asyncio
 async def test_orchestrator_empty_input():
     state = create_initial_state(
@@ -693,6 +937,7 @@ async def test_orchestrator_empty_input():
     
     # Assertions
     assert result["text"] == ""
+    assert result["uuid"] is not None  # UUID generated even on error
     assert result["error"] == "E1001"
     assert result["metadata"]["orchestrator_metadata"]["normalization_applied"] == False
     assert result["metadata"]["orchestrator_metadata"]["error"] is not None
@@ -1114,12 +1359,17 @@ if error_details:
 The orchestrator node provides:
 
 - ✅ **Entry point** for all user inputs
+- ✅ **UUID generation** for end-to-end request tracing
 - ✅ **6-step normalization** pipeline
 - ✅ **Structured error handling** with Pydantic models
 - ✅ **Telemetry integration** for all errors
 - ✅ **Backward compatibility** (no state schema changes)
 - ✅ **Graceful fallback** (never breaks workflow)
 - ✅ **Complete user story** implementation
+
+**Key Achievement**: UUID is generated by the orchestrator at the START of execution (before any processing), following industry-standard patterns. The UUID is immediately stored in state and flows through all downstream nodes, agents, and tools for complete request traceability.
+
+**Pattern Consistency**: The orchestrator uses the exact same logging pattern as all other nodes (safety, cache, context) - it generates UUID first, updates state, then uses `log_ctx["request_id"]` for all logging operations. This ensures uniform code patterns across the entire system.
 
 **All user stories are complete and verified.**
 
