@@ -5,7 +5,7 @@ Comprehensive Pydantic models for all node outputs in the LangGraph agent system
 Each model represents the structured output from a specific node type.
 """
 
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Callable
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
 from enum import Enum
@@ -351,6 +351,72 @@ class ToolResult(BaseModel):
                 "timestamp": "2025-11-10T10:30:45.123456Z"
             }
         }
+
+
+# ============================================================================
+# API REPOSITORY MODELS
+# ============================================================================
+
+class API_REPOSITORY(BaseModel):
+    """
+    API Registry Entry Model
+    
+    Defines an external API endpoint that the claims orchestrator can dynamically
+    route to based on user intent and extracted entities. Each API_REPOSITORY entry
+    represents a single API operation with its requirements and request builder.
+    
+    Used by: tools/get_api_repository.py, tools/claims_api.py
+    """
+    name: str = Field(..., description="Unique identifier for the API")
+    endpoint: str = Field(..., description="API endpoint path (e.g., /api/v1/claims)")
+    method: str = Field(default="POST", description="HTTP method (POST, GET, etc.)")
+    
+    # Matching criteria
+    required_entities: List[str] = Field(
+        ...,
+        description="Entities that must be present to call this API (camelCase names)"
+    )
+    intent_keywords: List[str] = Field(
+        ...,
+        description="Keywords to match against user intent for API selection"
+    )
+    
+    # Documentation
+    description: Optional[str] = Field(
+        None,
+        description="Human-readable description of what this API does"
+    )
+    
+    # Request building
+    body_template: Callable[[Dict[str, Any]], Dict[str, Any]] = Field(
+        ...,
+        description="Lambda function that builds request body from entities"
+    )
+    
+    # Runtime fields
+    full_url: Optional[str] = Field(
+        None,
+        description="Complete URL (BASE_URL + endpoint), set at runtime"
+    )
+    
+    class Config:
+        arbitrary_types_allowed = True  # Allow Callable type
+        json_schema_extra = {
+            "example": {
+                "name": "get_claim_details",
+                "endpoint": "/myclaims/claims/v1/details",
+                "method": "POST",
+                "required_entities": ["claimNumber", "claimSequence"],
+                "intent_keywords": ["details", "claim details", "full information"],
+                "description": "Fetch detailed information for a specific claim by claim number and sequence",
+                "full_url": "https://api.example.com/myclaims/claims/v1/details"
+            },
+            "note": "body_template is a lambda function and cannot be serialized in JSON"
+        }
+
+
+# Create alias for backward compatibility
+APIEntry = API_REPOSITORY
 
 
 # ============================================================================
@@ -911,3 +977,4 @@ def create_orchestrator_result(
         normalization_applied=normalization_applied,
         **kwargs
     )
+

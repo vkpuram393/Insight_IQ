@@ -18,9 +18,10 @@ Endpoints:
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import uuid
+import time
 from datetime import datetime
 
 from agents.intent_classifier import classify_intent
@@ -498,6 +499,273 @@ async def test_orchestrator(request: OrchestratorTestRequest):
 
 
 
+# ==================== Claims API Tests ====================
+
+class ClaimsAPITestRequest(BaseModel):
+    """Request model for claims API test endpoint"""
+    text: str = Field(..., description="User's original query text")
+    intent: str = Field(..., description="Detected intent (e.g., find_claim, claim_details)")
+    entities: Dict[str, Any] = Field(..., description="Extracted entities with raw_entities support")
+    session_id: Optional[str] = Field(None, description="Session identifier")
+    uuid: Optional[str] = Field(None, description="Request UUID")
+    domain: Optional[str] = Field(default="claims", description="Domain context")
+    user_info: Optional[Dict[str, Any]] = Field(default_factory=dict, description="User metadata")
+
+@router.post("/test-claims-api")
+async def test_claims_api(request: ClaimsAPITestRequest):
+    """
+    Test Claims API Orchestrator Node
+    
+    Tests: tools/claims_api.py - call_claims_tool_node()
+    
+    This endpoint tests the complete claims API orchestration flow:
+    - Entity normalization (snake_case → camelCase)
+    - Dynamic API matching based on intent + entities
+    - Request body building
+    - External API call with retry logic
+    - ToolResult creation and state update
+    
+    The endpoint validates that tool_results properly updates AgentState
+    for downstream LangGraph node consumption.
+    
+    Example requests:
+    
+    1. Find Claim by ID:
+    ```json
+    {
+      "text": "Show me claim 253152732536005",
+      "intent": "find_claim",
+      "entities": {
+        "raw_entities": {
+          "claim_id": "253152732536005"
+        }
+      }
+    }
+    ```
+    
+    2. Get Claim Details:
+    ```json
+    {
+      "text": "What are the details for claim 12345 sequence 1?",
+      "intent": "claim_details",
+      "entities": {
+        "claim_number": "253152732536005",
+        "raw_entities": {
+          "claim_sequence": "1"
+        }
+      }
+    }
+    ```
+    
+    3. Test Missing Entities Error:
+    ```json
+    {
+      "text": "Show me claim details",
+      "intent": "claim_details",
+      "entities": {
+        "claim_number": "12345"
+      }
+    }
+    ```
+    
+    cURL Example:
+    ```bash
+    curl -X POST "http://localhost:8000/utils/test-claims-api" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "text": "Show claim 253152732536005",
+        "intent": "find_claim",
+        "entities": {"raw_entities": {"claim_id": "253152732536005"}}
+      }'
+    ```
+    
+    PowerShell Example:
+    ```powershell
+    $body = @{
+        text = "Show claim 253152732536005"
+        intent = "find_claim"
+        entities = @{
+            raw_entities = @{
+                claim_id = "253152732536005"
+            }
+        }
+    } | ConvertTo-Json -Depth 5
+    
+    Invoke-RestMethod -Uri "http://localhost:8000/utils/test-claims-api" `
+      -Method POST `
+      -ContentType "application/json" `
+      -Body $body
+    ```
+    """
+    try:
+        from tools.claims_api import call_claims_tool_node
+        
+        session_id = request.session_id or str(uuid.uuid4())
+        request_uuid = request.uuid or str(uuid.uuid4())
+        
+        logger.info(f"🧪 TEST CLAIMS API: intent={request.intent}, entities={request.entities}")
+        
+        # Create complete AgentState matching production flow
+        state = AgentState(
+            text=request.text,
+            session_id=session_id,
+            user_info=request.user_info,
+            uuid=request_uuid,
+            domain=request.domain,
+            intent=request.intent,
+            confidence=0.9,  # High confidence for direct test
+            entities=request.entities,
+            slots=None,
+            required_slots=None,
+            missing_slots=None,
+            needs_clarification=False,
+            clarifying_question=None,
+            conversation_history=[],
+            relevant_facts=[],
+            extracted_slots=None,
+            planner_context=None,
+            tool_results=None,
+            safety_precheck_passed=True,
+            safety_postcheck_passed=False,
+            safety_block_reason=None,
+            response="",
+            metadata={
+                "request_id": request_uuid,
+                "user_id": request.user_info.get("user_id") if request.user_info else None
+            },
+            cache_hit=False,
+            error=None,
+            messages=[]
+        )
+        
+        # Log test start to telemetry database
+        if settings.enable_telemetry:
+            persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+            await persistence_store.log_audit(
+                session_id=session_id,
+                request_id=request_uuid,
+                user_id=request.user_info.get("user_id") if request.user_info else None,
+                node_name="test_claims_api",
+                event_type="test_start",
+                data={
+                    "intent": request.intent,
+                    "entities": request.entities,
+                    "test_type": "claims_api_orchestrator"
+                }
+            )
+        
+        # Call the claims tool node
+        logger.info("🔄 Calling call_claims_tool_node...")
+        start_time = time.time()
+        result = await call_claims_tool_node(state)
+        elapsed_ms = (time.time() - start_time) * 1000.0
+        
+        # Extract tool_results from result
+        tool_results = result.get("tool_results") if isinstance(result, dict) and "tool_results" in result else result
+        
+        # Determine success
+        is_success = tool_results.get("status") == "success" if isinstance(tool_results, dict) else False
+        
+        # Log test completion
+        if settings.enable_telemetry:
+            await persistence_store.log_audit(
+                session_id=session_id,
+                request_id=request_uuid,
+                user_id=request.user_info.get("user_id") if request.user_info else None,
+                node_name="test_claims_api",
+                event_type="test_complete",
+                data={
+                    "success": is_success,
+                    "status": tool_results.get("status") if isinstance(tool_results, dict) else None,
+                    "total_test_time_ms": elapsed_ms
+                }
+            )
+        
+        logger.info(f"✅ Test completed: success={is_success}, time={elapsed_ms:.2f}ms")
+        
+        # Build comprehensive response
+        return {
+            "test_metadata": {
+                "session_id": session_id,
+                "request_uuid": request_uuid,
+                "test_duration_ms": elapsed_ms,
+                "timestamp": datetime.now().isoformat()
+            },
+            "input": {
+                "text": request.text,
+                "intent": request.intent,
+                "entities": request.entities,
+                "domain": request.domain
+            },
+            "tool_execution": {
+                "tool_name": tool_results.get("tool_name") if isinstance(tool_results, dict) else None,
+                "status": tool_results.get("status") if isinstance(tool_results, dict) else None,
+                "api_endpoint": tool_results.get("api_endpoint") if isinstance(tool_results, dict) else None,
+                "execution_time_ms": tool_results.get("execution_time_ms") if isinstance(tool_results, dict) else None,
+                "http_status_code": tool_results.get("http_status_code") if isinstance(tool_results, dict) else None,
+                "retry_count": tool_results.get("retry_count") if isinstance(tool_results, dict) else None,
+                "is_retryable": tool_results.get("is_retryable") if isinstance(tool_results, dict) else None
+            },
+            "result": {
+                "success": is_success,
+                "has_data": bool(tool_results.get("data")) if isinstance(tool_results, dict) else False,
+                "data_preview": {
+                    "keys": list(tool_results.get("data", {}).keys()) if isinstance(tool_results, dict) and tool_results.get("data") else [],
+                    "total_count": tool_results.get("data", {}).get("totalCount") if isinstance(tool_results, dict) else None,
+                    "message": tool_results.get("data", {}).get("message") if isinstance(tool_results, dict) else None
+                },
+                "error_message": tool_results.get("error_message") if isinstance(tool_results, dict) else None,
+                "error_code": tool_results.get("error_code") if isinstance(tool_results, dict) else None
+            },
+            "agent_error": tool_results.get("agent_error") if isinstance(tool_results, dict) else None,
+            "state_update": {
+                "tool_results_field_updated": "tool_results" in result,
+                "structure_correct": isinstance(result, dict) and "tool_results" in result,
+                "ready_for_langgraph": "tool_results" in result,
+                "note": "Result properly wrapped for AgentState.tool_results update" if "tool_results" in result else "Warning: Result not wrapped properly"
+            },
+            "full_tool_results": tool_results,
+            "performance": {
+                "total_time_ms": elapsed_ms,
+                "api_time_ms": tool_results.get("execution_time_ms") if isinstance(tool_results, dict) else None,
+                "overhead_ms": elapsed_ms - (tool_results.get("execution_time_ms", 0) if isinstance(tool_results, dict) else 0)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"🧪 TEST CLAIMS API ERROR: {str(e)}")
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"🔍 STACK TRACE:\n{tb}")
+        
+        # Log exception to database
+        if settings.enable_telemetry:
+            try:
+                persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                await persistence_store.log_exception(
+                    session_id=session_id,
+                    request_id=request_uuid,
+                    user_id=request.user_info.get("user_id") if request.user_info else None,
+                    node_name="test_claims_api",
+                    error_code="E9001",
+                    category="system",
+                    severity="error",
+                    message=f"Test endpoint exception: {str(e)}",
+                    stacktrace=tb
+                )
+            except Exception as log_error:
+                logger.error(f"Failed to log exception: {log_error}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "traceback": tb,
+                "test": "claims_api_orchestrator"
+            }
+        )
+
+
 # ==================== Safety Tests ====================
 
 @router.post("/test-safety-precheck")
@@ -712,40 +980,6 @@ async def test_confidence_checker(request: ConfidenceCheckRequest):
         
     except Exception as e:
         logger.error(f"Confidence checker test failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== Claims API Tests ====================
-
-@router.post("/test-claims-api")
-async def test_claims_api(request: Dict[str, Any]):
-    """
-    Test claims API mock
-
-    Tests: tools/claims_api.py
-    """
-    try:
-        state = AgentState(
-            text=request.get("text", ""),
-            session_id=str(uuid.uuid4()),
-            user_info={},
-            uuid=None,
-            domain=None,
-            conversation_history=[],
-            relevant_facts=[],
-            intent=request.get("intent", "claim_status"),
-            entities=request.get("entities", {})
-        )
-
-        result = await call_claims_tool_node(state)
-
-        return {
-            "tool_called": True,
-            "tool_result": result.get("tool_result"),
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Claims API test failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
