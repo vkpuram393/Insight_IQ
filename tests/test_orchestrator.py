@@ -305,6 +305,87 @@ class TestOrchestratorTelemetry:
         assert "timestamp" in error
 
 
+class TestOrchestratorUUID:
+    """Tests for UUID generation"""
+    
+    @pytest.mark.asyncio
+    async def test_uuid_generated_when_not_provided(self):
+        """Test that orchestrator generates UUID when not provided"""
+        state = create_initial_state(
+            text="Test input",
+            session_id="test-session-uuid-001",
+            user_info={}
+        )
+        
+        result = await orchestrator_node(state)
+        
+        # Should have UUID
+        assert "uuid" in result
+        assert result["uuid"] is not None
+        assert isinstance(result["uuid"], str)
+        
+        # Should be valid UUID format
+        import uuid as uuid_lib
+        try:
+            uuid_lib.UUID(result["uuid"])
+            assert True
+        except ValueError:
+            assert False, "Generated UUID is not valid format"
+    
+    @pytest.mark.asyncio
+    async def test_uuid_preserved_when_provided(self):
+        """Test that existing UUID is preserved"""
+        existing_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        state = create_initial_state(
+            text="Test input",
+            session_id="test-session-uuid-002",
+            user_info={}
+        )
+        state["uuid"] = existing_uuid
+        
+        result = await orchestrator_node(state)
+        
+        # Should preserve existing UUID
+        assert result["uuid"] == existing_uuid
+    
+    @pytest.mark.asyncio
+    async def test_uuid_generated_on_empty_input_error(self):
+        """Test that UUID is generated even on empty input error"""
+        state = create_initial_state(
+            text="",
+            session_id="test-session-uuid-003",
+            user_info={}
+        )
+        
+        result = await orchestrator_node(state)
+        
+        # Should have UUID even on error
+        assert "uuid" in result
+        assert result["uuid"] is not None
+        assert isinstance(result["uuid"], str)
+    
+    @pytest.mark.asyncio
+    async def test_uuid_flows_to_downstream_nodes(self):
+        """Test that UUID flows correctly through state"""
+        state = create_initial_state(
+            text="Test input for UUID flow",
+            session_id="test-session-uuid-004",
+            user_info={"user_id": "user-123"}
+        )
+        
+        result = await orchestrator_node(state)
+        
+        # UUID should be in result
+        assert "uuid" in result
+        generated_uuid = result["uuid"]
+        
+        # Simulate state merge (like LangGraph does)
+        state.update(result)
+        
+        # UUID should now be accessible in merged state
+        assert state.get("uuid") == generated_uuid
+
+
 class TestOrchestratorRealWorldScenarios:
     """Tests for real-world scenarios"""
     
