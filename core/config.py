@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
+    # API Configuration
+    swagger_url: str ="https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com" # Base URL for external APIs
+
     class Config:
         env_file = ".env"
         case_sensitive = False
