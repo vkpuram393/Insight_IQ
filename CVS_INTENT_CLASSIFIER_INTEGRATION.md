@@ -8,16 +8,22 @@
 
 ## 📋 Overview
 
-This integration adds a **production-ready CVS Intent Classifier** to the `pss-myclaims-ai-agent` project. The classifier uses keyword-based pattern matching with 28+ CVS-specific intents, achieving 80%+ accuracy on pharmacy claims queries.
+This integration adds **production-ready CVS Intent Classifiers** to the `pss-myclaims-ai-agent` project. Two classifier options are available:
+
+1. **Keyword-Based Classifier** - Fast pattern matching (recommended for production)
+2. **Embedding-Based Classifier** - Semantic understanding using Azure OpenAI embeddings
+
+Both classifiers support 30 CVS-specific intents and achieve 73.7% accuracy on pharmacy claims queries.
 
 ### Key Features
 
-- ✅ **28+ CVS-Specific Intents** (claim_status, rejection_reasons, drug_info, pharmacy_info, etc.)
-- ✅ **Fast Performance** (~10ms, no LLM calls)
-- ✅ **High Accuracy** (80%+ on CVS pharmacy domain)
+- ✅ **30 CVS-Specific Intents** (claim_status, rejection_reasons, drug_info, pharmacy_info, etc.)
+- ✅ **Two Classifier Options** (keyword-based for speed, embedding-based for semantic understanding)
+- ✅ **Fast Performance** (~10ms keyword-based, ~100ms embedding-based)
+- ✅ **High Accuracy** (73.7% on CVS test cases)
 - ✅ **Entity Extraction** (claim IDs, member IDs, prescription IDs, dates, amounts)
 - ✅ **Complexity Detection** (identifies queries needing LLM processing)
-- ✅ **Two-Stage Routing** (keyword-based Stage 1 + Master LLM Agent Stage 2)
+- ✅ **Two-Stage Routing** (Stage 1 intent classification + Master LLM Agent Stage 2)
 - ✅ **API Error Fallback** (automatically recovers from API failures)
 - ✅ **Production-Grade** (tested with 13 routing scenarios)
 
@@ -25,12 +31,22 @@ This integration adds a **production-ready CVS Intent Classifier** to the `pss-m
 
 ## 🚀 Quick Start
 
-### Enable CVS Intent Classifier
+### Option 1: Keyword-Based Classifier (Recommended for Production)
 
 Edit `core/config.py`:
 
 ```python
-use_cvs_intent_classifier: bool = True  # Set to True
+use_cvs_intent_classifier: bool = True   # Enable CVS classifier
+use_embedding_classifier: bool = False   # Use keyword-based (fast)
+```
+
+### Option 2: Embedding-Based Classifier (For Semantic Understanding)
+
+Edit `core/config.py`:
+
+```python
+use_cvs_intent_classifier: bool = True   # Enable CVS classifier
+use_embedding_classifier: bool = True    # Use embedding-based (semantic)
 ```
 
 ### Test It
@@ -48,8 +64,10 @@ python3 test_cvs_classifier.py
 
 | File | Purpose |
 |------|---------|
-| `agents/cvs_intent_classifier.py` | Main classifier (28+ intents, keyword matching) |
+| `agents/cvs_intent_classifier.py` | Keyword-based classifier (30 intents, fast) |
+| `agents/cvs_intent_embedded.py` | Embedding-based classifier (30 intents, semantic) |
 | `agents/cvs_intent_agent_node.py` | LangGraph node wrapper |
+| `agents/intent_classifier_wrapper.py` | Unified interface (switches between classifiers) |
 | `agents/entity_extractor.py` | Extracts claim IDs, dates, amounts, etc. |
 
 ### Testing Files
@@ -167,7 +185,11 @@ python3 test_cvs_classifier.py
 - `appeal_info` - Appeal/dispute info
 - `out_of_scope` - Not pharmacy-related
 
-**Total: 28 Intents**
+### Additional Intents (2)
+- `multi_claim_summary` - Summary of multiple claims
+- `audit_info` - Audit trail information
+
+**Total: 30 Intents**
 
 ---
 
@@ -212,6 +234,7 @@ python3 test_all_12_routes.py
 ```python
 # Intent Classifier Selection
 use_cvs_intent_classifier: bool = False  # Set to True to use CVS classifier
+use_embedding_classifier: bool = False   # Set to True to use embedding-based (requires use_cvs_intent_classifier=True)
 
 # Confidence Threshold
 confidence_threshold: float = 0.6  # Queries below this go to Master LLM
@@ -220,38 +243,130 @@ confidence_threshold: float = 0.6  # Queries below this go to Master LLM
 llm_temperature: float = 0.0  # Deterministic responses (medical safety)
 ```
 
+### Classifier Selection Logic
+
+The system uses three modes:
+
+1. **MVP-1 Original Classifier** (LLM-based)
+   ```python
+   use_cvs_intent_classifier = False
+   use_embedding_classifier = False  # Ignored
+   ```
+
+2. **CVS Keyword Classifier** (Fast, production-ready) ⭐ **RECOMMENDED**
+   ```python
+   use_cvs_intent_classifier = True
+   use_embedding_classifier = False
+   ```
+
+3. **CVS Embedding Classifier** (Semantic understanding)
+   ```python
+   use_cvs_intent_classifier = True
+   use_embedding_classifier = True
+   ```
+
 ---
 
 ## 📈 Performance Comparison
 
-| Metric | Original Classifier | CVS Classifier |
-|--------|---------------------|----------------|
-| **Speed** | ~50ms (LLM call) | ~10ms (keywords) |
-| **Accuracy** | 65-70% | 80%+ |
-| **Intent Coverage** | 10-15 intents | 28 intents |
-| **CVS Domain** | Generic | Specialized |
-| **Cost** | LLM API costs | Free (no LLM) |
-| **Medical Safety** | ⚠️ Requires validation | ✅ Deterministic |
+| Metric | MVP-1 Original | CVS Keyword ⭐ | CVS Embedding |
+|--------|----------------|----------------|---------------|
+| **Speed** | ~50ms (LLM) | ~10ms | ~100ms (embeddings) |
+| **Accuracy** | 65-70% | 73.7% | 73.7% |
+| **Intent Coverage** | 10-15 intents | 30 intents | 30 intents |
+| **CVS Domain** | Generic | Specialized | Specialized |
+| **Cost** | LLM API costs | $0 (no API) | ~$0.0001/query (embeddings) |
+| **Generalization** | ⚠️ Variable | Exact keywords | Semantic similarity |
+| **Medical Safety** | ⚠️ Requires validation | ✅ Deterministic | ⚠️ Similarity-based |
+| **Setup Required** | LangChain | None | Azure OpenAI embeddings |
+| **Training Data** | None | Keyword weights | 600 examples (20/intent) |
+| **Use Case** | General queries | Production (fast) | Unusual phrasing |
+
+### When to Use Each Classifier
+
+**CVS Keyword Classifier** (⭐ Recommended)
+- ✅ Production use (fast, reliable, no costs)
+- ✅ Standard CVS pharmacy queries
+- ✅ Medical safety (deterministic)
+- ✅ Zero API costs
+
+**CVS Embedding Classifier**
+- ✅ Queries with unusual phrasing
+- ✅ Testing semantic understanding
+- ✅ When paraphrasing is common
+- ⚠️ Requires Azure OpenAI embeddings
+- ⚠️ ~10x slower than keyword
+
+**MVP-1 Original Classifier**
+- ✅ Non-CVS domains
+- ✅ New intents not in CVS set
+- ⚠️ Requires LangChain dependencies
 
 ---
 
 ## 🔄 Switching Between Classifiers
 
-### Use CVS Classifier (Recommended for Production)
+All three classifiers work seamlessly with the same LangGraph workflow! Just change the config flags:
+
+### Option 1: CVS Keyword Classifier ⭐ (Recommended for Production)
 
 ```python
 # core/config.py
-use_cvs_intent_classifier: bool = True
+use_cvs_intent_classifier: bool = True   # Enable CVS
+use_embedding_classifier: bool = False   # Use keyword-based
 ```
 
-### Use Original Classifier (For Comparison)
+**Benefits:**
+- ⚡ Fastest (~10ms)
+- 💰 Zero API costs
+- 🎯 73.7% accuracy
+- ✅ Deterministic (medical safety)
+
+### Option 2: CVS Embedding Classifier (For Semantic Understanding)
 
 ```python
 # core/config.py
-use_cvs_intent_classifier: bool = False
+use_cvs_intent_classifier: bool = True   # Enable CVS
+use_embedding_classifier: bool = True    # Use embedding-based
 ```
 
-Both classifiers work seamlessly with the same LangGraph workflow!
+**Benefits:**
+- 🧠 Semantic understanding
+- 🎯 73.7% accuracy
+- ✅ Better with paraphrasing
+- ⚠️ Requires Azure OpenAI embeddings
+
+**Note:** Embedding classifier includes 600 training examples (20 per intent) generated from real CVS queries using Azure OpenAI LLM.
+
+### Option 3: MVP-1 Original Classifier (For Comparison)
+
+```python
+# core/config.py
+use_cvs_intent_classifier: bool = False  # Disable CVS
+use_embedding_classifier: bool = False   # Ignored
+```
+
+**Benefits:**
+- ✅ General-purpose
+- ⚠️ Requires LangChain dependencies
+
+### Live Switching Example
+
+```python
+from core.config import settings
+from agents.intent_classifier_wrapper import classify_intent_unified
+
+# Switch to keyword classifier
+settings.use_cvs_intent_classifier = True
+settings.use_embedding_classifier = False
+result1 = classify_intent_unified("What is the cost of CLM12345?")
+print(f"Keyword: {result1['intent']} ({result1['confidence']:.2f})")
+
+# Switch to embedding classifier
+settings.use_embedding_classifier = True
+result2 = classify_intent_unified("What is the cost of CLM12345?")
+print(f"Embedding: {result2['intent']} ({result2['confidence']:.2f})")
+```
 
 ---
 
@@ -322,12 +437,21 @@ Contact: Ahmed Mahgoub (`ahmed.mahgoub@cvshealth.com`)
 
 ## 🎉 Summary
 
-✅ **Production-ready CVS intent classifier** integrated  
-✅ **28+ CVS-specific intents** with high accuracy  
+✅ **Two production-ready CVS intent classifiers** integrated  
+✅ **30 CVS-specific intents** with 73.7% accuracy  
+✅ **Flexible classification** (keyword-based ⚡ or embedding-based 🧠)  
 ✅ **Two-stage routing** for robust query handling  
 ✅ **API error recovery** with Master LLM fallback  
 ✅ **All tests passing** (13/13 scenarios)  
-✅ **Easy to enable** (single config flag)  
+✅ **Easy to switch** (config flags)  
 
-**Your team can now use this classifier for CVS production deployment!** 🚀
+### Recommended Setup for Production
+
+```python
+# core/config.py
+use_cvs_intent_classifier: bool = True   # ✅ Enable CVS classifier
+use_embedding_classifier: bool = False   # ✅ Use keyword-based (fast, free)
+```
+
+**Your team can now use these classifiers for CVS production deployment!** 🚀
 

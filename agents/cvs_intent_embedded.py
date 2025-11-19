@@ -1,0 +1,1012 @@
+"""
+CVS Intent Classifier - Embedding-Based (Zero-Shot)
+Uses Azure OpenAI embeddings + cosine similarity for intent classification
+NO TRAINING required - semantic understanding through embeddings
+
+This classifier returns the same structure as cvs_intent_classifier.py
+so it can be used as a drop-in replacement for A/B testing.
+
+Comparison:
+- cvs_intent_classifier.py: Keyword-based (fast, rule-based)
+- cvs_intent_embedded.py: Embedding-based (semantic understanding)
+"""
+
+import numpy as np
+import re
+from typing import Dict, List, Any, Tuple
+import logging
+from collections import defaultdict
+
+# Import embedding service
+try:
+    from utils.azure_embeddings import get_embedding, get_azure_embeddings
+    EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+    logging.warning("Azure embeddings not available. Using mock embeddings.")
+
+logger = logging.getLogger(__name__)
+
+
+class CVSIntentEmbedded:
+    """
+    Embedding-based intent classifier using semantic similarity
+    
+    Returns same structure as CVSIntentClassifier for compatibility:
+    {
+        'intent': str,
+        'confidence': float,
+        'all_scores': dict,
+        'is_simple': bool,
+        'is_complex': bool,
+        'needs_clarification': bool
+    }
+    """
+    
+    def __init__(self):
+        """Initialize with embedded intent examples"""
+        logger.info("Initializing CVS Intent Classifier (Embedding-Based)...")
+        
+        # Build intent examples (embedded in this file)
+        self.intent_examples = self._build_intent_examples()
+        
+        # Pre-compute embeddings for all examples
+        self.intent_embeddings = self._embed_all_examples()
+        
+        # Cache the embeddings service (singleton)
+        if EMBEDDINGS_AVAILABLE:
+            self.embeddings_service = get_azure_embeddings()
+        else:
+            self.embeddings_service = None
+        
+        # Thresholds
+        self.confidence_threshold = 0.50  # Match keyword classifier
+        
+        logger.info(f"✅ CVS Intent Classifier (Embeddings) initialized")
+        logger.info(f"   Intents: {len(self.intent_examples)}")
+        logger.info(f"   Total examples: {sum(len(ex) for ex in self.intent_examples.values())}")
+    
+    def _build_intent_examples(self) -> Dict[str, List[str]]:
+        """
+        Build intent examples (LLM-generated, no data leakage)
+        
+        600 examples total (20 per intent, 30 intents)
+        Generated from real CVS queries but EXCLUDING test queries
+        
+        Returns:
+            Dict mapping intent name to list of example queries
+        """
+        return CVS_INTENT_EXAMPLES
+    
+    def _embed_all_examples(self) -> Dict[str, np.ndarray]:
+        """
+        Convert all intent examples to embeddings
+        
+        Tries to load from cache first (instant), falls back to API calls if needed
+        
+        Returns:
+            Dict mapping intent name to array of embeddings
+        """
+        import pickle
+        import os
+        
+        # Try to load from cache first
+        cache_file = os.path.join(os.path.dirname(__file__), "intent_embeddings_cache.pkl")
+        
+        if os.path.exists(cache_file):
+            try:
+                logger.info(f"⚡ Loading embeddings from cache ({cache_file})...")
+                with open(cache_file, 'rb') as f:
+                    intent_embeddings = pickle.load(f)
+                logger.info(f"✅ Embeddings loaded from cache (INSTANT - no API calls!)")
+                return intent_embeddings
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to load cache: {e}")
+                logger.info("Falling back to generating embeddings...")
+        else:
+            logger.info("📝 No cache file found. Generating embeddings...")
+            logger.info(f"   💡 TIP: Run 'python agents/generate_intent_embeddings.py' once to create cache")
+        
+        # Generate embeddings (fallback)
+        intent_embeddings = {}
+        
+        logger.info("Converting all intent examples to embeddings (using batch processing)...")
+        
+        for intent, examples in self.intent_examples.items():
+            if EMBEDDINGS_AVAILABLE:
+                # Get embeddings for ALL examples at once (batch API call)
+                embeddings_service = get_azure_embeddings()
+                embeddings = embeddings_service.embed(examples)  # Single batch call for all 20 examples
+                
+                # Convert to numpy array
+                intent_embeddings[intent] = np.array(embeddings)
+                
+                logger.debug(f"   {intent}: {len(examples)} examples embedded (batch)")
+            else:
+                # Mock embeddings for testing
+                intent_embeddings[intent] = np.random.rand(len(examples), 1536)
+        
+        logger.info(f"✅ All examples embedded successfully (30 batch calls instead of 600 individual calls)")
+        
+        # Save to cache for next time
+        try:
+            logger.info(f"💾 Saving embeddings to cache for future use...")
+            with open(cache_file, 'wb') as f:
+                pickle.dump(intent_embeddings, f)
+            logger.info(f"✅ Cache saved! Next initialization will be instant.")
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to save cache: {e}")
+        
+        return intent_embeddings
+    
+    def classify(self, query: str) -> Dict[str, Any]:
+        """
+        Classify user query using embedding similarity
+        
+        Args:
+            query: User's natural language query
+            
+        Returns:
+            Dict with same structure as CVSIntentClassifier
+        """
+        query_lower = query.lower().strip()
+        
+        # Check for empty query
+        if not query_lower:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': 0.0,
+                'all_scores': {},
+                'is_simple': False,
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        # Get query embedding
+        if EMBEDDINGS_AVAILABLE:
+            query_embedding = get_embedding(query)
+        else:
+            query_embedding = np.random.rand(1536)
+        
+        # Calculate similarity scores for all intents
+        intent_scores = {}
+        
+        if self.embeddings_service is not None:
+            # Use cached Azure embeddings utility for similarity calculation
+            for intent, example_embeddings in self.intent_embeddings.items():
+                # Convert numpy array to list for utility function
+                example_list = [emb.tolist() if isinstance(emb, np.ndarray) else emb 
+                               for emb in example_embeddings]
+                query_list = query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding
+                
+                # Calculate cosine similarity with all examples of this intent
+                similarities = self.embeddings_service.batch_similarity(query_list, example_list)
+                
+                # Use the highest similarity as the score for this intent
+                intent_scores[intent] = float(max(similarities))
+        else:
+            # Fallback to manual calculation if utility not available
+            for intent, example_embeddings in self.intent_embeddings.items():
+                similarities = self._cosine_similarity_batch(query_embedding, example_embeddings)
+                intent_scores[intent] = float(np.max(similarities))
+        
+        # Get top intent
+        if not intent_scores:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': 0.0,
+                'all_scores': {},
+                'is_simple': False,
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        top_intent = max(intent_scores, key=intent_scores.get)
+        top_score = intent_scores[top_intent]
+        
+        # Check if below threshold
+        if top_score < self.confidence_threshold:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': top_score,
+                'all_scores': intent_scores,
+                'is_simple': False,
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        # Classify complexity (match keyword classifier logic)
+        is_simple = self._is_simple_query(query_lower, top_intent)
+        is_complex = self._is_complex_query(query_lower, top_intent)
+        
+        logger.info(f"Intent: {top_intent}, Confidence: {top_score:.2f}, Simple: {is_simple}, Complex: {is_complex}")
+        
+        return {
+            'intent': top_intent,
+            'confidence': top_score,
+            'all_scores': intent_scores,
+            'is_simple': is_simple,
+            'is_complex': is_complex,
+            'needs_clarification': top_score < 0.4 and top_intent != 'out_of_scope'
+        }
+    
+    def _cosine_similarity_batch(self, query_emb: np.ndarray, example_embs: np.ndarray) -> np.ndarray:
+        """
+        Calculate cosine similarity between query and all examples
+        (FALLBACK METHOD - uses utils.azure_embeddings by default)
+        
+        Args:
+            query_emb: Query embedding (1536,)
+            example_embs: Example embeddings (N, 1536)
+            
+        Returns:
+            Array of similarities (N,)
+        """
+        # Normalize vectors
+        query_norm = query_emb / (np.linalg.norm(query_emb) + 1e-10)
+        example_norms = example_embs / (np.linalg.norm(example_embs, axis=1, keepdims=True) + 1e-10)
+        
+        # Compute cosine similarity
+        similarities = np.dot(example_norms, query_norm)
+        
+        return similarities
+    
+    def _is_simple_query(self, query: str, intent: str) -> bool:
+        """
+        Determine if query is simple (can be handled with API call)
+        
+        Simple queries:
+        - Have claim ID explicitly mentioned
+        - Single intent, clear phrasing
+        """
+        # Has explicit claim ID
+        if re.search(r'\b(CLM|claim)\s*#?\s*\w+', query, re.IGNORECASE):
+            return True
+        
+        # Short, simple queries (< 6 words) without aggregation keywords
+        words = query.split()
+        if len(words) <= 6:
+            complex_keywords = ['all', 'compare', 'total', 'average', 'sum', 'between', 'from', 'to']
+            if not any(kw in query for kw in complex_keywords):
+                return True
+        
+        return False
+    
+    def _is_complex_query(self, query: str, intent: str) -> bool:
+        """
+        Determine if query requires LLM reasoning
+        
+        Complex queries:
+        - Aggregations: "total", "average", "all my claims"
+        - Comparisons: "compare", "difference between"
+        - Date ranges: "from January to May"
+        - Multiple conditions: "and", "but", "however"
+        """
+        complex_patterns = [
+            # Aggregations
+            r'\b(all|every|total|sum|average|mean)\b',
+            r'\b(most|least|highest|lowest|expensive|cheapest)\b',
+            
+            # Comparisons
+            r'\b(compare|comparison|difference|versus|vs)\b',
+            
+            # Date ranges
+            r'\b(from|between|during|in)\s+\w+\s+(to|and|through)\s+\w+',
+            r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
+            r'\b(last|past|previous)\s+(week|month|year|quarter)',
+            
+            # Multiple conditions
+            r'\band\b.*\band\b',  # Multiple "and"s
+            r'\bor\b.*\bor\b',    # Multiple "or"s
+        ]
+        
+        for pattern in complex_patterns:
+            if re.search(pattern, query, re.IGNORECASE):
+                return True
+        
+        # Multi-claim queries without specific CLM ID
+        if 'claims' in query and not re.search(r'CLM\d+', query, re.IGNORECASE):
+            return True
+        
+        return False
+
+
+# ================================================================================
+# EMBEDDED INTENT EXAMPLES - 600 EXAMPLES (20 PER INTENT, 30 INTENTS)
+# ================================================================================
+# Generated from real CVS production queries using Azure OpenAI
+# Original test queries EXCLUDED to avoid data leakage
+# ================================================================================
+
+CVS_INTENT_EXAMPLES = {
+    "appeal_info": [
+        "Generate the appeal options available for claim CLM12345.",
+        "Show the steps required to initiate an appeal for CLM12345.",
+        "Display the process to challenge the denial for claim CLM12345.",
+        "Give me the necessary documentation to file an appeal for CLM12345.",
+        "Tell me how to proceed with an appeal for claim CLM12345.",
+        "Provide the guidelines for appealing a rejected claim.",
+        "Retrieve the instructions for submitting an appeal for CLM12345.",
+        "Fetch the appeal procedures for claim CLM12345.",
+        "Generate the criteria for overturning a denial on CLM12345.",
+        "Show the appeal submission requirements for this claim.",
+        "Display the timeline for appealing a rejected claim.",
+        "Give me the contact information for the appeals department regarding CLM12345.",
+        "Tell me what evidence is needed to support an appeal for CLM12345.",
+        "Provide the appeal form for claim CLM12345.",
+        "Retrieve the status of any appeal filed for CLM12345.",
+        "Fetch the appeal guidelines for pharmacy claims.",
+        "What can be done to overcome the rejection for CLM12345?",
+        "How to resolve a rejected claim?",
+        "Steps to overturn a rejection for this claim.",
+        "Options to fix a denied claim.",
+    ],
+
+    "approval_info": [
+        "Provide a detailed approval summary for claim CLM12345.",
+        "Show which plan overrides were triggered during adjudication for CLM12345.",
+        "Retrieve the transition fill status for CLM12345.",
+        "Display the specific transition fill type applied to claim CLM12345.",
+        "Tell me what plan options were active for CLM12345 at the time of processing.",
+        "Generate a report on why accumulations were not considered for claim CLM12345.",
+        "Fetch the BPG configuration used to approve CLM12345.",
+        "Give me the override details for the most recent claim.",
+        "Provide information on any member PA or Smart PA applied to CLM12345.",
+        "Show the logic behind the approval decision for claim CLM12345.",
+        "Display all plan configuration overrides that affected CLM12345.",
+        "Retrieve the adjudication pathway for claim CLM12345.",
+        "Generate a TF summary for CLM12345.",
+        "Show transition fill details for this claim.",
+        "Provide TF status for CLM12345.",
+        "Display transition fill approval information.",
+        "Fetch TF configuration for claim CLM12345.",
+        "Tell me the TF eligibility for this member.",
+        "Give me transition fill override details.",
+        "Retrieve the TF type applied to this claim.",
+    ],
+
+    "audit_info": [
+        "Generate the audit log for claim CLM12345",
+        "Show me the change history for CLM12345",
+        "Display the audit information for this claim",
+        "Give me the modification record for claim CLM12345",
+        "Tell me the audit details for CLM12345",
+        "Provide the full audit report for this claim",
+        "Retrieve the change log for CLM12345",
+        "Fetch the update history for this claim",
+        "Generate the modification audit for CLM12345",
+        "Show the claim history for CLM12345",
+        "Display the audit trail for this claim",
+        "Give me the edit history for CLM12345",
+        "Tell me the claim modification details",
+        "Provide the audit summary for CLM12345",
+        "Retrieve the claim audit for CLM12345",
+        "Fetch the claim modification log",
+        "Generate the history of changes for CLM12345",
+        "Show me the audit record for this claim",
+        "Display the modification details for CLM12345",
+        "Give me the audit information for this claim",
+    ],
+
+    "beneficiary_info": [
+        "Generate the current benefit phase for claim CLM12345.",
+        "Show the member's coverage details associated with CLM12345.",
+        "Display the accumulation status for the member on claim CLM12345.",
+        "Give me the member's benefit type for CLM12345.",
+        "Tell me if medical dollars are included in the member's accumulation for CLM12345.",
+        "Provide the linked LOE information for the member on claim CLM12345.",
+        "Retrieve the member's coverage tier for CLM12345.",
+        "Fetch the benefit phase the member is currently in for claim CLM12345.",
+        "Generate the member's eligibility information for CLM12345.",
+        "Show the member's plan details for this claim.",
+        "Display whether medical expenses contribute to the accumulation for CLM12345.",
+        "Give me the member's insurance coverage type.",
+        "Tell me the current benefit phase for the member on this claim.",
+        "Provide the linked member levels of evidence (LOE) for CLM12345.",
+        "Retrieve the member's benefit eligibility.",
+        "Fetch the member's coverage information for this prescription.",
+        "Generate a summary of the member's benefit phase.",
+        "Show the member's accumulation rules for this claim.",
+        "Display the member's coverage classification.",
+        "Give me the member's benefit plan configuration.",
+    ],
+
+    "claim_status": [
+        "Generate a full claim summary for CLM12345.",
+        "Show the current status of claim CLM12345.",
+        "Display all details for claim CLM12345.",
+        "Give me the processing status for claim CLM12345.",
+        "Tell me the progress of claim CLM12345.",
+        "Provide the adjudication outcome for CLM12345.",
+        "Retrieve the complete claim record for CLM12345.",
+        "Fetch the claim details for CLM12345.",
+        "Generate a breakdown of claim CLM12345.",
+        "Show the status update for this claim.",
+        "Give me a claim summary for CLM12345.",
+        "Generate a claim summary.",
+        "Show claim summary for CLM12345.",
+        "Provide a summary of claim CLM12345.",
+        "What happened on claim sequences for CLM12345?",
+        "Compare this claim CLM12345 to another claim.",
+        "Tell me about claim CLM12345.",
+        "Show the full record for claim CLM12345.",
+        "Display the adjudication details for this claim.",
+        "Give me the comprehensive summary for CLM12345.",
+    ],
+
+    "cob_info": [
+        "Generate a COB summary for claim CLM12345.",
+        "Show the coordination of benefits details for CLM12345.",
+        "Display the other insurance information for CLM12345.",
+        "Give me the COB pricing breakdown for claim CLM12345.",
+        "Tell me how other insurance affected CLM12345.",
+        "Provide the secondary insurance details for this claim.",
+        "Retrieve the COB calculation for CLM12345.",
+        "Fetch the coordination details for claim CLM12345.",
+        "Generate the COB pricing information.",
+        "Show how coordination of benefits was applied to CLM12345.",
+        "Display the other payer information for this claim.",
+        "Give me the dual coverage details for CLM12345.",
+        "Tell me the COB setup for this claim.",
+        "Provide the secondary payer information.",
+        "Retrieve the coordination of benefits report.",
+        "Fetch the other insurance impact on CLM12345.",
+        "Generate the COB adjudication details.",
+        "Show the primary and secondary insurance breakdown.",
+        "Display the COB configuration for this claim.",
+        "Give me the coordination pricing summary.",
+    ],
+
+    "compound_info": [
+        "Generate the compound medication details for claim CLM12345.",
+        "Show the ingredient breakdown for CLM12345.",
+        "Display the MIC information for this claim.",
+        "Give me the compound ingredient costs for CLM12345.",
+        "Tell me if claim CLM12345 is for a compounded medication.",
+        "Provide the funded and unfunded costs for the compound in CLM12345.",
+        "Retrieve the ingredient list for this compound claim.",
+        "Fetch the compound drug details for CLM12345.",
+        "Generate the MIC cost breakdown.",
+        "Show the individual ingredient pricing.",
+        "Display whether this is a compound prescription.",
+        "Give me the compound formulation details.",
+        "Tell me the ingredient costs for the compounded medication.",
+        "Provide the compound medication summary.",
+        "Retrieve the MIC details and ingredient breakdown.",
+        "Fetch the compound pricing information.",
+        "Generate the ingredient cost report.",
+        "Show the funded versus unfunded ingredient costs.",
+        "Display the compound claim details.",
+        "Give me the MIC summary for this prescription.",
+    ],
+
+    "date_range_claims": [
+        "Generate a list of claims that contributed to the deductible.",
+        "Show all claims for this drug in the member's history.",
+        "Display claims from the past six months.",
+        "Give me the claims that affected the out-of-pocket maximum.",
+        "Tell me which claims contributed to the member's accumulation.",
+        "Provide a history of all claims for this medication.",
+        "Retrieve claims within a specific date range.",
+        "Fetch the member's claim history for this drug.",
+        "Generate a report of claims affecting deductible and OOP.",
+        "Show the claims that impacted the member's benefit phase.",
+        "Display all prescription claims for this member.",
+        "Give me the list of claims for this year.",
+        "Tell me the claims that contributed to cost-sharing.",
+        "Provide the claim history for this member and drug.",
+        "Retrieve all claims that affected the accumulation.",
+        "Fetch the deductible-contributing claims.",
+        "Generate a summary of claims over the last quarter.",
+        "Show the member's prescription history.",
+        "Display the claims from January to March.",
+        "Give me all claims for this drug type.",
+    ],
+
+    "daw_info": [
+        "Generate the DAW status for claim CLM12345.",
+        "Show the dispense as written details for CLM12345.",
+        "Display whether brand name was required for claim CLM12345.",
+        "Give me the DAW code for this prescription.",
+        "Tell me if generic substitution was allowed for CLM12345.",
+        "Provide the brand versus generic information for this claim.",
+        "Retrieve the DAW indicator for CLM12345.",
+        "Fetch the dispense as written status.",
+        "Generate the substitution details for this prescription.",
+        "Show whether brand was medically necessary.",
+        "Display the DAW selection for this claim.",
+        "Give me the brand name requirement details.",
+        "Tell me if a generic could be substituted.",
+        "Provide the DAW configuration for CLM12345.",
+        "Retrieve the dispense as written code.",
+        "Fetch the brand versus generic status.",
+        "Generate the substitution rules for this claim.",
+        "Show the DAW designation.",
+        "Display the brand requirement information.",
+        "Give me the generic availability status.",
+    ],
+
+    "drug_info": [
+        "Generate the drug status for claim CLM12345.",
+        "Show the medication details for CLM12345.",
+        "Display the drug information for this prescription.",
+        "Give me the formulary status for the drug in CLM12345.",
+        "Tell me which drug was dispensed for claim CLM12345.",
+        "Provide the medication classification for this claim.",
+        "Retrieve the drug setup used in RxClaim for CLM12345.",
+        "Fetch the drug name and NDC for this prescription.",
+        "Generate the drug category details.",
+        "Show the formulary position for this medication.",
+        "Display the drug type and classification.",
+        "Give me the GPI and therapeutic class.",
+        "Tell me the drug status assigned by RxClaim.",
+        "Provide the medication tier information.",
+        "Retrieve the drug details for CLM12345.",
+        "Fetch the drug configuration from the claim.",
+        "Generate the formulary report for this drug.",
+        "Show the drug classification details.",
+        "Display the medication status.",
+        "Give me the drug tier and formulary placement.",
+    ],
+
+    "drug_interaction_info": [
+        "Generate the DUR edits applied to claim CLM12345.",
+        "Show the drug utilization review details for CLM12345.",
+        "Display the DUR outcomes for this prescription.",
+        "Give me the interaction alerts for claim CLM12345.",
+        "Tell me which DUR edits were triggered for CLM12345.",
+        "Provide the drug interaction warnings.",
+        "Retrieve the DUR edit results for this claim.",
+        "Fetch the utilization review information.",
+        "Generate the DUR report for CLM12345.",
+        "Show the drug interaction outcomes.",
+        "Display the clinical edits that were triggered.",
+        "Give me the DUR override details.",
+        "Tell me the utilization review results.",
+        "Provide the interaction screening outcomes.",
+        "Retrieve the DUR edit codes for this claim.",
+        "Fetch the drug utilization details.",
+        "Generate the interaction alert summary.",
+        "Show the clinical screening results.",
+        "Display the DUR processing details.",
+        "Give me the drug interaction report.",
+    ],
+
+    "fill_date_info": [
+        "Generate the fill date for claim CLM12345.",
+        "Show when the prescription was filled for CLM12345.",
+        "Display the dispense date for this claim.",
+        "Give me the service date for CLM12345.",
+        "Tell me when the medication was dispensed.",
+        "Provide the date the prescription was filled.",
+        "Retrieve the fill date details for CLM12345.",
+        "Fetch the dispensing date for this prescription.",
+        "Generate the date of service for this claim.",
+        "Show the fill date information.",
+        "Display when the pharmacy filled this prescription.",
+        "Give me the date the medication was picked up.",
+        "Tell me the dispensing date for CLM12345.",
+        "Provide the fill date and time.",
+        "Retrieve the service date for this prescription.",
+        "Fetch the date when this was filled.",
+        "Generate the dispensing date report.",
+        "Show the fill timestamp.",
+        "Display the prescription fill date.",
+        "Give me the date of fill for this claim.",
+    ],
+
+    "generic_availability": [
+        "Generate a list of generic alternatives for claim CLM12345.",
+        "Show the substitute medications available.",
+        "Display the generic options for this drug.",
+        "Give me the alternative medications for CLM12345.",
+        "Tell me what generic drugs are available.",
+        "Provide the therapeutic alternatives.",
+        "Retrieve the substitute drug list.",
+        "Fetch the generic availability information.",
+        "Generate the alternative medication options.",
+        "Show the formulary alternatives for this drug.",
+        "Display the generic substitutes.",
+        "Give me the list of cheaper drug options.",
+        "Tell me the available generic medications.",
+        "Provide the therapeutic equivalent drugs.",
+        "Retrieve the substitute options for this prescription.",
+        "Fetch the generic alternative details.",
+        "Generate the drug substitution recommendations.",
+        "Show the formulary-approved alternatives.",
+        "Display the generic medication options.",
+        "Give me the substitute drug information.",
+    ],
+
+    "government_claim_type": [
+        "Generate the government claim type for CLM12345.",
+        "Show whether this is a Medicare or Medicaid claim.",
+        "Display the government program classification for CLM12345.",
+        "Give me the claim type designation.",
+        "Tell me if claim CLM12345 is a government claim.",
+        "Provide the Medicare or Medicaid status.",
+        "Retrieve the government program details.",
+        "Fetch the claim classification for CLM12345.",
+        "Generate the program type information.",
+        "Show the government claim designation.",
+        "Display whether this is a public insurance claim.",
+        "Give me the Medicare type for this claim.",
+        "Tell me the government program classification.",
+        "Provide the claim type (Medicare Part D, Medicaid, etc.).",
+        "Retrieve the government claim category.",
+        "Fetch the public program details.",
+        "Generate the claim type report.",
+        "Show the government insurance classification.",
+        "Display the Medicare or Medicaid designation.",
+        "Give me the program type for this claim.",
+    ],
+
+    "greeting": [
+        "Generate a welcome message",
+        "Show me the greeting",
+        "Display hello",
+        "Give me a hi",
+        "Tell me hello there",
+        "Provide greetings",
+        "Retrieve the welcome",
+        "Fetch a greeting",
+        "Generate hello",
+        "Show a welcome",
+        "Display good morning",
+        "Give me a good afternoon",
+        "Tell me good evening",
+        "Provide a hi",
+        "Retrieve greetings",
+        "Fetch hello",
+        "Generate a hi there",
+        "Show good day",
+        "Display howdy",
+        "Give me a hey",
+    ],
+
+    "help": [
+        "Generate instructions on how to submit a claim properly.",
+        "Show me the steps to avoid claim rejection.",
+        "Display the correct submission process.",
+        "Give me guidance on filing claims.",
+        "Tell me how to submit claims without errors.",
+        "Provide the proper claim submission procedure.",
+        "Retrieve the instructions for correct claim filing.",
+        "Fetch the help documentation for claim submission.",
+        "Generate the guidelines for avoiding rejections.",
+        "Show the best practices for claim submission.",
+        "Display the claim submission checklist.",
+        "Give me the process to follow for successful claims.",
+        "Tell me the requirements for claim acceptance.",
+        "Provide the claim submission help.",
+        "Retrieve the instructions to prevent denials.",
+        "Fetch the submission guidelines.",
+        "Generate the correct filing procedures.",
+        "Show the claim submission protocol.",
+        "Display the help for proper claim filing.",
+        "Give me the instructions for avoiding errors.",
+    ],
+
+    "mail_order_info": [
+        "Generate the mail order status for claim CLM12345.",
+        "Show whether this was a home delivery prescription.",
+        "Display the delivery method for CLM12345.",
+        "Give me the mail order details for this claim.",
+        "Tell me if this prescription was shipped.",
+        "Provide the home delivery information.",
+        "Retrieve the mail order status.",
+        "Fetch the delivery type for this prescription.",
+        "Generate the shipping details for CLM12345.",
+        "Show whether this was a mail order claim.",
+        "Display the delivery method used.",
+        "Give me the home delivery status.",
+        "Tell me if this was sent by mail.",
+        "Provide the mail order designation.",
+        "Retrieve the shipping information.",
+        "Fetch the delivery details for this claim.",
+        "Generate the mail order report.",
+        "Show the home delivery status.",
+        "Display whether this was mailed.",
+        "Give me the delivery method information.",
+    ],
+
+    "medicare_part_d": [
+        "Generate a Medicare Part D summary for claim CLM12345.",
+        "Show the PDE details for CLM12345.",
+        "Display the MEDD pricing including LICS and N1s.",
+        "Give me the Part D information for this claim.",
+        "Tell me the Medicare coverage details for CLM12345.",
+        "Provide the PDE report for this prescription.",
+        "Retrieve the Part D summary.",
+        "Fetch the Medicare pricing details.",
+        "Generate the LICS and N1 breakdown for CLM12345.",
+        "Show the Part D plan information.",
+        "Display the PDE submission details.",
+        "Give me the Medicare Part D coverage.",
+        "Tell me the MEDD pricing summary.",
+        "Provide the Part D benefit details.",
+        "Retrieve the PDE information.",
+        "Fetch the Medicare coverage report.",
+        "Generate the Part D pricing breakdown.",
+        "Show the LICS details for this claim.",
+        "Display the N1 and MEDD information.",
+        "Give me the Medicare Part D summary.",
+    ],
+
+    "multi_claim_summary": [
+        "Generate a summary of ALL claims for this member",
+        "Display the list of MULTIPLE claims associated with this member",
+        "Retrieve ALL claim records in the system",
+        "Provide details for EVERY claim linked to this member",
+        "Show the complete set of ALL claims",
+        "Give me a summary of MULTIPLE claims",
+        "Tell me about ALL claims under this member",
+        "Fetch EVERY claim related to this member",
+        "Generate a report of ALL claims in the database",
+        "Display ALL available claims for this member",
+        "Retrieve ALL claims in the system",
+        "Provide a summary of MULTIPLE claims in history",
+        "Show the FULL LIST of claims",
+        "Give me details for ALL claims",
+        "Tell me about MULTIPLE claims",
+        "Fetch ALL claim records",
+        "List EVERY claim in the database",
+        "Display MULTIPLE claims",
+        "Retrieve the complete set of ALL claims",
+        "Show me ALL claims for this member",
+    ],
+
+    "network_info": [
+        "Generate the pharmacy network details for claim CLM12345.",
+        "Show which network was used for CLM12345.",
+        "Display the network information for this prescription.",
+        "Give me the pharmacy chain details for CLM12345.",
+        "Tell me which network processed this claim.",
+        "Provide the pharmacy network classification.",
+        "Retrieve the network type for CLM12345.",
+        "Fetch the pharmacy network information.",
+        "Generate the network details used for payment.",
+        "Show the pharmacy chain network.",
+        "What pharmacy network did the claim pay with?",
+        "Which network was used to pay this claim?",
+        "Tell me the payment network for CLM12345.",
+        "Show the network that paid for this claim.",
+        "What network processed the payment for CLM12345?",
+        "Display the paying network information.",
+        "Which pharmacy network handled the payment?",
+        "Retrieve the network used for claim payment.",
+        "Give me the payment network details.",
+        "Show the network that reimbursed this claim.",
+    ],
+
+    "out_of_scope": [
+        "Generate a random topic",
+        "Show me the weather",
+        "Display a joke",
+        "Give me sports scores",
+        "Tell me about politics",
+        "Provide cooking recipes",
+        "Retrieve stock market data",
+        "Fetch entertainment news",
+        "Generate celebrity gossip",
+        "Show movie showtimes",
+        "Display restaurant recommendations",
+        "Give me travel advice",
+        "Tell me about history",
+        "Provide science facts",
+        "Retrieve unrelated information",
+        "Fetch random content",
+        "Generate off-topic discussion",
+        "Show something different",
+        "Display non-claim information",
+        "Give me irrelevant data",
+    ],
+
+    "pharmacy_info": [
+        "Generate the pharmacy details for claim CLM12345.",
+        "Show where the prescription was filled.",
+        "Display the dispensing pharmacy for CLM12345.",
+        "Give me the pharmacy name where CLM12345 was filled.",
+        "Tell me which pharmacy dispensed this prescription.",
+        "Provide the pharmacy location information.",
+        "Retrieve the dispensing pharmacy details.",
+        "Fetch the pharmacy information for CLM12345.",
+        "Generate the store location where this was filled.",
+        "Show the pharmacy name and address.",
+        "Display the dispensing location.",
+        "Give me the CVS store details.",
+        "Tell me where the member got this prescription.",
+        "Provide the pharmacy NCPDP number.",
+        "Retrieve the dispensing pharmacy location.",
+        "Fetch the store information.",
+        "Generate the pharmacy report.",
+        "Show where the medication was dispensed.",
+        "Display the pharmacy details.",
+        "Give me the filling pharmacy information.",
+    ],
+
+    "prescriber_info": [
+        "Generate the prescriber details for claim CLM12345.",
+        "Show who prescribed the medication for CLM12345.",
+        "Display the physician information for this prescription.",
+        "Give me the doctor's name for CLM12345.",
+        "Tell me which physician wrote this prescription.",
+        "Provide the prescriber NPI for this claim.",
+        "Retrieve the ordering provider details.",
+        "Fetch the prescriber information.",
+        "Generate the physician report for CLM12345.",
+        "Show the doctor's contact information.",
+        "Display the prescriber's name and credentials.",
+        "Give me the provider details.",
+        "Tell me who ordered this medication.",
+        "Provide the prescribing physician information.",
+        "Retrieve the prescriber NPI and name.",
+        "Fetch the doctor's details.",
+        "Generate the provider summary.",
+        "Show the prescribing physician.",
+        "Display the ordering provider information.",
+        "Give me the prescriber name.",
+    ],
+
+    "pricing_info": [
+        "Show the detailed pricing breakdown for claim CLM12345.",
+        "Provide the copay calculation steps for CLM12345.",
+        "Retrieve the ingredient cost and associated fees for claim CLM12345.",
+        "Display the manufacturer rebate applied to CLM12345.",
+        "Give me the pricing schedule used for claim CLM12345.",
+        "Fetch the patient pay details for CLM12345.",
+        "Tell me the final out-of-pocket amount for claim CLM12345.",
+        "Generate a summary of all pricing components for CLM12345.",
+        "Show the co-pay modifier and its impact on claim CLM12345.",
+        "Provide the total cost and copay for CLM12345.",
+        "Generate a pricing summary for CLM12345.",
+        "Show pricing summary for this claim.",
+        "Display the pricing breakdown.",
+        "What is the cost of claim CLM12345?",
+        "How much did I pay?",
+        "Tell me the pricing details.",
+        "What's the total cost of my prescriptions?",
+        "Provide the pricing summary for the most recent claim.",
+        "Retrieve the final copay amount for the last processed claim.",
+        "Display the pricing information for this claim.",
+    ],
+
+    "prior_auth_info": [
+        "Generate the prior authorization details for claim CLM12345.",
+        "Show the PA status for CLM12345.",
+        "Display the Smart PA information for this claim.",
+        "Give me the Member PA details for CLM12345.",
+        "Tell me if prior authorization was required.",
+        "Provide the PA number and approval status.",
+        "Retrieve the prior auth details for this prescription.",
+        "Fetch the authorization information.",
+        "Generate the PA summary for CLM12345.",
+        "Show whether PA was approved or denied.",
+        "Display the authorization status.",
+        "Give me the Smart PA configuration.",
+        "Tell me the prior auth requirements.",
+        "Provide the Member PA summary.",
+        "Retrieve the PA approval details.",
+        "Fetch the authorization status for this drug.",
+        "Generate the prior authorization report.",
+        "Show the PA type and approval.",
+        "Display the authorization details.",
+        "Give me the prior auth information.",
+    ],
+
+    "reimbursement_info": [
+        "Generate the reimbursement details for claim CLM12345.",
+        "Show what was reimbursed for the paper claim.",
+        "Display the payment information for CLM12345.",
+        "Give me the reimbursement amount for this claim.",
+        "Tell me what was paid for CLM12345.",
+        "Provide the reimbursement breakdown.",
+        "Retrieve the payment details.",
+        "Fetch the reimbursement information.",
+        "Generate the payment summary.",
+        "Show the reimbursed amount.",
+        "Display the payment calculation.",
+        "Give me the reimbursement rationale.",
+        "Tell me why this amount was reimbursed.",
+        "Provide the payment details for the paper claim.",
+        "Retrieve the reimbursement report.",
+        "Fetch the payment information.",
+        "Generate the reimbursement summary.",
+        "Show what the pharmacy was paid.",
+        "Display the reimbursement calculation.",
+        "Give me the payment breakdown.",
+    ],
+
+    "rejection_reasons": [
+        "Generate the specific rejection reasons for claim CLM12345.",
+        "Show the edits that caused claim CLM12345 to reject.",
+        "Display the rejection details for claim CLM12345.",
+        "Give me the list of rejection codes for claim CLM12345.",
+        "Tell me why claim CLM12345 was denied.",
+        "Provide the rejection explanation for claim CLM12345.",
+        "Retrieve the failed edits for claim CLM12345.",
+        "Fetch the reason codes for the rejection of claim CLM12345.",
+        "Generate the rejection rationale for this claim.",
+        "Show the specific edits that led to the claim rejection.",
+        "Display the denial reasons for the current claim.",
+        "Give me the claim rejection breakdown.",
+        "Tell me which edits triggered the rejection for this claim.",
+        "Provide the details on why the claim was not accepted.",
+        "Retrieve the rejection information for this claim.",
+        "Fetch the failed edit codes for the claim.",
+        "Generate a summary of the rejection reasons for the claim.",
+        "Show the claim rejection cause.",
+        "Display the edits that resulted in the claim denial.",
+        "Give me the technical reason for the claim rejection.",
+    ],
+
+    "reversal_info": [
+        "Generate the reversal details for claim CLM12345.",
+        "Show any adjustments made to CLM12345.",
+        "Display the R&R information for this claim.",
+        "Give me the manual adjustment details.",
+        "Tell me if claim CLM12345 was reversed.",
+        "Provide the modification history.",
+        "Retrieve the reversal and resubmission details.",
+        "Fetch the adjustment information.",
+        "Generate the R&R report for CLM12345.",
+        "Show any claim modifications.",
+        "Display the reversal status.",
+        "Give me the adjustment details.",
+        "Tell me about any manual changes.",
+        "Provide the reversal information.",
+        "Retrieve the modification details.",
+        "Fetch the R&R status.",
+        "Generate the adjustment summary.",
+        "Show the claim reversal details.",
+        "Display any resubmissions.",
+        "Give me the reversal report.",
+    ],
+
+    "rx_details": [
+        "Generate the RX number for claim CLM12345.",
+        "Show the prescription details for CLM12345.",
+        "Display the quantity dispensed for this claim.",
+        "Give me the days supply for CLM12345.",
+        "Tell me the fill number for this prescription.",
+        "Provide the RX details for this claim.",
+        "Retrieve the prescription number.",
+        "Fetch the quantity and days supply.",
+        "Generate the RX information.",
+        "Show the prescription fill details.",
+        "Display the RX number and fill count.",
+        "Give me the dispensing quantity.",
+        "Tell me the days supply for this prescription.",
+        "Provide the fill number information.",
+        "Retrieve the RX details.",
+        "Fetch the prescription strength and quantity.",
+        "Generate the prescription summary.",
+        "Show the RX number.",
+        "Display the fill details.",
+        "Give me the prescription information.",
+    ],
+
+    "settlement_info": [
+        "Generate the settlement codes for claim CLM12345.",
+        "Show the pharmacy response for CLM12345.",
+        "Display the settlement information sent to the pharmacy.",
+        "Give me the feedback codes for this claim.",
+        "Tell me what was sent back to the pharmacy.",
+        "Provide the settlement details.",
+        "Retrieve the pharmacy response codes.",
+        "Fetch the settlement information.",
+        "Generate the settlement report.",
+        "Show the response sent to the pharmacy.",
+        "Display the settlement codes.",
+        "Give me the pharmacy feedback.",
+        "Tell me the settlement status.",
+        "Provide the response codes.",
+        "Retrieve the settlement details.",
+        "Fetch the pharmacy response.",
+        "Generate the settlement summary.",
+        "Show the codes sent to the pharmacy.",
+        "Display the settlement feedback.",
+        "Give me the response information.",
+    ],
+}
+

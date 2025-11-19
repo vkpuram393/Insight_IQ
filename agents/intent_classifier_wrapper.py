@@ -23,7 +23,8 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
     Classify intent using configured classifier
     
     Switches between:
-    - CVS Production Classifier (if settings.use_cvs_intent_classifier=True)
+    - CVS Embedding Classifier (if settings.use_cvs_intent_classifier=True and use_embedding_classifier=True)
+    - CVS Keyword Classifier (if settings.use_cvs_intent_classifier=True and use_embedding_classifier=False)
     - Original EDGAR Classifier (if settings.use_cvs_intent_classifier=False)
     
     Args:
@@ -39,12 +40,22 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
             - is_complex: bool (optional)
     """
     if settings.use_cvs_intent_classifier:
-        # Use CVS Production Classifier (28+ intents, production-ready)
-        logger.info("🔵 Using CVS Production Intent Classifier")
-        from agents.cvs_intent_classifier import get_cvs_intent_classifier
+        # Use CVS Production Classifier (30 intents, production-ready)
         
-        classifier = get_cvs_intent_classifier()
-        result = classifier.classify(query)
+        if settings.use_embedding_classifier:
+            # Use Embedding-based Classifier (semantic understanding)
+            logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
+            from agents.cvs_intent_embedded import CVSIntentEmbedded
+            
+            classifier = CVSIntentEmbedded()
+            result = classifier.classify(query)
+        else:
+            # Use Keyword-based Classifier (fast, rule-based)
+            logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
+            from agents.cvs_intent_classifier import get_cvs_intent_classifier
+            
+            classifier = get_cvs_intent_classifier()
+            result = classifier.classify(query)
         
         # Ensure 'needs_clarification' key exists (for compatibility)
         if 'needs_clarification' not in result:

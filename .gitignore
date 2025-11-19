@@ -71,3 +71,5 @@ coverage.xml
 
 # Ignore local tooling state
 copilot-*.json
+*.pkl
+data/telemetry.db

@@ -30,9 +30,22 @@ class Settings(BaseSettings):
     ssl_cert_file: str | None = None
     requests_ca_bundle: str | None = None
 
+    # Azure OpenAI Embeddings (for embedding-based classifier)
+    azure_openai_endpoint: str = ""
+    azure_openai_key: str = ""  # Optional if using Azure AD
+    azure_openai_chat_model: str = "gpt-4"
+    azure_openai_embedding_model: str = "text-embedding-ada-002"
+    azure_openai_api_version: str = "2024-02-01"
+    
+    # Azure AD Service Principal (alternative to API key)
+    azure_tenant_id: str = ""
+    azure_client_id: str = ""
+    azure_client_secret: str = ""
+
     # Agent
     confidence_threshold: float = 0.6  # Lowered to route more uncertain queries to Master LLM Agent
-    use_cvs_intent_classifier: bool = True  # Set to True to use Ahmed's production-ready CVS classifier (28+ intents)
+    use_cvs_intent_classifier: bool = False  # Set to True to use Ahmed's production-ready CVS classifier (28+ intents)
+    use_embedding_classifier: bool = False  # Set to True to use embedding-based classifier instead of keyword-based (requires use_cvs_intent_classifier=True)
 
     # Safety
     enable_safety_precheck: bool = True
