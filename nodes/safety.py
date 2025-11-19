@@ -1,184 +1,379 @@
 """
-Safety Nodes - Input and Output validation
+Safety Nodes - Unified Safety Check with PII Protection
 
-These are FUNCTIONS, not agents. No LLM needed - just rules!
+ARCHITECTURE:
+    User Query
+        ↓
+    [safety_precheck_node] ← Unified safety check
+        ├─ Violence pattern check
+        ├─ Mask PII/PHI
+        ├─ Gemini filters (on masked data)
+        └─ Unmask PII/PHI
+    Returns: Safe query with PII/PHI intact
+        ↓
+    ... (cache, context, intent_agent, tool_calls) ...
+        ↓
+    [response_safety_pii_precheck_node] ← Mask before response LLM
+        ↓
+    [response_agent] ← LLM (works with masked data)
+        ↓
+    [response_safety_pii_postcheck_node] ← Unmask for user
 """
 
-import asyncio
-import traceback
 from typing import Dict, Any
+from langgraph.graph import END
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
-from core.error_models import create_internal_error
-from core.logging_context import extract_logging_context
-from persistence import PersistenceStoreFactory
+from core.pii_protection import (
+    get_safety_checker,
+    get_pii_service
+)
 
 logger = get_logger(__name__)
 
 # ============================================================================
-# SAFETY PRECHECK NODE
+# NODE 1: UNIFIED SAFETY PRECHECK (All-in-One)
 # ============================================================================
 
 async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
     """
-    Check if USER INPUT is safe
-
-    📍 BREAKPOINT: Set here to debug safety checking
-
-    🎓 CONCEPT:
-    This is a FUNCTION NODE - it just runs code, no LLM.
-    It checks for harmful keywords and blocks bad input.
-
-    INPUT (reads from state):
-        - text: User's message
-
-    OUTPUT (writes to state):
-        - safety_precheck_passed: True/False
-        - safety_block_reason: Why blocked (if blocked)
-        - response: Error message (if blocked)
-
+    Unified safety check node that handles everything:
+    
+    Internal Steps:
+    1. Violence pattern check (fast, local)
+    2. Mask PII/PHI (local, no external calls)
+    3. Call Gemini safety filters (on masked data - no PII leakage)
+    4. Unmask PII/PHI (restore original values)
+    5. Return safe query with PII/PHI intact
+    
+    INPUT (from state):
+        - text: User's query
+        - session_id: For token storage
+    
+    OUTPUT (to state):
+        - text: Safe, unmasked query with PII/PHI intact
+        - safety_precheck_passed: bool
+        - threat_detected: bool
+        - threat_reason: str (if blocked)
+        - response: error message (if blocked)
+        - metadata.pii_metadata: PII detection metadata
+    
     FLOW:
-        If blocked → Graph ends (returns error to user)
-        If passed → Graph continues to next node
+        Blocked → END (safety violation)
+        Passed → Continue with PII/PHI intact for downstream nodes
     """
-    node_name = "safety_precheck"
-    log_ctx = extract_logging_context(state)
+    logger.info("\n" + "="*70)
+    logger.info("🛡️  SAFETY PRECHECK NODE - Unified Safety Check")
+    logger.info("="*70)
     
-    try:
-        logger.info("🔒 Node: Safety Precheck")
-
-        if not settings.enable_safety_precheck:
-            return {"safety_precheck_passed": True}
-
-        text = state["text"].lower()
-
-        # Check harmful keywords
-        # we will be using Gemini filter here
-        harmful = {
-            "self_harm": ["kill", "suicide"],
-            "violence": ["bomb", "hurt"],
-            "hate_speech": ["hate speech examples here"]
-        }
-
-        for category, keywords in harmful.items():
-            for keyword in keywords:
-                if keyword in text:
-                    logger.warning(f"🚫 Blocked: {category}")
-                    return {
-                        "safety_precheck_passed": False,
-                        "safety_block_reason": f"Violates {category} policy",
-                        "response": "I cannot process that request."
-                    }
-
-        await asyncio.sleep(0.05)  # Simulate check
-
-        logger.info("✅ Safety precheck passed")
+    if not settings.enable_safety_precheck:
+        logger.info("⭐ Safety precheck disabled in config")
         return {"safety_precheck_passed": True}
-        
-    except Exception as e:
-        tb = traceback.format_exc()
-        error = create_internal_error(
-            error_message=f"Safety precheck failed: {str(e)}",
-            stacktrace=tb,
-            session_id=log_ctx["session_id"],
-            node_name=node_name
-        )
-        
-        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
-        await persistence_store.log_exception(
-            error_code=error.error_code.value,
-            category=error.category.value,
-            severity=error.severity.value,
-            message=error.message,
-            user_message=error.user_message,
-            session_id=log_ctx["session_id"],
-            request_id=log_ctx["request_id"],
-            node_name=node_name,
-            stacktrace=error.stacktrace,
-            metadata=error.metadata,
-            user_id=log_ctx["user_id"]
-        )
-        
-        logger.error(f"🚨 Exception in safety precheck: {e}\n{tb}")
-        
-        return {
-            "error": error.user_message,
-            "safety_precheck_passed": False,
-            "metadata": {
-                **state.get("metadata", {}),
-                "error_occurred": True,
-                "error_code": error.error_code.value
-            }
-        }
-
-# ============================================================================
-# SAFETY POSTCHECK NODE
-# ============================================================================
-
-async def safety_postcheck_node(state: AgentState) -> Dict[str, Any]:
-    """
-    Check if AI OUTPUT is safe
-
-    Same concept as precheck but for responses we generate.
-    Ensures AI doesn't say anything harmful.
-    """
-    node_name = "safety_postcheck"
-    log_ctx = extract_logging_context(state)
+    
+    text = state.get("text", "")
+    session_id = state.get("session_id", "default")
     
     try:
-        logger.info("🔒 Node: Safety Postcheck")
-
-        if not settings.enable_safety_postcheck:
-            return {"safety_postcheck_passed": True}
-
-        response = state["response"].lower()
-
-        # Check if too long (possible attack)
-        if len(response) > 5000:
-            logger.warning("🚫 Response too long")
+        # Get safety checker instance
+        safety_checker = get_safety_checker()
+        
+        # Run complete safety pipeline (Method 3)
+        result = await safety_checker.check_harmful_content(text, session_id)
+        
+        if not result["is_safe"]:
+            # Safety violation detected
+            reason = result.get("reason", "Content safety violation")
+            violation_categories = result.get("violation_categories", [])
+            
+            logger.warning(f"🚫 BLOCKED: {reason}")
+            if violation_categories:
+                logger.warning(f"   Categories: {', '.join(violation_categories)}")
+            
             return {
-                "safety_postcheck_passed": False,
-                "response": "I apologize, I cannot provide that information."
+                "safety_precheck_passed": False,
+                "threat_detected": True,
+                "threat_reason": reason,
+                "response": (
+                    "I'm here to help with pharmacy claims and coverage questions. "
+                    "I can't assist with that type of request."
+                )
             }
-
-        await asyncio.sleep(0.05)
-
-        logger.info("✅ Safety postcheck passed")
-        return {"safety_postcheck_passed": True}
         
-    except Exception as e:
-        tb = traceback.format_exc()
-        error = create_internal_error(
-            error_message=f"Safety postcheck failed: {str(e)}",
-            stacktrace=tb,
-            session_id=log_ctx["session_id"],
-            node_name=node_name
-        )
+        # Safety check passed - return unmasked text with PII/PHI
+        logger.info("✅ Safety check passed - Query is safe")
+        logger.info(f"   PII/PHI intact for downstream processing")
         
-        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
-        await persistence_store.log_exception(
-            error_code=error.error_code.value,
-            category=error.category.value,
-            severity=error.severity.value,
-            message=error.message,
-            user_message=error.user_message,
-            session_id=log_ctx["session_id"],
-            request_id=log_ctx["request_id"],
-            node_name=node_name,
-            stacktrace=error.stacktrace,
-            metadata=error.metadata,
-            user_id=log_ctx["user_id"]
-        )
-        
-        logger.error(f"🚨 Exception in safety postcheck: {e}\n{tb}")
+        # Store PII metadata for later use
+        metadata = state.get("metadata", {})
+        metadata["pii_metadata"] = result.get("pii_metadata", {})
         
         return {
-            "error": error.user_message,
-            "safety_postcheck_passed": False,
+            "text": result["text"],  # Unmasked text with PII/PHI intact
+            "safety_precheck_passed": True,
+            "threat_detected": False,
+            "threat_reason": None,
+            "metadata": metadata
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Safety precheck failed: {e}", exc_info=True)
+        # Fail closed - block on error
+        return {
+            "safety_precheck_passed": False,
+            "threat_detected": True,
+            "threat_reason": f"Safety check error: {str(e)}",
+            "response": (
+                "I'm unable to process your request at this time. "
+                "Please try again later."
+            )
+        }
+
+
+# ============================================================================
+# NODE 2: RESPONSE SAFETY PII PRECHECK (Mask before LLM)
+# ============================================================================
+
+async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Mask PII/PHI before sending to response generation LLM
+    
+    This prevents PII leakage to the LLM service
+    
+    INPUT (from state):
+        - text: UNMASKED text (with PII/PHI from previous nodes)
+        - tool_results: May contain PII/PHI
+        - session_id: For token storage
+    
+    OUTPUT (to state):
+        - text: MASKED text
+        - tool_results: MASKED (if contains PII/PHI)
+        - metadata.response_pii_masking: Masking metadata
+    
+    FLOW:
+        Always continues
+        Response agent works with MASKED data (safe)
+    """
+    logger.info("\n" + "="*70)
+    logger.info("🔐 RESPONSE SAFETY PII PRECHECK - Masking before Response LLM")
+    logger.info("="*70)
+    
+    text = state.get("text", "")
+    tool_results = state.get("tool_results", {})
+    session_id = state.get("session_id", "default")
+    
+    try:
+        pii_service = get_pii_service()
+        
+        # Mask text
+        masked_text, text_metadata = pii_service.mask_pii_phi(text, session_id)
+        
+        # Mask tool results (convert to string, mask, keep structure)
+        tool_results_str = str(tool_results)
+        masked_tool_results_str, tool_metadata = pii_service.mask_pii_phi(tool_results_str, session_id)
+        
+        total_masked = text_metadata["masked_count"] + tool_metadata["masked_count"]
+        
+        if total_masked > 0:
+            logger.info(f"🎭 Masked {total_masked} PII/PHI entities before response LLM")
+            logger.debug(f"   Original text: {text[:100]}...")
+            logger.debug(f"   Masked text: {masked_text[:100]}...")
+        else:
+            logger.info("ℹ️  No PII/PHI detected - data unchanged")
+        
+        # Store metadata for unmasking
+        metadata = state.get("metadata", {})
+        metadata["response_pii_masking"] = {
+            "text_metadata": text_metadata,
+            "tool_metadata": tool_metadata
+        }
+        
+        return {
+            "text": masked_text,
+            "metadata": metadata
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Response PII masking failed: {e}", exc_info=True)
+        # Fail-safe: continue with original text (not ideal but prevents blocking)
+        return {
             "metadata": {
                 **state.get("metadata", {}),
-                "error_occurred": True,
-                "error_code": error.error_code.value
+                "response_pii_masking": {
+                    "has_pii": False,
+                    "masked_count": 0,
+                    "error": str(e)
+                }
             }
         }
+
+
+# ============================================================================
+# NODE 3: RESPONSE SAFETY PII POSTCHECK (Unmask for user)
+# ============================================================================
+
+async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Unmask PII/PHI in the generated response + Leakage detection
+    
+    Two steps:
+    1. Leakage Detection: Check if LLM response contains unexpected PII
+    2. Token Unmasking: Restore original PII/PHI values for user
+    
+    INPUT (from state):
+        - response: LLM-generated response (with tokens)
+        - session_id: For token lookup
+        - metadata.response_pii_masking: Token mappings
+    
+    OUTPUT (to state):
+        - response: UNMASKED response (real values restored)
+        - safety_postcheck_passed: bool
+        - metadata.response_pii_unmasking: Unmasking stats
+        - metadata.leakage_check: Leakage detection results
+    
+    FLOW:
+        Leakage detected → Block response, return generic message
+        No leakage → Unmask tokens, return to user
+    """
+    logger.info("\n" + "="*70)
+    logger.info("🔍 RESPONSE SAFETY PII POSTCHECK - Leakage Check + Unmasking")
+    logger.info("="*70)
+    
+    response = state.get("response", "")
+    session_id = state.get("session_id", "default")
+    
+    if not response:
+        logger.warning("⚠️  No response to postcheck")
+        return {"safety_postcheck_passed": True}
+    
+    try:
+        pii_service = get_pii_service()
+        metadata = state.get("metadata", {})
+        response_pii_masking = metadata.get("response_pii_masking", {})
+        
+        # Get token mappings
+        text_metadata = response_pii_masking.get("text_metadata", {})
+        tool_metadata = response_pii_masking.get("tool_metadata", {})
+        
+        text_token_mapping = text_metadata.get("token_mapping", {})
+        tool_token_mapping = tool_metadata.get("token_mapping", {})
+        
+        # Combine token mappings
+        combined_token_mapping = {**text_token_mapping, **tool_token_mapping}
+        
+        # ===== STEP 1: Check for PII Leakage =====
+        logger.info("Step 1: Leakage detection")
+        
+        # Detect any NEW PII in response (not from original input)
+        detected_pii = pii_service.detect_pii_phi(response)
+        
+        leaked_entities = []
+        for entity in detected_pii:
+            entity_text = entity["text"]
+            # Check if this PII value was in original input
+            is_expected = any(
+                entity_text == data["original"] 
+                for data in combined_token_mapping.values()
+            )
+            if not is_expected:
+                # NEW PII detected - this is a leak!
+                leaked_entities.append(entity)
+        
+        if leaked_entities:
+            logger.error(
+                f"🚨 PII LEAKAGE DETECTED! Found {len(leaked_entities)} "
+                f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
+            )
+            return {
+                "response": (
+                    "I apologize, but I cannot display that information due to "
+                    "privacy protection. Please try rephrasing your question."
+                ),
+                "safety_postcheck_passed": False,
+                "metadata": {
+                    **metadata,
+                    "leakage_check": {
+                        "has_leakage": True,
+                        "leaked_entities": [
+                            {
+                                "type": e["entity_type"],
+                                "text": e["text"][:20] + "..."
+                            }
+                            for e in leaked_entities
+                        ]
+                    }
+                }
+            }
+        
+        logger.info("✅ No PII leakage detected")
+        
+        # ===== STEP 2: Unmask PII/PHI Tokens =====
+        logger.info("Step 2: Unmasking tokens")
+        
+        if not combined_token_mapping:
+            logger.info("ℹ️  No tokens to unmask")
+            return {
+                "safety_postcheck_passed": True,
+                "metadata": {
+                    **metadata,
+                    "leakage_check": {"has_leakage": False},
+                    "response_pii_unmasking": {"tokens_unmasked": 0}
+                }
+            }
+        
+        # Unmask tokens in response
+        unmasked_response = pii_service.unmask_pii_phi(response, combined_token_mapping)
+        
+        tokens_unmasked = sum(1 for token in combined_token_mapping.keys() if token in response)
+        
+        logger.info(f"🔓 Unmasked {tokens_unmasked} tokens in final response")
+        logger.debug(f"   Masked: {response[:100]}...")
+        logger.debug(f"   Unmasked: {unmasked_response[:100]}...")
+        
+        return {
+            "response": unmasked_response,  # ← CRITICAL: Replace with unmasked
+            "safety_postcheck_passed": True,
+            "metadata": {
+                **metadata,
+                "leakage_check": {"has_leakage": False},
+                "response_pii_unmasking": {
+                    "tokens_unmasked": tokens_unmasked,
+                    "token_types": list(set(
+                        data["entity_type"] 
+                        for data in combined_token_mapping.values()
+                    ))
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Response postcheck failed: {e}", exc_info=True)
+        # Fail-safe: Return response as-is (may contain tokens)
+        return {
+            "response": response,
+            "safety_postcheck_passed": True,
+            "metadata": {
+                **state.get("metadata", {}),
+                "response_pii_unmasking": {"error": str(e)}
+            }
+        }
+
+
+# ============================================================================
+# ROUTERS
+# ============================================================================
+
+def should_continue_after_precheck(state: AgentState) -> str:
+    """
+    After safety precheck, decide next step
+
+    ROUTING:
+        Blocked → END (return error)
+        Passed → continue (to cache check)
+    """
+    if not state.get("safety_precheck_passed", False):
+        logger.info("⛔ Flow blocked - threat detected")
+        return END
+    
+    logger.info("✅ Flow continues")
+    return "check_cache"

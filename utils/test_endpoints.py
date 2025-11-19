@@ -27,7 +27,11 @@ from datetime import datetime
 from agents.intent_classifier import classify_intent
 from agents.intent_agent import intent_agent_node
 from agents.response_agent import response_agent_node
-from nodes.safety import safety_precheck_node, safety_postcheck_node
+from nodes.safety import (
+    safety_precheck_node,
+    response_safety_pii_precheck_node,
+    response_safety_pii_postcheck_node
+)
 from nodes.confidence import confidence_check_router
 from nodes.clarification import clarification_node
 from nodes.context import build_context_node, update_memory_node
@@ -819,7 +823,7 @@ async def test_safety_postcheck(request: SafetyTestRequest):
             response="This is a test response"
         )
 
-        result = await safety_postcheck_node(state)
+        result = await response_safety_pii_postcheck_node(state)
 
         return {
             "response": state.get("response", "This is a test response"),
@@ -1044,7 +1048,11 @@ async def test_exception_handling(request: ExceptionTestRequest):
                 intent_agent, response_agent, call_claims_tool
     """
     try:
-        from nodes.safety import safety_precheck_node, safety_postcheck_node
+        from nodes.safety import (
+            safety_precheck_node,
+            response_safety_pii_precheck_node,
+            response_safety_pii_postcheck_node
+        )
         from nodes.cache import check_cache_node, cache_response_node
         from nodes.context import build_context_node, update_memory_node
         from nodes.clarification import clarification_node
@@ -1109,7 +1117,8 @@ async def test_exception_handling(request: ExceptionTestRequest):
         # Map node names to their functions
         node_map = {
             "safety_precheck": safety_precheck_node,
-            "safety_postcheck": safety_postcheck_node,
+            "response_safety_pii_precheck": response_safety_pii_precheck_node,
+            "response_safety_pii_postcheck": response_safety_pii_postcheck_node,
             "check_cache": check_cache_node,
             "cache_response": cache_response_node,
             "build_context": build_context_node,
