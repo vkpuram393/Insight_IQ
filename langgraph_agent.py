@@ -12,11 +12,12 @@ from state.schema import AgentState
 from nodes import (
     orchestrator_node,
     safety_precheck_node,
+    response_safety_pii_precheck_node,
+    response_safety_pii_postcheck_node,
     check_cache_node,
     build_context_node,
     clarification_node,
     confidence_check_router,
-    safety_postcheck_node,
     update_memory_node,
     cache_response_node
 )
@@ -62,40 +63,92 @@ def should_continue_after_cache(state: AgentState) -> str:
 # Workflow builder -----------------------------------------------------------
 
 def _build_workflow() -> StateGraph:
+    """
+    Build the complete workflow with unified safety check
+    
+    FLOW:
+        User Query
+            ↓
+        orchestrator
+            ↓
+        [safety_precheck] ← Unified safety (pattern check + mask + Gemini + unmask)
+            ↓
+        check_cache
+            ↓
+        build_context
+            ↓
+        intent_agent (processes with PII/PHI intact)
+            ↓
+        call_claims_tool / clarification
+            ↓
+        [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
+            ↓
+        response_agent (LLM - SAFE)
+            ↓
+        [response_safety_pii_postcheck] ← Unmask for user
+            ↓
+        update_memory → cache_response → END
+    """
     workflow = StateGraph(AgentState)
 
+    # Add all nodes
     workflow.add_node("orchestrator", orchestrator_node)
-    workflow.add_node("safety_precheck", safety_precheck_node)
-    workflow.add_node("safety_postcheck", safety_postcheck_node)
+    workflow.add_node("safety_precheck", safety_precheck_node)  # Unified safety check
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("build_context", build_context_node)
     workflow.add_node("intent_agent", intent_agent_node)
+    workflow.add_node("response_safety_pii_precheck", response_safety_pii_precheck_node)
     workflow.add_node("response_agent", response_agent_node)
+    workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
-    # Set orchestrator as entry point
+    # Build the flow
+    # Entry point
     workflow.set_entry_point("orchestrator")
-    # Connect orchestrator to safety_precheck
+    
+    # Orchestrator → Safety Precheck (unified: pattern + mask + Gemini + unmask)
     workflow.add_edge("orchestrator", "safety_precheck")
+    
+    # Safety Precheck → Cache or END
     workflow.add_conditional_edges(
         "safety_precheck", should_continue_after_precheck, {"check_cache": "check_cache", END: END}
     )
+    
+    # Cache → Context or END
     workflow.add_conditional_edges(
         "check_cache", should_continue_after_cache, {"build_context": "build_context", END: END}
     )
+    
+    # Context → Intent Agent (PII/PHI intact)
     workflow.add_edge("build_context", "intent_agent")
+    
+    # Intent Agent → Tool Call or Clarification
     workflow.add_conditional_edges(
         "intent_agent", confidence_check_router, {"clarification": "clarification", "tool_call": "call_claims_tool"}
     )
-    workflow.add_edge("clarification", "update_memory")  # CHANGED: clarification no longer ends graph directly
-    workflow.add_edge("call_claims_tool", "response_agent")
-    workflow.add_edge("response_agent", "safety_postcheck")
-    workflow.add_edge("safety_postcheck", "update_memory")
+
+    # Clarification → Update Memory
+    workflow.add_edge("clarification", "update_memory") # CHANGED: clarification no longer ends graph directly
+    
+    # Tool Call → Response Safety PII Precheck (mask PII/PHI before response LLM)
+    workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
+    
+    # Response Safety PII Precheck → Response Agent
+    workflow.add_edge("response_safety_pii_precheck", "response_agent")
+    
+    # Response Agent → Response Safety PII Postcheck (unmask for user)
+    workflow.add_edge("response_agent", "response_safety_pii_postcheck")
+    
+    # Response Safety PII Postcheck → Memory Update
+    workflow.add_edge("response_safety_pii_postcheck", "update_memory")
+    
+    # Memory → Cache → END
     workflow.add_edge("update_memory", "cache_response")
     workflow.add_edge("cache_response", END)
+    
     return workflow
 
 # Lifecycle ------------------------------------------------------------------
@@ -136,3 +189,4 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
+
