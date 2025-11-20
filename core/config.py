@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.7
+    conversation_history_limit: int = 5  # Number of past conversations to include in response generation
 
     # Safety
     enable_safety_precheck: bool = True
