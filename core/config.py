@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Lowered to route more uncertain queries to Master LLM Agent
+    conversation_history_limit: int = 5  # Number of past conversations to include in response generation
     use_cvs_intent_classifier: bool = False  # Set to True to use Ahmed's production-ready CVS classifier (28+ intents)
     use_embedding_classifier: bool = False  # Set to True to use embedding-based classifier instead of keyword-based (requires use_cvs_intent_classifier=True)
 
@@ -53,6 +54,9 @@ class Settings(BaseSettings):
 
     # Cache
     enable_semantic_cache: bool = True
+    
+    # Orchestrator
+    remove_punctuation_in_normalization: bool = True
 
     # Memory Store (cache and session memory)
     memory_store_type: str = "inmemory"  # Options: "inmemory", "redis", "memorystore"
@@ -71,6 +75,9 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     debug: bool = True
+
+    # API Configuration
+    swagger_url: str ="https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com" # Base URL for external APIs
 
     class Config:
         env_file = ".env"
