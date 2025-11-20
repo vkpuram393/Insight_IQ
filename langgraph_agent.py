@@ -16,10 +16,10 @@ from nodes import (
     clarification_node,
     confidence_check_router,
     route_after_api_call,  # NEW: API error fallback routing
-    safety_postcheck_node,
     update_memory_node,
     cache_response_node,
-    master_llm_agent_node  # NEW: Master LLM Agent (Stage 2)
+    master_llm_agent_node,  # NEW: Master LLM Agent (Stage 2)
+    response_safety_pii_postcheck_node
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
@@ -65,24 +65,30 @@ def should_continue_after_cache(state: AgentState) -> str:
 def _build_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
     workflow.add_node("safety_precheck", safety_precheck_node)
-    workflow.add_node("safety_postcheck", safety_postcheck_node)
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("build_context", build_context_node)
     workflow.add_node("intent_agent", intent_agent_node)
     workflow.add_node("master_llm", master_llm_agent_node)  # NEW: Master LLM Agent (Stage 2)
     workflow.add_node("response_agent", response_agent_node)
+    workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
     workflow.set_entry_point("safety_precheck")
+    
+    # Safety Precheck → Cache or END
     workflow.add_conditional_edges(
         "safety_precheck", should_continue_after_precheck, {"check_cache": "check_cache", END: END}
     )
+    
+    # Cache → Context or END
     workflow.add_conditional_edges(
         "check_cache", should_continue_after_cache, {"build_context": "build_context", END: END}
     )
+    
+    # Context → Intent Agent (PII/PHI intact)
     workflow.add_edge("build_context", "intent_agent")
     
     # NEW: Three-way routing from intent_agent
@@ -108,7 +114,7 @@ def _build_workflow() -> StateGraph:
         elif state.get("response"):
             # LLM provided a direct response (greeting, clarification, etc.)
             logger.info("💬 Master LLM provided direct response → skipping to postcheck")
-            return "safety_postcheck"
+            return "response_agent"
         else:
             # Default: go to response agent
             return "response_agent"
@@ -118,12 +124,11 @@ def _build_workflow() -> StateGraph:
         route_after_master_llm,
         {
             "call_claims_tool": "call_claims_tool",
-            "response_agent": "response_agent",
-            "safety_postcheck": "safety_postcheck"
+            "response_agent": "response_agent"
         }
     )
     
-    workflow.add_edge("clarification", "update_memory")  # CHANGED: clarification no longer ends graph directly
+    workflow.add_edge("clarification", "update_memory")
     
     # NEW: API error handling with LLM fallback (CRITICAL for multiple APIs!)
     workflow.add_conditional_edges(
@@ -135,10 +140,11 @@ def _build_workflow() -> StateGraph:
         }
     )
     
-    workflow.add_edge("response_agent", "safety_postcheck")
-    workflow.add_edge("safety_postcheck", "update_memory")
+    workflow.add_edge("response_agent", "response_safety_pii_postcheck")
+    workflow.add_edge("response_safety_pii_postcheck", "update_memory")
     workflow.add_edge("update_memory", "cache_response")
     workflow.add_edge("cache_response", END)
+    
     return workflow
 
 # Lifecycle ------------------------------------------------------------------
@@ -179,3 +185,4 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
+
