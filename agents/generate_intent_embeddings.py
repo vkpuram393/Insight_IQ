@@ -37,8 +37,15 @@ def generate_and_save_embeddings():
     
     # Initialize embeddings service
     print("\n⏳ Initializing Azure OpenAI Embeddings...")
+    
+    # Force fresh initialization by clearing singleton
+    import utils.azure_embeddings as azure_emb_module
+    azure_emb_module._azure_embeddings = None
+    
     embeddings_service = get_azure_embeddings()
-    print("✅ Embeddings service ready")
+    print(f"✅ Embeddings service ready")
+    print(f"   Client status: {'Connected' if embeddings_service.client else 'NOT CONNECTED (using mocks)'}")
+    print(f"   Auth method: {embeddings_service.auth_method}")
     
     # Generate embeddings for all intents
     intent_embeddings = {}
@@ -60,8 +67,9 @@ def generate_and_save_embeddings():
     
     print(f"\n✅ All embeddings generated!")
     
-    # Save to file
-    output_file = "intent_embeddings_cache.pkl"
+    # Save to file in the agents directory (where this script lives)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_file = os.path.join(script_dir, "intent_embeddings_cache.pkl")
     print(f"\n⏳ Saving to {output_file}...")
     
     with open(output_file, 'wb') as f:
@@ -70,9 +78,9 @@ def generate_and_save_embeddings():
     print(f"✅ Embeddings saved successfully!")
     
     # Verify file
-    import os
     file_size = os.path.getsize(output_file) / (1024 * 1024)
     print(f"   File size: {file_size:.2f} MB")
+    print(f"   Location: {output_file}")
     
     print("\n" + "=" * 80)
     print("🎉 DONE!")
