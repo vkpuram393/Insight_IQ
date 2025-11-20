@@ -935,6 +935,20 @@ TEST_CASES = [
         "has_entities": True,
         "description": "UC38: Claim adjustments and reversals"
     },
+    {
+        "query": "Could you explain when claim CLM12345 was reversed?",
+        "expected_intent": "reversal_info",
+        "expected_route": "tool_call → response_agent",
+        "has_entities": True,
+        "description": "UC38b: Claim reversal explanation with timing"
+    },
+    {
+        "query": "Could you explain when claim was reversed?",
+        "expected_intent": "reversal_info",
+        "expected_route": "clarification",
+        "has_entities": False,
+        "description": "UC38c: Claim reversal without ID (needs clarification)"
+    },
     
     # USE CASE 39: PDE Summary
     {

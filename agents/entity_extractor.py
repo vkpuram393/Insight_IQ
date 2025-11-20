@@ -238,6 +238,7 @@ class EntityExtractor:
             'claim_status': ['claim_id'],
             'claim_details': ['claim_id'],
             'rejection_reasons': ['claim_id'],
+            'reversal_info': ['claim_id'],
             'claim_pending': ['claim_id'],
             'prescription_info': ['prescription_id'],
             'prescription_status': ['prescription_id'],
