@@ -15,7 +15,6 @@ from nodes import (
     build_context_node,
     clarification_node,
     confidence_check_router,
-    route_after_api_call,  # NEW: API error fallback routing
     confidence_checker_node,  # Team's addition
     update_memory_node,
     cache_response_node,
@@ -166,16 +165,15 @@ def _build_workflow() -> StateGraph:
     
     workflow.add_edge("clarification", "update_memory")
     
-    # NEW: API error handling with LLM fallback (CRITICAL for multiple APIs!)
-    workflow.add_conditional_edges(
-        "call_claims_tool",
-        route_after_api_call,
-        {
-            "master_llm": "master_llm",          # LLM fallback on API failure
-            "response_agent": "response_agent"   # Success
-        }
-    )
+    # Tool Call → Response Safety PII Precheck (mask PII/PHI before response LLM)
+    # Matches remote MVP-1 architecture: direct edge, no conditional routing
+    # LLM handles both API success and failure cases gracefully
+    workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
     
+    # Response Safety PII Precheck → Response Agent
+    workflow.add_edge("response_safety_pii_precheck", "response_agent")
+    
+    # Response Agent → Response Safety PII Postcheck (unmask for user)
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
     workflow.add_edge("response_safety_pii_postcheck", "update_memory")
     workflow.add_edge("update_memory", "cache_response")
