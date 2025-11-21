@@ -44,19 +44,31 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
-def confidence_check_router(state: AgentState) -> Literal["clarification", "tool_call"]:
-    """Route based on confidence and slot completeness (kept for backward compatibility).
+def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context"]:
+    """Route based on confidence and slot completeness.
 
     Rules:
       - If required slots are missing -> clarification
       - Else if confidence < threshold -> clarification
-      - Else -> tool_call
+      - Else -> build_context (which leads to tool call)
     """
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
     
     confidence = state.get("confidence", 0.0)
     missing_slots = state.get("missing_slots") or []
+    needs_clarification = state.get("needs_clarification", False)
+    confidence_check_passed = state.get("metadata", {}).get("confidence_check_passed", False)
+
+    # Check if confidence_checker_node already determined we need clarification
+    if needs_clarification:
+        logger.info(f"⚠️ Needs clarification (from confidence_checker) -> Clarification")
+        return "clarification"
+    
+    # Check if confidence_checker_node already passed
+    if confidence_check_passed:
+        logger.info(f"✅ Confidence check passed (from confidence_checker) -> Build Context")
+        return "build_context"
 
     # Check for missing required slots (from intent classifier)
     if missing_slots:
@@ -67,8 +79,8 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "tool
         logger.info(f"⚠️ Low confidence ({confidence:.2f}) < {threshold:.2f} -> Clarification")
         return "clarification"
 
-    logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Tool Call")
-    return "tool_call"
+    logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Build Context")
+    return "build_context"
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
     """

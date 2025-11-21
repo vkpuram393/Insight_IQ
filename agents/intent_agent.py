@@ -10,13 +10,12 @@ import re
 import json
 import traceback
 from typing import Dict, Any, List
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error, create_llm_error
 from core.logging_context import log_state_snapshot
+from core.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from persistence import PersistenceStoreFactory
 
 # Use base logger
@@ -97,52 +96,77 @@ async def intent_agent_node(state: AgentState) -> Dict[str, Any]:
         # Select LLM (mock vs real)
         if settings.use_mock_llm:
             llm = MockLLM()
+            # Invoke mock LLM (async)
+            response = await llm.ainvoke([{"role": "user", "content": text}])
         else:
-            llm = ChatOpenAI(
-                model=settings.llm_model,
-                temperature=settings.llm_temperature,
-                openai_api_key=settings.openai_api_key,
+            # Use Gemini for real LLM
+            logger.info("🔧 Using Gemini for intent classification")
+            
+            # Build system prompt
+            system_prompt = (
+                "You are an intent classification agent for a pharmacy benefits system.\n\n"
+                "Your job: Classify the user's intent and extract entities.\n\n"
+                "Available intents:\n"
+                "- claim_status: User wants to check claim status\n"
+                "- claim_rejection_reason: User wants to know why claim was rejected\n"
+                "- find_pharmacy: User wants to find a pharmacy\n"
+                "- check_coverage: User wants to check medication coverage\n"
+                "- claim_details: User wants detailed information about a specific claim\n"
+                "- unknown: Cannot determine intent\n\n"
+                "Respond ONLY with JSON like:\n"
+                '{"intent": "claim_status", "confidence": 0.95, "entities": {"claim_number": "12345"}}\n\n'
+                "Be conservative with confidence; if unsure use lower confidence."
             )
-
-        # Build raw system prompt then escape braces to avoid KeyError during format
-        raw_system_prompt = (
-            "You are an intent classification agent for a pharmacy benefits system.\n\n"
-            "Your job: Classify the user's intent and extract entities.\n\n"
-            "Available intents:\n"
-            "- claim_status: User wants to check claim status\n"
-            "- claim_rejection_reason: User wants to know why claim was rejected\n"
-            "- find_pharmacy: User wants to find a pharmacy\n"
-            "- check_coverage: User wants to check medication coverage\n"
-            "- unknown: Cannot determine intent\n\n"
-            "Respond ONLY with JSON like:\n"
-            '{"intent": "claim_status", "confidence": 0.95, "entities": {"claim_number": "12345"}}\n\n'
-            "Be conservative with confidence; if unsure use lower confidence."
-        )
-        # Escape braces for Python .format safety
-        system_prompt = raw_system_prompt.replace('{', '{{').replace('}', '}}')
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("user", (
-                "User message: {user_text}\n\n"
-                "Conversation history:\n{conversation_history}\n\n"
+            
+            # Build user prompt
+            user_prompt = (
+                f"User message: {text}\n\n"
+                f"Conversation history:\n{history_str if history_str.strip() else '(none)'}\n\n"
                 "Classify this."
-            )),
-        ])
-
-        # Format messages
-        messages = prompt.format_messages(
-            user_text=text,
-            conversation_history=history_str if history_str.strip() else "(none)"
-        )
-
-        # Invoke LLM
-        response = await llm.ainvoke(messages)
+            )
+            
+            # Call Gemini
+            req = GenerateRequest(
+                prompt=user_prompt,
+                system_instruction=system_prompt,
+                temperature=settings.llm_temperature,
+                model=settings.llm_model
+            )
+            
+            # Run in executor to avoid blocking (Gemini client is sync)
+            loop = asyncio.get_event_loop()
+            gemini_response = await loop.run_in_executor(None, _generate_core, req)
+            
+            # Create response object compatible with existing parsing
+            class Response:
+                content = gemini_response.text
+            response = Response()
+            
+            # Log raw response for debugging
+            logger.debug(f"📋 Raw Gemini response: {response.content[:500]}")
 
         # Parse JSON safely
         try:
-            result = json.loads(response.content)
-        except Exception:
+            response_text = response.content.strip()
+            
+            # Remove markdown code blocks if present (Gemini sometimes wraps JSON in ```json ... ```)
+            response_text = re.sub(r'^```json\s*', '', response_text, flags=re.MULTILINE)
+            response_text = re.sub(r'^```\s*', '', response_text, flags=re.MULTILINE)
+            response_text = re.sub(r'```\s*$', '', response_text, flags=re.MULTILINE)
+            response_text = response_text.strip()
+            
+            # Try to extract JSON from response (in case Gemini adds extra text)
+            json_match = re.search(r'\{[^{}]*"intent"[^{}]*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group(0))
+            else:
+                result = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"⚠️ Failed to parse JSON from response: {e}")
+            logger.warning(f"   Response was: {response.content[:500] if hasattr(response, 'content') else str(response)[:500]}")
+            result = {"intent": "unknown", "confidence": 0.1, "entities": {}}
+        except Exception as e:
+            logger.error(f"❌ Error parsing intent response: {e}")
             result = {"intent": "unknown", "confidence": 0.1, "entities": {}}
 
         intent = result.get("intent", "unknown")
