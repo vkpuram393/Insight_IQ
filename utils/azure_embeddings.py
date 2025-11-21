@@ -50,8 +50,8 @@ class AzureEmbeddings:
     
     def _init_with_azure_ad_cvs_pattern(self, settings):
         """
-        Initialize with Azure AD using DefaultAzureCredential (CVS Pattern)
-        Matches CVS's nlx_qa_agent.py implementation
+        Initialize with Azure AD using DefaultAzureCredential with AUTO-REFRESH
+        Uses azure_ad_token_provider for automatic token refresh (no expiration issues!)
         """
         try:
             from azure.identity import DefaultAzureCredential
@@ -62,26 +62,29 @@ class AzureEmbeddings:
             os.environ['AZURE_CLIENT_ID'] = settings.azure_client_id
             os.environ['AZURE_CLIENT_SECRET'] = settings.azure_client_secret
             
-            logger.info("Exported Azure credentials to environment")
-            logger.info(f"Endpoint: {settings.azure_openai_endpoint}")
-            logger.info(f"Deployment: {settings.azure_openai_embedding_model}")
+            logger.info("🔐 Setting up Azure AD authentication with AUTO-REFRESH")
+            logger.info(f"   Endpoint: {settings.azure_openai_endpoint}")
+            logger.info(f"   Deployment: {settings.azure_openai_embedding_model}")
             
-            # Get credentials from environment (CVS pattern)
+            # Get credentials from environment
             credential = DefaultAzureCredential()
-            logger.info("DefaultAzureCredential created")
+            logger.info("✅ DefaultAzureCredential created")
             
-            # Get token manually (CVS pattern)
-            access_token = credential.get_token("https://cognitiveservices.azure.com/.default")
-            logger.info("✅ Access token obtained successfully!")
+            # Create token provider function for automatic refresh
+            def azure_ad_token_provider():
+                """Token provider that automatically refreshes when expired"""
+                token = credential.get_token("https://cognitiveservices.azure.com/.default")
+                return token.token
             
-            # Initialize Azure OpenAI client with static token (CVS pattern)
+            # Initialize Azure OpenAI client with token provider (AUTO-REFRESH!)
             self.client = AzureOpenAI(
                 azure_endpoint=settings.azure_openai_endpoint,
                 api_version=settings.azure_openai_api_version,
-                azure_ad_token=access_token.token
+                azure_ad_token_provider=azure_ad_token_provider  # ← AUTO-REFRESH!
             )
-            self.auth_method = "Azure AD (CVS Pattern - DefaultAzureCredential)"
-            logger.info("✅ Azure OpenAI Embeddings client initialized")
+            self.auth_method = "Azure AD (AUTO-REFRESH with token provider)"
+            logger.info("✅ Azure OpenAI Embeddings client initialized with AUTO-REFRESH")
+            logger.info("   Tokens will automatically refresh - no expiration issues!")
         except ImportError as e:
             logger.warning(f"⚠️  Azure dependencies not installed: {e}")
             logger.warning("   Install with: pip install azure-identity openai")
@@ -89,6 +92,7 @@ class AzureEmbeddings:
             self.auth_method = "Mock (missing dependencies)"
         except Exception as e:
             logger.error(f"❌ Azure AD authentication failed: {e}")
+            logger.error(f"   Error details: {str(e)}")
             self.client = None
             self.auth_method = "Mock (auth failed)"
     

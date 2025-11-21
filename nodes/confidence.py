@@ -211,3 +211,27 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
+
+
+def route_after_api_call(state: AgentState) -> Literal["master_llm", "response_agent"]:
+    """
+    Route after API call - handles API failures with graceful fallback
+    
+    If API call fails, route to master_llm (future: LLM will generate response)
+    If API call succeeds, route to response_agent for final formatting
+    
+    Args:
+        state: Current agent state with api_error field
+        
+    Returns:
+        "master_llm" if API failed, "response_agent" if API succeeded
+    """
+    api_error = state.get("api_error")
+    
+    if api_error:
+        logger.error(f"⚠️ API Error detected: {api_error}")
+        logger.info("→ Routing to master_llm (API FAILED - using fallback)")
+        return "master_llm"
+    
+    logger.info("→ Routing to response_agent (API success)")
+    return "response_agent"
