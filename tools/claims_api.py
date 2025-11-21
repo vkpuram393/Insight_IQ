@@ -28,7 +28,7 @@ from core.error_models import (
 from core.node_models import IntentResult
 from state.schema import AgentState
 from core.logger import get_logger
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from core.config import settings
 from persistence import PersistenceStoreFactory
 
@@ -360,7 +360,10 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=200,
                 is_retryable=False
             )
-            return {"tool_results": tool_result.dict()}
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
 
         except Exception as exc:
             elapsed_ms = (time.time() - start) * 1000.0
@@ -396,7 +399,10 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=ae.metadata.get("status_code") if isinstance(ae.metadata, dict) else None,
                 is_retryable=ae.is_retryable
             )
-            return {"tool_results": tool_result.dict()}
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
     except Exception as e:
         # Outer exception handler for unexpected errors
         tb = traceback.format_exc()

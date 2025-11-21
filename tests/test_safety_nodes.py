@@ -9,6 +9,7 @@ Tests:
 """
 
 import asyncio
+import pytest
 from state.schema import create_initial_state
 from nodes.safety import (
     safety_precheck_node,
@@ -25,6 +26,7 @@ print("="*80)
 # TEST 1: safety_precheck_node - Unified Safety Check
 # ============================================================================
 
+@pytest.mark.asyncio
 async def test_safety_precheck():
     print("\n" + "="*80)
     print("TEST 1: safety_precheck_node - Unified Safety Check")
@@ -87,6 +89,7 @@ async def test_safety_precheck():
 # TEST 2: response_safety_pii_precheck_node - PII/PHI Masking
 # ============================================================================
 
+@pytest.mark.asyncio
 async def test_response_pii_precheck():
     print("\n" + "="*80)
     print("TEST 2: response_safety_pii_precheck_node - PII/PHI Masking")
@@ -135,6 +138,7 @@ async def test_response_pii_precheck():
 # TEST 3: response_safety_pii_postcheck_node - Leakage Check + Unmasking
 # ============================================================================
 
+@pytest.mark.asyncio
 async def test_response_pii_postcheck():
     print("\n" + "="*80)
     print("TEST 3: response_safety_pii_postcheck_node - Leakage Check + Unmasking")
@@ -207,6 +211,7 @@ async def test_response_pii_postcheck():
 # TEST 4: Complete Flow - All 3 Nodes Together
 # ============================================================================
 
+@pytest.mark.asyncio
 async def test_complete_flow():
     print("\n" + "="*80)
     print("TEST 4: Complete Flow - All 3 Nodes Together")

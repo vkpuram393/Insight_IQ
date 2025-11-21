@@ -25,6 +25,7 @@ from langgraph.graph import END
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
+from core.logging_context import extract_logging_context, log_state_snapshot
 from core.pii_protection import (
     get_safety_checker,
     get_pii_service
@@ -63,13 +64,17 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         Blocked → END (safety violation)
         Passed → Continue with PII/PHI intact for downstream nodes
     """
+    node_name = "safety_precheck"
+    
     logger.info("\n" + "="*70)
     logger.info("🛡️  SAFETY PRECHECK NODE - Unified Safety Check")
     logger.info("="*70)
     
     if not settings.enable_safety_precheck:
         logger.info("⭐ Safety precheck disabled in config")
-        return {"safety_precheck_passed": True}
+        result = {"safety_precheck_passed": True}
+        await log_state_snapshot(state, node_name, result)
+        return result
     
     text = state.get("text", "")
     session_id = state.get("session_id", "default")
@@ -90,7 +95,7 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
             if violation_categories:
                 logger.warning(f"   Categories: {', '.join(violation_categories)}")
             
-            return {
+            result_dict = {
                 "safety_precheck_passed": False,
                 "threat_detected": True,
                 "threat_reason": reason,
@@ -99,6 +104,8 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
                     "I can't assist with that type of request."
                 )
             }
+            await log_state_snapshot(state, node_name, result_dict)
+            return result_dict
         
         # Safety check passed - return unmasked text with PII/PHI
         logger.info("✅ Safety check passed - Query is safe")
@@ -108,13 +115,15 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         metadata = state.get("metadata", {})
         metadata["pii_metadata"] = result.get("pii_metadata", {})
         
-        return {
+        result_dict = {
             "text": result["text"],  # Unmasked text with PII/PHI intact
             "safety_precheck_passed": True,
             "threat_detected": False,
             "threat_reason": None,
             "metadata": metadata
         }
+        await log_state_snapshot(state, node_name, result_dict)
+        return result_dict
         
     except Exception as e:
         logger.error(f"❌ Safety precheck failed: {e}", exc_info=True)
@@ -154,6 +163,8 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
         Always continues
         Response agent works with MASKED data (safe)
     """
+    node_name = "response_safety_pii_precheck"
+    
     logger.info("\n" + "="*70)
     logger.info("🔐 RESPONSE SAFETY PII PRECHECK - Masking before Response LLM")
     logger.info("="*70)
@@ -188,15 +199,17 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
             "tool_metadata": tool_metadata
         }
         
-        return {
+        result = {
             "text": masked_text,
             "metadata": metadata
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         logger.error(f"❌ Response PII masking failed: {e}", exc_info=True)
         # Fail-safe: continue with original text (not ideal but prevents blocking)
-        return {
+        result = {
             "metadata": {
                 **state.get("metadata", {}),
                 "response_pii_masking": {
@@ -206,6 +219,8 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
                 }
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 
 # ============================================================================
@@ -235,16 +250,19 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         Leakage detected → Block response, return generic message
         No leakage → Unmask tokens, return to user
     """
+    node_name = "response_safety_pii_postcheck"
+    
     logger.info("\n" + "="*70)
     logger.info("🔍 RESPONSE SAFETY PII POSTCHECK - Leakage Check + Unmasking")
     logger.info("="*70)
     
     response = state.get("response", "")
-    session_id = state.get("session_id", "default")
     
     if not response:
         logger.warning("⚠️  No response to postcheck")
-        return {"safety_postcheck_passed": True}
+        result = {"safety_postcheck_passed": True}
+        await log_state_snapshot(state, node_name, result)
+        return result
     
     try:
         pii_service = get_pii_service()
@@ -284,7 +302,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                 f"🚨 PII LEAKAGE DETECTED! Found {len(leaked_entities)} "
                 f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
             )
-            return {
+            result = {
                 "response": (
                     "I apologize, but I cannot display that information due to "
                     "privacy protection. Please try rephrasing your question."
@@ -304,6 +322,8 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                     }
                 }
             }
+            await log_state_snapshot(state, node_name, result)
+            return result
         
         logger.info("✅ No PII leakage detected")
         
@@ -312,7 +332,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         
         if not combined_token_mapping:
             logger.info("ℹ️  No tokens to unmask")
-            return {
+            result = {
                 "safety_postcheck_passed": True,
                 "metadata": {
                     **metadata,
@@ -320,6 +340,8 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                     "response_pii_unmasking": {"tokens_unmasked": 0}
                 }
             }
+            await log_state_snapshot(state, node_name, result)
+            return result
         
         # Unmask tokens in response
         unmasked_response = pii_service.unmask_pii_phi(response, combined_token_mapping)
@@ -330,7 +352,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         logger.debug(f"   Masked: {response[:100]}...")
         logger.debug(f"   Unmasked: {unmasked_response[:100]}...")
         
-        return {
+        result = {
             "response": unmasked_response,  # ← CRITICAL: Replace with unmasked
             "safety_postcheck_passed": True,
             "metadata": {
@@ -345,6 +367,8 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                 }
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         logger.error(f"❌ Response postcheck failed: {e}", exc_info=True)

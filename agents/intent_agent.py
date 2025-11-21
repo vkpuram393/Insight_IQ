@@ -16,6 +16,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error, create_llm_error
+from core.logging_context import log_state_snapshot
 from persistence import PersistenceStoreFactory
 
 # Use base logger
@@ -150,11 +151,13 @@ async def intent_agent_node(state: AgentState) -> Dict[str, Any]:
 
         logger.info(f"🎯 Intent: {intent} ({confidence:.2f}) | Entities: {entities}")
 
-        return {
+        result = {
             "intent": intent,
             "confidence": confidence,
             "entities": entities,
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

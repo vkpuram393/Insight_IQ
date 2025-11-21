@@ -28,7 +28,11 @@ logger = get_logger(__name__)
 class SQLitePersistenceStore(PersistenceStore):
     """SQLite implementation for telemetry and analytics"""
 
-    def __init__(self, db_path: str = "data/telemetry.db"):
+    def __init__(self, db_path: str = None):
+        # Use settings.telemetry_db_path if not provided (allows test override)
+        if db_path is None:
+            from core.config import settings
+            db_path = settings.telemetry_db_path
         self.db_path = db_path
         self.db = None
         # Ensure data directory exists
@@ -38,8 +42,9 @@ class SQLitePersistenceStore(PersistenceStore):
     async def _get_connection(self):
         """Get or create database connection"""
         if self.db is None:
-            self.db = await aiosqlite.connect(self.db_path)
+            self.db = await aiosqlite.connect(self.db_path, timeout=10.0)  # 10 second timeout
             self.db.row_factory = aiosqlite.Row
+            await self.db.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
             await self._init_schema()
         return self.db
 

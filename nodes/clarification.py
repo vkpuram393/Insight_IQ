@@ -8,7 +8,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
@@ -44,12 +44,14 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
 
         logger.info(f"❓ Generated: {question}")
 
-        return {
+        result = {
             "needs_clarification": True,
             "clarifying_question": question,
             "response": question,
             "metadata": {**state.get("metadata", {}), "clarification": True}
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

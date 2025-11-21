@@ -18,6 +18,7 @@ from nodes import (
     build_context_node,
     clarification_node,
     confidence_check_router,
+    confidence_checker_node,
     update_memory_node,
     cache_response_node
 )
@@ -53,12 +54,10 @@ def should_continue_after_cache(state: AgentState) -> str:
     After cache check, decide next step
 
     ROUTING:
-        Cache HIT → END (return cached response)
-        Cache MISS → build_context (continue processing)
+        Cache HIT or MISS → intent_agent (cache not fully implemented yet)
     """
-    if state.get("cache_hit", False):
-        return END
-    return "build_context"
+    # Cache not fully implemented - always go to intent_agent
+    return "intent_agent"
 
 # Workflow builder -----------------------------------------------------------
 
@@ -75,11 +74,13 @@ def _build_workflow() -> StateGraph:
             ↓
         check_cache
             ↓
-        build_context
-            ↓
         intent_agent (processes with PII/PHI intact)
             ↓
-        call_claims_tool / clarification
+        confidence_checker
+            ↓
+        [router] → clarification (END) OR build_context
+            ↓
+        build_context → call_claims_tool
             ↓
         [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
             ↓
@@ -96,8 +97,9 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("safety_precheck", safety_precheck_node)  # Unified safety check
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
-    workflow.add_node("build_context", build_context_node)
     workflow.add_node("intent_agent", intent_agent_node)
+    workflow.add_node("confidence_checker", confidence_checker_node)
+    workflow.add_node("build_context", build_context_node)
     workflow.add_node("response_safety_pii_precheck", response_safety_pii_precheck_node)
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
@@ -117,21 +119,29 @@ def _build_workflow() -> StateGraph:
         "safety_precheck", should_continue_after_precheck, {"check_cache": "check_cache", END: END}
     )
     
-    # Cache → Context or END
+    # Cache → Intent Agent (cache not fully implemented, always routes to intent_agent)
     workflow.add_conditional_edges(
-        "check_cache", should_continue_after_cache, {"build_context": "build_context", END: END}
+        "check_cache", should_continue_after_cache, {"intent_agent": "intent_agent"}
     )
     
-    # Context → Intent Agent (PII/PHI intact)
-    workflow.add_edge("build_context", "intent_agent")
+    # Intent Agent → Confidence Checker
+    workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Intent Agent → Tool Call or Clarification
+    # Confidence Checker → Clarification or Build Context
     workflow.add_conditional_edges(
-        "intent_agent", confidence_check_router, {"clarification": "clarification", "tool_call": "call_claims_tool"}
+        "confidence_checker", 
+        confidence_check_router, 
+        {
+            "clarification": "clarification",
+            "build_context": "build_context"
+        }
     )
-
-    # Clarification → Update Memory
-    workflow.add_edge("clarification", "update_memory") # CHANGED: clarification no longer ends graph directly
+    
+    # Clarification → END (immediate return to user)
+    workflow.add_edge("clarification", END)
+    
+    # Build Context → Call Claims Tool
+    workflow.add_edge("build_context", "call_claims_tool")
     
     # Tool Call → Response Safety PII Precheck (mask PII/PHI before response LLM)
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
@@ -189,4 +199,5 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
+
 

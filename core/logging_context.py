@@ -48,7 +48,7 @@ async def log_state_snapshot(
     state: AgentState,
     node_name: str,
     node_result: Dict[str, Any]
-) -> str:
+) -> Optional[str]:
     """
     Log full AgentState snapshot after a node completes.
     
@@ -62,29 +62,40 @@ async def log_state_snapshot(
         node_result: The partial update returned by the node
         
     Returns:
-        Log ID of the created log entry
+        Log ID of the created log entry, or None if telemetry is disabled or logging fails
         
     Example:
         >>> result = await my_node(state)
         >>> log_id = await log_state_snapshot(state, "my_node", result)
     """
-    log_ctx = extract_logging_context(state)
+    # Skip logging if telemetry is disabled
+    if not settings.enable_telemetry:
+        return None
     
-    # Simulate LangGraph merge: combine state with node result
-    updated_state = {**state, **node_result}
-    
-    # Get persistence store
-    persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
-    
-    # Log full AgentState snapshot
-    log_id = await persistence_store.log_audit(
-        session_id=log_ctx["session_id"],
-        request_id=log_ctx["request_id"],
-        user_id=log_ctx["user_id"],
-        node_name=node_name,
-        event_type="state_snapshot",
-        data=updated_state  # Full AgentState after node execution
-    )
-    
-    return log_id
+    try:
+        log_ctx = extract_logging_context(state)
+        
+        # Simulate LangGraph merge: combine state with node result
+        updated_state = {**state, **node_result}
+        
+        # Get persistence store
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        
+        # Log full AgentState snapshot
+        log_id = await persistence_store.log_audit(
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
+            user_id=log_ctx["user_id"],
+            node_name=node_name,
+            event_type="state_snapshot",
+            data=updated_state  # Full AgentState after node execution
+        )
+        
+        return log_id
+    except Exception as e:
+        # Don't fail the node if logging fails - just log the error and continue
+        from core.logger import get_logger
+        logger = get_logger(__name__)
+        logger.warning(f"⚠️ Failed to log state snapshot for {node_name}: {e}")
+        return None
 

@@ -34,6 +34,12 @@ logs/
 # Checkpoint / state databases
 checkpoints.db*
 
+# SQLite telemetry databases
+data/telemetry.db
+data/telemetry.db-wal
+data/telemetry.db-shm
+data/telemetry_test.db*
+
 # Environment & secrets
 .env
 .env.*
