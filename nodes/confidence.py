@@ -44,58 +44,43 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
-def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "master_llm"]:
-    """Route based on confidence, entity completeness, and query complexity.
-
-    TWO-STAGE ROUTING:
-      Stage 1 (Intent Classifier): Fast keyword-based classification
-      Stage 2 (Master LLM Agent): Comprehensive LLM analysis for complex/unclear cases
+def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context"]:
+    """Route based on confidence and slot completeness.
 
     Rules:
-      1. If Stage 1 set needs_clarification=True (missing slots) -> clarification
-      2. CRITICAL: If query is_complex=True (aggregations, comparisons) -> master_llm (even if high confidence!)
-      3. Else if confidence < threshold AND no entities -> master_llm (Stage 2 analysis)
-      4. Else if confidence < threshold but has entities -> build_context (trust entities)
-      5. Else -> build_context
+      - If required slots are missing -> clarification
+      - Else if confidence < threshold -> clarification
+      - Else -> build_context (which leads to tool call)
     """
+    config = _load_config()
+    threshold = config.get("confidence_threshold", 0.7)
+    
     confidence = state.get("confidence", 0.0)
+    missing_slots = state.get("missing_slots") or []
     needs_clarification = state.get("needs_clarification", False)
-    is_complex = state.get("is_complex", False)
-    entities = state.get("entities", {})
-    threshold = settings.confidence_threshold
+    confidence_check_passed = state.get("metadata", {}).get("confidence_check_passed", False)
 
-    # RULE 1: Query is complex (CRITICAL: Route to LLM BEFORE checking slots!)
-    # Complex queries like "summarize my claims" need LLM even if missing entities
-    if is_complex:
-        logger.info(f"🧠 Complex query detected (confidence: {confidence:.2f}) -> Master LLM Agent")
-        logger.info("   Reason: Query contains aggregations, comparisons, or multiple conditions")
-        return "master_llm"
-
-    # RULE 2: Stage 1 detected missing slots (e.g., "show my claim" but no claim ID)
+    # Check if confidence_checker_node already determined we need clarification
     if needs_clarification:
-        logger.info("❓ Stage 1 detected missing required slots -> Clarification")
+        logger.info(f"⚠️ Needs clarification (from confidence_checker) -> Clarification")
+        return "clarification"
+    
+    # Check if confidence_checker_node already passed
+    if confidence_check_passed:
+        logger.info(f"✅ Confidence check passed (from confidence_checker) -> Build Context")
+        return "build_context"
+
+    # Check for missing required slots (from intent classifier)
+    if missing_slots:
+        logger.info(f"⚠️ Missing required slots: {missing_slots} -> Clarification")
         return "clarification"
 
-    # RULE 3 & 4: Low confidence routing
     if confidence < threshold:
-        # NEW: Two-stage routing!
-        # If confidence is low and no entities found, route to Master LLM Agent for comprehensive analysis
-        has_any_entity = any(entities.values()) if isinstance(entities, dict) else False
-        
-        if not has_any_entity:
-            # No entities found - can't call API
-            # Route to Master LLM Agent to analyze from scratch
-            logger.info(f"⚠️ Low confidence ({confidence:.2f}) + no entities -> Master LLM Agent (Stage 2)")
-            return "master_llm"
-        else:
-            # Has entities but low confidence
-            # Trust the entities and go to API anyway
-            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but has entities -> Build Context")
-            return "build_context"
+        logger.info(f"⚠️ Low confidence ({confidence:.2f}) < {threshold:.2f} -> Clarification")
+        return "clarification"
 
     logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Build Context")
     return "build_context"
-
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -226,29 +211,3 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
-
-
-def route_after_api_call(state: AgentState) -> Literal["master_llm", "response_agent"]:
-    """
-    Route after API call with LLM fallback
-    
-    CRITICAL: When multiple APIs exist, wrong API call might return 400 error.
-    This router catches errors and falls back to Master LLM Agent.
-    
-    Rules:
-      - If api_error exists → route to master_llm (LLM figures it out!)
-      - Else → route to response_agent (success)
-    
-    NOTE: Simplified version (no retry loop for now)
-    Team can add retry logic later if needed
-    """
-    api_error = state.get("api_error")
-    
-    if api_error:
-        logger.error(f"⚠️ API Error detected: {api_error}")
-        logger.info("→ Routing to master_llm (API FAILED - LLM FALLBACK!)")
-        return "master_llm"
-    
-    # Success
-    logger.info("→ Routing to response_agent (API success)")
-    return "response_agent"
