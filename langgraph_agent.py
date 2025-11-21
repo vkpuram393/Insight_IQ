@@ -78,9 +78,13 @@ def _build_workflow() -> StateGraph:
             ↓
         confidence_checker
             ↓
-        [router] → clarification (END) OR build_context
+        [router] → clarification (END) OR build_context OR response_agent (complex)
             ↓
-        build_context → call_claims_tool
+        build_context → call_claims_tool (simple queries with entities)
+            ↓
+        OR
+            ↓
+        response_agent (complex queries skip API)
             ↓
         [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
             ↓
@@ -127,13 +131,17 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Clarification or Build Context
+    # Confidence Checker → Three-way routing
+    # - clarification: Missing required entities
+    # - build_context: Simple query → API call
+    # - response_agent: Complex query → Direct LLM (skip API)
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
             "clarification": "clarification",
-            "build_context": "build_context"
+            "build_context": "build_context",
+            "response_agent": "response_safety_pii_precheck"  # Complex queries skip API, go straight to LLM
         }
     )
     

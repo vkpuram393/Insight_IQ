@@ -62,6 +62,26 @@ async def cvs_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     else:
         logger.info(f"💬 No API needed - Intent will use {'LLM' if requires_llm else 'FAQ/Knowledge Base'}")
     
+    # Check query complexity (aggregations, comparisons, date ranges)
+    query_lower = text.lower()
+    complexity_keywords = {
+        'aggregation': ['all', 'total', 'sum', 'count', 'average', 'summarize', 'list all', 'show all'],
+        'comparison': ['compare', 'difference', 'versus', 'vs', 'better', 'worse', 'more than', 'less than'],
+        'range': ['between', 'from', 'to', 'since', 'until', 'last', 'past', 'recent'],
+        'multiple': [' and ', 'both', 'all of', 'each']
+    }
+    
+    is_complex = False
+    complexity_reason = []
+    
+    for category, keywords in complexity_keywords.items():
+        if any(kw in query_lower for kw in keywords):
+            is_complex = True
+            complexity_reason.append(category)
+    
+    if is_complex:
+        logger.info(f"🧠 Complex query detected: {', '.join(complexity_reason)}")
+    
     # Check if clarification needed (only for missing slots, not low confidence)
     needs_clarification = False
     clarifying_question = None
@@ -87,6 +107,7 @@ async def cvs_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         "intent": intent,
         "confidence": confidence,
         "entities": entities,
+        "is_complex": is_complex,  # NEW: Complexity detection for LLM routing
         "needs_clarification": needs_clarification,
         "clarifying_question": clarifying_question,
         # NEW: API routing info from config

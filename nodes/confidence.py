@@ -44,13 +44,20 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
-def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context"]:
-    """Route based on confidence and slot completeness.
+def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "response_agent"]:
+    """Route based on confidence, entity completeness, and query complexity.
+
+    THREE-WAY ROUTING:
+      1. clarification: Missing required entities
+      2. build_context → API: Simple query with entities
+      3. response_agent: Complex queries needing LLM reasoning (skip API)
 
     Rules:
-      - If required slots are missing -> clarification
-      - Else if confidence < threshold -> clarification
-      - Else -> build_context (which leads to tool call)
+      1. If query is_complex=True -> response_agent (LLM handles directly)
+      2. If needs_clarification=True -> clarification (missing required slots)
+      3. If confidence < threshold AND no entities -> response_agent (LLM fallback)
+      4. If confidence < threshold but has entities -> build_context (trust entities)
+      5. Else -> build_context
     """
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
@@ -58,11 +65,20 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     confidence = state.get("confidence", 0.0)
     missing_slots = state.get("missing_slots") or []
     needs_clarification = state.get("needs_clarification", False)
+    is_complex = state.get("is_complex", False)
+    entities = state.get("entities", {})
     confidence_check_passed = state.get("metadata", {}).get("confidence_check_passed", False)
 
-    # Check if confidence_checker_node already determined we need clarification
+    # RULE 1: Query is complex (CRITICAL: Route to LLM BEFORE checking slots!)
+    # Complex queries like "summarize all my claims" need LLM reasoning, skip API
+    if is_complex:
+        logger.info(f"🧠 Complex query detected (confidence: {confidence:.2f}) -> Response Agent (LLM)")
+        logger.info("   Reason: Query contains aggregations, comparisons, or multiple conditions")
+        return "response_agent"
+
+    # RULE 2: Missing required entities
     if needs_clarification:
-        logger.info(f"⚠️ Needs clarification (from confidence_checker) -> Clarification")
+        logger.info(f"⚠️ Needs clarification (missing entities) -> Clarification")
         return "clarification"
     
     # Check if confidence_checker_node already passed
@@ -75,9 +91,16 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         logger.info(f"⚠️ Missing required slots: {missing_slots} -> Clarification")
         return "clarification"
 
+    # RULE 3 & 4: Low confidence routing
     if confidence < threshold:
-        logger.info(f"⚠️ Low confidence ({confidence:.2f}) < {threshold:.2f} -> Clarification")
-        return "clarification"
+        has_any_entity = any(entities.values()) if isinstance(entities, dict) else False
+        
+        if not has_any_entity:
+            logger.info(f"⚠️ Low confidence ({confidence:.2f}) + no entities -> Response Agent (LLM)")
+            return "response_agent"
+        else:
+            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but has entities -> Build Context")
+            return "build_context"
 
     logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Build Context")
     return "build_context"
