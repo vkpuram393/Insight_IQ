@@ -10,7 +10,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
 
@@ -42,7 +42,9 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         logger.info("💾 Node: Check Cache")
 
         if not settings.enable_semantic_cache:
-            return {"cache_hit": False}
+            result = {"cache_hit": False}
+            await log_state_snapshot(state, node_name, result)
+            return result
 
         key = f"cache:{_hash(state['text'])}"
 
@@ -52,16 +54,20 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         if cached_value:
             cached = json.loads(cached_value) if isinstance(cached_value, str) else cached_value
             logger.info("🎯 Cache HIT!")
-            return {
+            result = {
                 "response": cached["response"],
                 "intent": cached["intent"],
                 "confidence": cached["confidence"],
                 "cache_hit": True,
                 "metadata": {**state.get("metadata", {}), "cache": "hit"}
             }
+            await log_state_snapshot(state, node_name, result)
+            return result
 
         logger.info("💨 Cache MISS")
-        return {"cache_hit": False, "metadata": {**state.get("metadata", {}), "cache": "miss"}}
+        result = {"cache_hit": False, "metadata": {**state.get("metadata", {}), "cache": "miss"}}
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()
@@ -120,7 +126,9 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
             logger.info("✅ Response cached")
 
         # Always return metadata to register a change
-        return {"metadata": {**state.get("metadata", {}), "cached": settings.enable_semantic_cache}}
+        result = {"metadata": {**state.get("metadata", {}), "cached": settings.enable_semantic_cache}}
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

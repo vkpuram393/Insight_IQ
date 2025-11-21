@@ -269,11 +269,13 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         updated_facts = await _memory_store.get_session_facts(session_id)
 
         logger.info("✅ Memory updated")
-        return {
+        result = {
             "conversation_history": updated_history,
             "relevant_facts": updated_facts,
             "metadata": {**state.get("metadata", {}), "memory_updated": True}
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

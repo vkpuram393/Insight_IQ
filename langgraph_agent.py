@@ -16,6 +16,7 @@ from nodes import (
     clarification_node,
     confidence_check_router,
     route_after_api_call,  # NEW: API error fallback routing
+    confidence_checker_node,  # Team's addition
     update_memory_node,
     cache_response_node,
     master_llm_agent_node,  # NEW: Master LLM Agent (Stage 2)
@@ -53,23 +54,51 @@ def should_continue_after_cache(state: AgentState) -> str:
     After cache check, decide next step
 
     ROUTING:
-        Cache HIT → END (return cached response)
-        Cache MISS → build_context (continue processing)
+        Cache HIT or MISS → intent_agent (cache not fully implemented yet)
     """
-    if state.get("cache_hit", False):
-        return END
-    return "build_context"
+    # Cache not fully implemented - always go to intent_agent
+    return "intent_agent"
 
 # Workflow builder -----------------------------------------------------------
 
 def _build_workflow() -> StateGraph:
+    """
+    Build the complete workflow with unified safety check
+    
+    FLOW:
+        User Query
+            ↓
+        orchestrator
+            ↓
+        [safety_precheck] ← Unified safety (pattern check + mask + Gemini + unmask)
+            ↓
+        check_cache
+            ↓
+        intent_agent (processes with PII/PHI intact)
+            ↓
+        confidence_checker
+            ↓
+        [router] → clarification (END) OR build_context OR master_llm
+            ↓
+        build_context → call_claims_tool
+            ↓
+        [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
+            ↓
+        response_agent (LLM - SAFE)
+            ↓
+        [response_safety_pii_postcheck] ← Unmask for user
+            ↓
+        update_memory → cache_response → END
+    """
     workflow = StateGraph(AgentState)
     workflow.add_node("safety_precheck", safety_precheck_node)
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
-    workflow.add_node("build_context", build_context_node)
     workflow.add_node("intent_agent", intent_agent_node)
+    workflow.add_node("confidence_checker", confidence_checker_node)
+    workflow.add_node("build_context", build_context_node)
     workflow.add_node("master_llm", master_llm_agent_node)  # NEW: Master LLM Agent (Stage 2)
+    workflow.add_node("response_safety_pii_precheck", response_safety_pii_precheck_node)
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
@@ -83,27 +112,33 @@ def _build_workflow() -> StateGraph:
         "safety_precheck", should_continue_after_precheck, {"check_cache": "check_cache", END: END}
     )
     
-    # Cache → Context or END
+    # Cache → Intent Agent (cache not fully implemented, always routes to intent_agent)
     workflow.add_conditional_edges(
-        "check_cache", should_continue_after_cache, {"build_context": "build_context", END: END}
+        "check_cache", should_continue_after_cache, {"intent_agent": "intent_agent"}
     )
     
-    # Context → Intent Agent (PII/PHI intact)
-    workflow.add_edge("build_context", "intent_agent")
+    # Intent Agent → Confidence Checker
+    workflow.add_edge("intent_agent", "confidence_checker")
     
-    # NEW: Three-way routing from intent_agent
-    # - tool_call: Stage 1 caught API query → go to API
-    # - master_llm: Stage 1 uncertain → go to Master LLM Agent (Stage 2)
-    # - clarification: Stage 1 knows we need clarification
+    # Confidence Checker → Three-way routing
+    # - clarification: Needs more info from user
+    # - build_context: High confidence, proceed to API
+    # - master_llm: Low confidence or complex, route to Master LLM
     workflow.add_conditional_edges(
-        "intent_agent", 
+        "confidence_checker", 
         confidence_check_router, 
         {
-            "clarification": "clarification", 
-            "tool_call": "call_claims_tool",
+            "clarification": "clarification",
+            "build_context": "build_context",
             "master_llm": "master_llm"  # NEW: Route to Master LLM Agent
         }
     )
+    
+    # Clarification → END (immediate return to user)
+    workflow.add_edge("clarification", END)
+    
+    # Build Context → Call Claims Tool
+    workflow.add_edge("build_context", "call_claims_tool")
     
     # NEW: Master LLM Agent can reroute to API or respond directly
     def route_after_master_llm(state: AgentState) -> str:
@@ -185,4 +220,5 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
+
 

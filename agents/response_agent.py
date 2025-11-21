@@ -21,7 +21,7 @@ from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
 from core.error_models import create_internal_error, create_llm_error
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from core.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 
@@ -410,7 +410,9 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         if settings.use_mock_llm:
             logger.info("⚙️ Using Mock LLM (development mode)")
             logger.info("💡 Set USE_MOCK_LLM=false in .env for real Gemini")
-            return await _mock_response(state)
+            result = await _mock_response(state)
+            await log_state_snapshot(state, node_name, result)
+            return result
         
         # === REAL LLM PATH ===
         # Initialize response agent
@@ -455,7 +457,9 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 }
             )
         
-        return {"response": response_text}
+        result = {"response": response_text}
+        await log_state_snapshot(state, node_name, result)
+        return result
         
     except Exception as e:
         tb = traceback.format_exc()

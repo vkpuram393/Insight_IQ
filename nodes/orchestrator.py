@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from state.schema import AgentState
 from core.config import settings
 from core.logger import get_logger
-from core.logging_context import extract_logging_context
+from core.logging_context import extract_logging_context, log_state_snapshot
 from core.node_models import OrchestratorResult, create_orchestrator_result
 from core.error_models import (
     AgentError,
@@ -35,7 +35,6 @@ from core.error_models import (
     create_orchestrator_invalid_type_error,
     create_orchestrator_normalization_error
 )
-from core.telemetry import log_event
 from persistence import EventType, PersistenceStoreFactory
 from utils.serialization import to_dict
 
@@ -410,7 +409,7 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
         )
         
         # Return partial state update (LangGraph will merge with existing state)
-        return {
+        result_dict = {
             "text": normalized,  # CRITICAL: safety_precheck_node expects this as string
             "uuid": state["uuid"],
             "metadata": {
@@ -419,6 +418,11 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
                 "original_text": original_text  # Preserve for logging/display
             }
         }
+        
+        # Log full AgentState snapshot after this node
+        await log_state_snapshot(state, node_name, result_dict)
+        
+        return result_dict
         
     except Exception as e:
         # ============================================================
