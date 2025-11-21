@@ -44,7 +44,7 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
-def confidence_check_router(state: AgentState) -> Literal["clarification", "tool_call", "master_llm"]:
+def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "master_llm"]:
     """Route based on confidence, entity completeness, and query complexity.
 
     TWO-STAGE ROUTING:
@@ -55,8 +55,8 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "tool
       1. If Stage 1 set needs_clarification=True (missing slots) -> clarification
       2. CRITICAL: If query is_complex=True (aggregations, comparisons) -> master_llm (even if high confidence!)
       3. Else if confidence < threshold AND no entities -> master_llm (Stage 2 analysis)
-      4. Else if confidence < threshold but has entities -> tool_call (trust entities)
-      5. Else -> tool_call
+      4. Else if confidence < threshold but has entities -> build_context (trust entities)
+      5. Else -> build_context
     """
     confidence = state.get("confidence", 0.0)
     needs_clarification = state.get("needs_clarification", False)
@@ -90,11 +90,11 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "tool
         else:
             # Has entities but low confidence
             # Trust the entities and go to API anyway
-            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but has entities -> Tool Call")
-            return "tool_call"
+            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but has entities -> Build Context")
+            return "build_context"
 
-    logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Tool Call")
-    return "tool_call"
+    logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Build Context")
+    return "build_context"
 
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
