@@ -19,6 +19,7 @@ With:
 from typing import Dict, Any
 from state.schema import AgentState
 from core.logger import get_logger
+from core.logging_context import log_state_snapshot
 from agents.intent_classifier_wrapper import classify_intent_unified, extract_entities_unified
 from config.api_routing_config import get_api_config  # NEW: Get API endpoint from config
 
@@ -82,7 +83,7 @@ async def cvs_intent_agent_node(state: AgentState) -> Dict[str, Any]:
             else:
                 clarifying_question = f"I need more information to help you. Could you provide: {', '.join(missing)}?"
     
-    return {
+    result = {
         "intent": intent,
         "confidence": confidence,
         "entities": entities,
@@ -93,4 +94,9 @@ async def cvs_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         "required_entities_list": required_entities_list,
         "requires_llm": requires_llm,
     }
+    
+    # Log to telemetry database (same as remote MVP-1's intent_agent.py)
+    await log_state_snapshot(state, "intent_agent", result)
+    
+    return result
 

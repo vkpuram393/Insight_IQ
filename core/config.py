@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # LLM
     openai_api_key: str = "mock"
-    use_mock_llm: bool = True
+    use_mock_llm: bool = False  # Set to False to use real Google Gemini LLM
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.7
     top_p: float = 0.95
@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     use_embedding_classifier: bool = True  # Set to True to use embedding-based classifier instead of keyword-based (requires use_cvs_intent_classifier=True)
 
     # Safety
-    enable_safety_precheck: bool = False  # Disabled for testing
-    enable_safety_postcheck: bool = False  # Disabled for testing
+    enable_safety_precheck: bool = True  # Match remote MVP-1
+    enable_safety_postcheck: bool = True  # Match remote MVP-1
 
     # Cache
     enable_semantic_cache: bool = True

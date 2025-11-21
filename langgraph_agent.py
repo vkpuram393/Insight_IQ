@@ -10,16 +10,16 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from state.schema import AgentState
 from nodes import (
+    orchestrator_node,
     safety_precheck_node,
     check_cache_node,
     build_context_node,
     clarification_node,
     confidence_check_router,
-    confidence_checker_node,  # Team's addition
+    confidence_checker_node,
     update_memory_node,
     cache_response_node,
-    master_llm_agent_node,  # NEW: Master LLM Agent (Stage 2)
-    response_safety_pii_precheck_node,  # Team's addition
+    response_safety_pii_precheck_node,
     response_safety_pii_postcheck_node
 )
 from agents import intent_agent_node, response_agent_node
@@ -78,7 +78,7 @@ def _build_workflow() -> StateGraph:
             ↓
         confidence_checker
             ↓
-        [router] → clarification (END) OR build_context OR master_llm
+        [router] → clarification (END) OR build_context
             ↓
         build_context → call_claims_tool
             ↓
@@ -91,13 +91,15 @@ def _build_workflow() -> StateGraph:
         update_memory → cache_response → END
     """
     workflow = StateGraph(AgentState)
+
+    # Add all nodes
+    workflow.add_node("orchestrator", orchestrator_node)
     workflow.add_node("safety_precheck", safety_precheck_node)
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("intent_agent", intent_agent_node)
     workflow.add_node("confidence_checker", confidence_checker_node)
     workflow.add_node("build_context", build_context_node)
-    workflow.add_node("master_llm", master_llm_agent_node)  # NEW: Master LLM Agent (Stage 2)
     workflow.add_node("response_safety_pii_precheck", response_safety_pii_precheck_node)
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
@@ -105,7 +107,12 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
-    workflow.set_entry_point("safety_precheck")
+    # Build the flow
+    # Entry point
+    workflow.set_entry_point("orchestrator")
+    
+    # Orchestrator → Safety Precheck
+    workflow.add_edge("orchestrator", "safety_precheck")
     
     # Safety Precheck → Cache or END
     workflow.add_conditional_edges(
@@ -120,17 +127,13 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Three-way routing
-    # - clarification: Needs more info from user
-    # - build_context: High confidence, proceed to API
-    # - master_llm: Low confidence or complex, route to Master LLM
+    # Confidence Checker → Clarification or Build Context
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
             "clarification": "clarification",
-            "build_context": "build_context",
-            "master_llm": "master_llm"  # NEW: Route to Master LLM Agent
+            "build_context": "build_context"
         }
     )
     
@@ -140,40 +143,11 @@ def _build_workflow() -> StateGraph:
     # Build Context → Call Claims Tool
     workflow.add_edge("build_context", "call_claims_tool")
     
-    # NEW: Master LLM Agent can reroute to API or respond directly
-    def route_after_master_llm(state: AgentState) -> str:
-        """Route after Master LLM Agent decision"""
-        if state.get("needs_api_reroute"):
-            logger.info("🔄 Master LLM rerouting to API path!")
-            return "call_claims_tool"
-        elif state.get("response"):
-            # LLM provided a direct response (greeting, clarification, etc.)
-            logger.info("💬 Master LLM provided direct response → skipping to postcheck")
-            return "response_agent"
-        else:
-            # Default: go to response agent
-            return "response_agent"
-    
-    workflow.add_conditional_edges(
-        "master_llm",
-        route_after_master_llm,
-        {
-            "call_claims_tool": "call_claims_tool",
-            "response_agent": "response_agent"
-        }
-    )
-    
     workflow.add_edge("clarification", "update_memory")
     
-    # Tool Call → Response Safety PII Precheck (mask PII/PHI before response LLM)
-    # Matches remote MVP-1 architecture: direct edge, no conditional routing
-    # LLM handles both API success and failure cases gracefully
+    # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
-    
-    # Response Safety PII Precheck → Response Agent
     workflow.add_edge("response_safety_pii_precheck", "response_agent")
-    
-    # Response Agent → Response Safety PII Postcheck (unmask for user)
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
     workflow.add_edge("response_safety_pii_postcheck", "update_memory")
     workflow.add_edge("update_memory", "cache_response")
