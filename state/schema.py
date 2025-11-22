@@ -63,14 +63,6 @@ class AgentState(TypedDict):
     requires_llm: bool                           # Intent needs LLM (no API)
     is_complex: bool                             # Query needs complex analysis (aggregations, comparisons)
 
-    # === MASTER LLM AGENT (Stage 2 Routing) ===
-    llm_action: Optional[str]                    # LLM decision: call_api, search_faq, ask_clarification, general_response
-    llm_confidence: Optional[float]              # LLM confidence (0-1)
-    llm_reasoning: Optional[str]                 # Why LLM made this decision
-    llm_rerouted: bool                           # Did LLM reroute from Stage 1 decision?
-    needs_api_reroute: bool                      # Signal to router: reroute to API
-    needs_faq: bool                              # Signal to router: search FAQ
-
     # === CLARIFICATION ===
     needs_clarification: bool                    # Ask user question?
     clarifying_question: Optional[str]           # The question
@@ -130,13 +122,6 @@ def create_initial_state(
         required_entities_list=None,
         requires_llm=False,
         is_complex=False,
-        # Master LLM Agent (Stage 2) fields
-        llm_action=None,
-        llm_confidence=None,
-        llm_reasoning=None,
-        llm_rerouted=False,
-        needs_api_reroute=False,
-        needs_faq=False,
         # Other fields
         needs_clarification=False,
         clarifying_question=None,
