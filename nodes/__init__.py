@@ -9,7 +9,7 @@ from nodes.safety import (
 from nodes.cache import check_cache_node, cache_response_node
 from nodes.context import build_context_node, update_memory_node
 from nodes.clarification import clarification_node
-from nodes.confidence import confidence_check_router, confidence_checker_node, route_after_api_call
+from nodes.confidence import confidence_check_router, confidence_checker_node
 from nodes.master_llm_agent import master_llm_agent_node
 
 __all__ = [
@@ -25,6 +25,5 @@ __all__ = [
     "clarification_node",
     "confidence_check_router",
     "confidence_checker_node",
-    "master_llm_agent_node",  # NEW: Stage 2 LLM routing
-    "route_after_api_call"    # NEW: API error fallback routing
+    "master_llm_agent_node"
 ]
