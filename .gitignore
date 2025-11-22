@@ -85,3 +85,6 @@ monitor_flow.sh
 test_compare_both_classifiers.py
 cvs_classifier_steps_3_to_12.png
 nodes/master_llm_agent.py
+test_cvs_classifier_endpoints.sh
+CVS_INTENT_CLASSIFIER_FLOW.md
+CVS_INTENT_CLASSIFIER_INTEGRATION.md
