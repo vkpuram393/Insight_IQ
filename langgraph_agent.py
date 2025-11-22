@@ -12,15 +12,15 @@ from state.schema import AgentState
 from nodes import (
     orchestrator_node,
     safety_precheck_node,
-    response_safety_pii_precheck_node,
-    response_safety_pii_postcheck_node,
     check_cache_node,
     build_context_node,
     clarification_node,
     confidence_check_router,
     confidence_checker_node,
     update_memory_node,
-    cache_response_node
+    cache_response_node,
+    response_safety_pii_precheck_node,
+    response_safety_pii_postcheck_node
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
@@ -78,9 +78,13 @@ def _build_workflow() -> StateGraph:
             ↓
         confidence_checker
             ↓
-        [router] → clarification (END) OR build_context
+        [router] → clarification (END) OR build_context OR response_agent (complex)
             ↓
-        build_context → call_claims_tool
+        build_context → call_claims_tool (simple queries with entities)
+            ↓
+        OR
+            ↓
+        response_agent (complex queries skip API)
             ↓
         [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
             ↓
@@ -94,7 +98,7 @@ def _build_workflow() -> StateGraph:
 
     # Add all nodes
     workflow.add_node("orchestrator", orchestrator_node)
-    workflow.add_node("safety_precheck", safety_precheck_node)  # Unified safety check
+    workflow.add_node("safety_precheck", safety_precheck_node)
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("intent_agent", intent_agent_node)
@@ -111,7 +115,7 @@ def _build_workflow() -> StateGraph:
     # Entry point
     workflow.set_entry_point("orchestrator")
     
-    # Orchestrator → Safety Precheck (unified: pattern + mask + Gemini + unmask)
+    # Orchestrator → Safety Precheck
     workflow.add_edge("orchestrator", "safety_precheck")
     
     # Safety Precheck → Cache or END
@@ -127,13 +131,17 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Clarification or Build Context
+    # Confidence Checker → Three-way routing
+    # - clarification: Missing required entities
+    # - build_context: Simple query → API call
+    # - response_agent: Complex query → Direct LLM (skip API)
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
             "clarification": "clarification",
-            "build_context": "build_context"
+            "build_context": "build_context",
+            "response_agent": "response_safety_pii_precheck"  # Complex queries skip API, go straight to LLM
         }
     )
     
@@ -143,19 +151,13 @@ def _build_workflow() -> StateGraph:
     # Build Context → Call Claims Tool
     workflow.add_edge("build_context", "call_claims_tool")
     
-    # Tool Call → Response Safety PII Precheck (mask PII/PHI before response LLM)
+    workflow.add_edge("clarification", "update_memory")
+    
+    # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
-    
-    # Response Safety PII Precheck → Response Agent
     workflow.add_edge("response_safety_pii_precheck", "response_agent")
-    
-    # Response Agent → Response Safety PII Postcheck (unmask for user)
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
-    
-    # Response Safety PII Postcheck → Memory Update
     workflow.add_edge("response_safety_pii_postcheck", "update_memory")
-    
-    # Memory → Cache → END
     workflow.add_edge("update_memory", "cache_response")
     workflow.add_edge("cache_response", END)
     

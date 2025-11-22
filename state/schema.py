@@ -56,6 +56,13 @@ class AgentState(TypedDict):
     slots: Optional[Dict[str, Any]]              # API parameters (from intent classifier)
     required_slots: Optional[List[str]]          # Required slots for this intent (from intent classifier)
     missing_slots: Optional[List[str]]           # Required slots that are missing (from intent classifier)
+    
+    # === API ROUTING (from config via intent_agent) ===
+    api_endpoint: Optional[str]                  # Which CVS API to call (from config)
+    required_entities_list: Optional[List[str]]  # Required entities for this intent
+    requires_llm: bool                           # Intent needs LLM (no API)
+    is_complex: bool                             # Query needs complex analysis (aggregations, comparisons)
+    embedding_failed: bool                       # Embedding classifier failed - route to LLM
 
     # === CLARIFICATION ===
     needs_clarification: bool                    # Ask user question?
@@ -69,6 +76,8 @@ class AgentState(TypedDict):
 
     # === TOOL RESULTS ===
     tool_results: Optional[Dict[str, Any]]       # API call results
+    api_error: Optional[str]                     # API error message if call failed
+    api_retry_count: int                         # Number of API retry attempts
 
     # === SAFETY ===
     safety_precheck_passed: bool                 # Input safe?
@@ -109,6 +118,13 @@ def create_initial_state(
         slots=None,
         required_slots=None,
         missing_slots=None,
+        # API Routing (from config)
+        api_endpoint=None,
+        required_entities_list=None,
+        requires_llm=False,
+        is_complex=False,
+        embedding_failed=False,
+        # Other fields
         needs_clarification=False,
         clarifying_question=None,
         conversation_history=[],
@@ -116,6 +132,8 @@ def create_initial_state(
         extracted_slots=None,
         planner_context=None,
         tool_results=None,
+        api_error=None,
+        api_retry_count=0,
         safety_precheck_passed=False,
         safety_postcheck_passed=False,
         safety_block_reason=None,

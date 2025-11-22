@@ -13,6 +13,7 @@
     "claim_list": [],
     "claim_summary": [],
     "rejection_reasons": ["claim_number"],
+    "reversal_info": ["claim_number"],
     "member_info": ["member_id"],
     "benefits_info": [],
     "copay_info": [],
