@@ -23,7 +23,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agents.cvs_intent_agent_node import cvs_intent_agent_node
+from agents.extended_intent_agent_node import extended_intent_agent_node
 from nodes.confidence import confidence_check_router
 from core.logger import get_logger
 
@@ -1045,7 +1045,7 @@ async def run_all_tests():
             }
             
             # Step 1: Intent Classification
-            result = await cvs_intent_agent_node(state)
+            result = await extended_intent_agent_node(state)
             
             intent = result.get('intent')
             confidence = result.get('confidence', 0)

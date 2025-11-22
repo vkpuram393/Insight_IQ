@@ -1,11 +1,11 @@
 """
-CVS Intent Agent Node (NO LLM REQUIRED)
-Alternative to intent_agent.py that uses keyword-based classification
+Extended Intent Agent Node (NO LLM REQUIRED)
+Alternative to intent_agent.py that uses keyword-based or embedding-based classification
 
 🚀 BENEFITS:
-- NO LLM costs
-- Faster (< 10ms vs 500ms+)
-- 28+ CVS-specific intents
+- NO LLM costs for intent classification
+- Faster (< 10ms for keyword, ~200ms for embeddings vs 500ms+ for LLM)
+- 30+ CVS-specific intents
 - Production-ready with conversation continuity
 - Can run side-by-side with existing LLM agent
 
@@ -13,7 +13,7 @@ Alternative to intent_agent.py that uses keyword-based classification
 In langgraph_agent.py, replace:
     workflow.add_node("intent_agent", intent_agent_node)
 With:
-    workflow.add_node("intent_agent", cvs_intent_agent_node)
+    workflow.add_node("intent_agent", extended_intent_agent_node)
 """
 
 from typing import Dict, Any
@@ -26,7 +26,7 @@ from config.api_routing_config import get_api_config  # NEW: Get API endpoint fr
 logger = get_logger(__name__)
 
 
-async def cvs_intent_agent_node(state: AgentState) -> Dict[str, Any]:
+async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     """
     Classify user intent using CVS keyword-based classifier
     NO LLM required - fast and cost-effective

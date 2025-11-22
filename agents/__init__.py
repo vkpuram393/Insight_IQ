@@ -5,7 +5,7 @@ from core.config import settings
 # Use CVS Classifier or Original based on config
 if settings.use_cvs_intent_classifier:
     # CVS Production Classifier (NO LangChain required!)
-    from agents.cvs_intent_agent_node import cvs_intent_agent_node as intent_agent_node
+    from agents.extended_intent_agent_node import extended_intent_agent_node as intent_agent_node
     try:
         from agents.response_agent import response_agent_node
     except ImportError:
@@ -30,4 +30,4 @@ else:
 #   from agents.keyword_classifier import get_cvs_intent_classifier
 #   from agents.entity_extractor import get_entity_extractor
 #   from agents.intent_classifier_wrapper import classify_intent_unified
-#   from agents.cvs_intent_agent_node import cvs_intent_agent_node
+#   from agents.extended_intent_agent_node import extended_intent_agent_node
