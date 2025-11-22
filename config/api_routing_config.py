@@ -2,6 +2,19 @@
 CVS MyClaims API Routing Configuration
 Maps intents to actual CVS API endpoints
 
+⚠️  IMPORTANT NOTE - FOR GUIDANCE ONLY:
+    This file documents the intent-to-API mapping for reference purposes.
+    When you need to return specific slots from the API, use the intention
+    and expected entities listed under each intention in this configuration.
+    
+    The actual API routing is handled by tools/claims_api.py which uses
+    tools/api_repository.py (not this file) for dynamic API matching.
+    
+    This file serves as:
+    - Documentation for what each intent should fetch
+    - Reference for required entities per intent
+    - Guide for expected API response fields
+
 Based on CVS MyClaims Capability API v1.0:
 - /myclaims/claims/v1/claim/byclaimnumber (Basic search)
 - /myclaims/claims/v1/claim/byclaimnumberandseq (Detailed info)
