@@ -45,50 +45,59 @@ def _load_config() -> Dict[str, Any]:
         }
 
 def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "response_agent"]:
-    """Route based on confidence, entity completeness, and query complexity.
+    """Route based on confidence, entity existence, and query complexity.
 
     SIMPLIFIED THREE-WAY ROUTING:
-      1. clarification: Missing entities (ask user for specific information)
+      1. clarification: No entities extracted (ask user for specific information)
       2. build_context → API: High confidence + has entities (clear, simple query)
       3. response_agent: Complex OR low confidence (will become "LLM Judge Agent")
 
     Rules (Priority Order):
-      1. If is_complex=True → response_agent (will become LLM Judge Agent)
-      2. If confidence < threshold → response_agent (will become LLM Judge Agent)
-      3. If missing entities → clarification (existing clarification engine)
-      4. If high confidence + has entities → build_context (standard API flow)
+      1. If is_complex=True → response_agent (LLM Judge Agent)
+      2. If confidence < threshold → response_agent (LLM Judge Agent)
+      3. If no entities AND intent requires them → clarification
+      4. If high confidence + has entities → build_context (API flow)
     """
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
     
     confidence = state.get("confidence", 0.0)
-    needs_clarification = state.get("needs_clarification", False)
+    intent = state.get("intent", "")
+    entities = state.get("entities", {})
     is_complex = state.get("is_complex", False)
     embedding_failed = state.get("embedding_failed", False)
 
-    # RULE 1: Complex query → Response Agent (will become LLM Judge Agent)
+    # RULE 1: Complex query → Response Agent (LLM Judge Agent)
     # Complex queries like "summarize all my claims" need LLM reasoning
     if is_complex:
         logger.info(f"🧠 Complex query detected (confidence: {confidence:.2f}) -> Response Agent (LLM Judge)")
         logger.info("   Reason: Query contains aggregations, comparisons, or multiple conditions")
         return "response_agent"
 
-    # RULE 2: Low confidence → Response Agent (will become LLM Judge Agent)
+    # RULE 2: Low confidence → Response Agent (LLM Judge Agent)
     # Let LLM Judge handle uncertain intent classification
     if confidence < threshold:
         logger.info(f"⚠️ Low confidence ({confidence:.2f}) < {threshold} -> Response Agent (LLM Judge)")
         logger.info("   Reason: Uncertain intent - route to LLM Judge for decision")
         return "response_agent"
 
-    # RULE 3: Missing entities → Clarification Engine
-    # Use existing clarification node to ask user for specific entities
-    if needs_clarification:
-        logger.info(f"⚠️ Missing required entities -> Clarification Engine")
-        logger.info("   Reason: Classifier detected missing required slots")
+    # RULE 3: No entities → Clarification Engine
+    # Check if entities were extracted (for intents that need them)
+    # Exception: out_of_scope, greeting, help don't need entities
+    INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
+    
+    has_entities = bool(entities and any(v is not None for v in entities.values()))
+    
+    if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
+        logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification Engine")
+        logger.info(f"   Reason: Intent requires entities but none were found")
         return "clarification"
 
-    # RULE 4: High confidence + Has entities → Build Context (Standard API flow)
-    logger.info(f"✅ High confidence ({confidence:.2f}) + ready for API -> Build Context")
+    # RULE 4: High confidence + Has entities (or doesn't need them) → Build Context (API flow)
+    if has_entities:
+        logger.info(f"✅ High confidence ({confidence:.2f}) + has entities -> Build Context")
+    else:
+        logger.info(f"✅ Intent '{intent}' doesn't require entities -> Build Context")
     return "build_context"
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
