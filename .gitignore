@@ -88,3 +88,4 @@ nodes/master_llm_agent.py
 test_cvs_classifier_endpoints.sh
 CVS_INTENT_CLASSIFIER_FLOW.md
 CVS_INTENT_CLASSIFIER_INTEGRATION.md
+*.pid
