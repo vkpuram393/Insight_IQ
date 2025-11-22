@@ -41,12 +41,12 @@ def create_pharmacy_recognizers() -> List[PatternRecognizer]:
         context=["member", "patient", "subscriber", "ID"]
     ))
     
-    # Claim ID: CLM-XXXXXX or CLAIM-XXXXXX (HIGH PRIORITY)
+    # Claim ID: CLM-XXXXXX or CLAIM-XXXXXX or 15-digit numeric (HIGH PRIORITY)
     recognizers.append(PatternRecognizer(
         supported_entity="CLAIM_ID",
         patterns=[Pattern(
             name="claim_id",
-            regex=r"\b(?:CLM|CLAIM)[-_]?\d{4,10}\b",
+            regex=r"\b((?:CLM|CLAIM)[-_]?\d{4,10}|\d{15})\b",
             score=0.95  # High score to override US_DRIVER_LICENSE
         )],
         context=["claim", "rejected", "approved", "status"]
