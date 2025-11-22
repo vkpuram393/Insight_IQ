@@ -20,7 +20,8 @@ class EntityExtractor:
     def __init__(self):
         # Entity patterns
         self.patterns = {
-            'claim_id': r'\b(CLM\d{3,10})\b',
+            # Claim ID: CLM prefix (CLM12345) OR pure numeric (253152732536005 - exactly 15 digits)
+            'claim_id': r'\b(CLM\d{3,10}|\d{15})\b',
             'member_id': r'\b(MEM\d{3,10})\b',
             'prescription_id': r'\b(RX\d{3,10})\b',
             'amount': r'\$?\d+(?:\.\d{2})?',
