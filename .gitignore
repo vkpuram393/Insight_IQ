@@ -82,7 +82,6 @@ data/telemetry.db
 
 # Test and documentation files (keep local only)
 monitor_flow.sh
-test_compare_both_classifiers.py
 cvs_classifier_steps_3_to_12.png
 nodes/master_llm_agent.py
 test_cvs_classifier_endpoints.sh
