@@ -24,7 +24,7 @@ from nodes import (
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
-from core.config import settings
+from config.config import settings
 from core.logger import get_logger
 
 logger = get_logger(__name__)

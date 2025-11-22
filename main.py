@@ -20,7 +20,7 @@ def FORCE_BREAKPOINT(): val = 42 # set breakpoint here FORCE_BREAKPOINT()
 # Import application components ---------------------------------------------
 try:
     from api.routes import router as api_router
-    from core.config import settings
+    from config.config import settings
     from langgraph_agent import init_graph, close_graph
     print("[BOOT] Imports succeeded")
 except Exception as e:

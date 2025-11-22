@@ -10,8 +10,8 @@ from typing import Dict, List
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-from agents.keyword_classifier import get_cvs_intent_classifier
-from agents.embedded_classifier import CVSIntentEmbedded
+from classifiers.keyword_classifier import get_cvs_intent_classifier
+from classifiers.embedded_classifier import CVSIntentEmbedded
 from test_use_cases import TEST_CASES
 
 print("=" * 120)

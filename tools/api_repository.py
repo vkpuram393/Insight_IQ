@@ -2,7 +2,7 @@ from typing import List,Dict,Any
 from core.node_models import API_REPOSITORY
 from dotenv import load_dotenv
 import os
-from core.config import settings
+from config.config import settings
 from functools import lru_cache
 
 BASE_URL = settings.swagger_url

@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple, Optional, Any
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from core.logger import get_logger
-from core.llm_connection import client, MODEL_ID
+from services.llm_connection import client, MODEL_ID
 from google.genai import types
 
 logger = get_logger(__name__)

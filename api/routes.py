@@ -136,7 +136,7 @@ async def get_session_history(session_id: str):
     """Get conversation history for a session"""
     try:
         from memory import MemoryStoreFactory
-        from core.config import settings
+        from config.config import settings
 
         memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
         history = await memory_store.get_session_history(session_id)
@@ -157,7 +157,7 @@ async def clear_session(session_id: str):
     """Clear all data for a session"""
     try:
         from memory import MemoryStoreFactory
-        from core.config import settings
+        from config.config import settings
 
         memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
         cleared = await memory_store.clear_session(session_id)

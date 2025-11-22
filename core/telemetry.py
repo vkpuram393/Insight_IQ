@@ -8,7 +8,7 @@ using the persistence store facade.
 import time
 from typing import Dict, Any, Optional
 from datetime import datetime
-from core.config import settings
+from config.config import settings
 from core.logger import get_logger
 from persistence import PersistenceStoreFactory, EventType
 

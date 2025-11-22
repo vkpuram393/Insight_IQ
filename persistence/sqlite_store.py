@@ -31,7 +31,7 @@ class SQLitePersistenceStore(PersistenceStore):
     def __init__(self, db_path: str = None):
         # Use settings.telemetry_db_path if not provided (allows test override)
         if db_path is None:
-            from core.config import settings
+            from config.config import settings
             db_path = settings.telemetry_db_path
         self.db_path = db_path
         self.db = None
@@ -46,11 +46,15 @@ class SQLitePersistenceStore(PersistenceStore):
             self.db.row_factory = aiosqlite.Row
             await self.db.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
             await self._init_schema()
+            await self.db.commit()  # Ensure schema is committed
         return self.db
 
     async def _init_schema(self):
         """Initialize database schema"""
-        db = await self._get_connection()
+        # Use self.db directly to avoid circular dependency
+        db = self.db
+        if db is None:
+            raise RuntimeError("Database connection not established before schema initialization")
 
         # Events table
         await db.execute("""

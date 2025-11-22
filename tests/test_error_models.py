@@ -6,7 +6,7 @@ Run with: pytest tests/test_error_models.py -v
 
 import pytest
 from datetime import datetime
-from core.error_models import (
+from core.errors.models import (
     AgentError,
     ErrorResponse,
     ErrorCode,

@@ -1,6 +1,6 @@
 """AI Agents"""
 
-from core.config import settings
+from config.config import settings
 
 # Use CVS Classifier or Original based on config
 if settings.use_cvs_intent_classifier:
@@ -27,7 +27,7 @@ else:
 
 # CVS Intent Classifier (NO dependencies required)
 # These can be imported directly:
-#   from agents.keyword_classifier import get_cvs_intent_classifier
-#   from agents.entity_extractor import get_entity_extractor
-#   from agents.intent_classifier_wrapper import classify_intent_unified
+#   from classifiers.keyword_classifier import get_cvs_intent_classifier
+#   from utils.entity_extractor import get_entity_extractor
+#   from classifiers.intent_classifier_wrapper import classify_intent_unified
 #   from agents.extended_intent_agent_node import extended_intent_agent_node
