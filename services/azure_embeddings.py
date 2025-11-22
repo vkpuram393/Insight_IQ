@@ -20,7 +20,7 @@ class AzureEmbeddings:
     
     def __init__(self):
         """Initialize Azure OpenAI client with appropriate authentication"""
-        from core.config import settings
+        from config.config import settings
         
         # Check if using Azure AD or API Key
         if hasattr(settings, 'azure_tenant_id') and settings.azure_tenant_id:
@@ -139,7 +139,7 @@ class AzureEmbeddings:
                 return [list(np.random.rand(dimensions).astype(float)) for _ in text]
         
         try:
-            from core.config import settings
+            from config.config import settings
             
             # Convert single string to list for uniform processing
             is_single = isinstance(text, str)

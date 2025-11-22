@@ -19,7 +19,7 @@ from collections import defaultdict
 
 # Import embedding service
 try:
-    from utils.azure_embeddings import get_embedding, get_azure_embeddings
+    from services.azure_embeddings import get_embedding, get_azure_embeddings
     EMBEDDINGS_AVAILABLE = True
 except ImportError:
     EMBEDDINGS_AVAILABLE = False
@@ -105,7 +105,7 @@ class CVSIntentEmbedded:
                 logger.info("Falling back to generating embeddings...")
         else:
             logger.info("📝 No cache file found. Generating embeddings...")
-            logger.info(f"   💡 TIP: Run 'python agents/generate_intent_embeddings.py' once to create cache")
+            logger.info(f"   💡 TIP: Run 'python scripts/generate_intent_embeddings.py' once to create cache")
         
         # Generate embeddings (fallback)
         intent_embeddings = {}

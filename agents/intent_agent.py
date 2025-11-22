@@ -11,11 +11,11 @@ import json
 import traceback
 from typing import Dict, Any, List
 from state.schema import AgentState
-from core.config import settings
+from config.config import settings
 from core.logger import get_logger
-from core.error_models import create_internal_error, create_llm_error
+from core.errors.models import create_internal_error, create_llm_error
 from core.logging_context import log_state_snapshot
-from core.llm_connection import client as gemini_client, GenerateRequest, _generate_core
+from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from persistence import PersistenceStoreFactory
 
 # Use base logger

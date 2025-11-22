@@ -23,7 +23,7 @@ from typing import Optional, Dict, Any, List
 import uuid
 from datetime import datetime
 
-from agents.intent_classifier import classify_intent
+from classifiers.intent_classifier import classify_intent
 from agents import intent_agent_node, response_agent_node  # Use configured classifier based on settings
 from nodes.safety import safety_precheck_node, response_safety_pii_postcheck_node as safety_postcheck_node
 from nodes.confidence import confidence_check_router
@@ -33,7 +33,7 @@ from nodes.cache import check_cache_node, cache_response_node
 from tools.claims_api import call_claims_tool_node
 from memory import MemoryStoreFactory
 from persistence import PersistenceStoreFactory, EventType
-from core.config import settings
+from config.config import settings
 from core.logger import get_logger
 from core.telemetry import log_event, log_request_response
 from state.schema import AgentState
@@ -91,7 +91,7 @@ async def test_intent_classifier(request: IntentTestRequest):
     """
     Test the intent classifier independently
 
-    Tests: agents/intent_classifier.py
+    Tests: classifiers/intent_classifier.py
     """
     try:
         result = await classify_intent(
@@ -813,7 +813,7 @@ async def test_exception_handling(request: ExceptionTestRequest):
         
         # Check database for logged exception
         from persistence import PersistenceStoreFactory
-        from core.config import settings
+        from config.config import settings
         persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
         
         # Get recent exceptions for this node

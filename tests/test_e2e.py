@@ -119,7 +119,7 @@ def check_exceptions_in_db(
         print(f"   ⚠️  Error checking exceptions in database: {e}")
         return []
 
-def test_node_logging(node_name: str, test_endpoint: str, test_payload: Dict, expected_events: List[str], description: str) -> Tuple[bool, Dict]:
+def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict, expected_events: List[str], description: str) -> Tuple[bool, Dict]:
     """Test logging for a specific node"""
     print(f"\n📊 Testing Logging: {node_name}")
     print(f"   {description}")
@@ -190,7 +190,7 @@ def test_node_logging(node_name: str, test_endpoint: str, test_payload: Dict, ex
         print(f"   ❌ Test failed: {e}")
         return False, {"error": str(e)}
 
-def test_endpoint(name: str, method: str, url: str, payload: Optional[Dict] = None, expected_status: int = 200) -> bool:
+def run_endpoint_test(name: str, method: str, url: str, payload: Optional[Dict] = None, expected_status: int = 200) -> bool:
     """Test a single endpoint"""
     try:
         if method == "GET":
@@ -224,7 +224,7 @@ def test_endpoint(name: str, method: str, url: str, payload: Optional[Dict] = No
         print(f"   ❌ {name}: Error - {str(e)}")
         return False
 
-def test_node_exception_handling(node_name: str, description: str) -> Tuple[bool, Dict]:
+def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[bool, Dict]:
     """Test exception handling for a specific node"""
     print(f"\n🚨 Testing Exception Handling: {node_name}")
     print(f"   {description}")
@@ -391,7 +391,7 @@ def main():
     
     for i, (name, method, url, payload) in enumerate(endpoint_tests, 1):
         print(f"{i}. Testing {name}")
-        result = test_endpoint(name, method, url, payload)
+        result = run_endpoint_test(name, method, url, payload)
         results["endpoint_tests"].append((name, result))
         time.sleep(0.2)  # Small delay between tests
         print()
@@ -445,7 +445,7 @@ def main():
     ]
     
     for test in logging_tests:
-        success, result = test_node_logging(
+        success, result = run_node_logging_test(
             test["node_name"],
             test["endpoint"],
             test["payload"],
@@ -477,7 +477,7 @@ def main():
     ]
     
     for node_name, description in exception_tests:
-        success, result = test_node_exception_handling(node_name, description)
+        success, result = run_node_exception_handling_test(node_name, description)
         results["exception_tests"].append((node_name, success, result))
         time.sleep(0.5)
     

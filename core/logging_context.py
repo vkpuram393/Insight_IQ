@@ -8,7 +8,7 @@ across all nodes when logging to SQLite.
 from typing import Dict, Optional, Any
 from state.schema import AgentState
 from persistence import PersistenceStoreFactory
-from core.config import settings
+from config.config import settings
 
 
 def extract_logging_context(state: AgentState) -> Dict[str, Optional[str]]:

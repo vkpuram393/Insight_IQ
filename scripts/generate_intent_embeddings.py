@@ -7,7 +7,7 @@ import numpy as np
 import pickle
 import logging
 from typing import Dict
-from embedded_classifier import CVS_INTENT_EXAMPLES
+from classifiers.embedded_classifier import CVS_INTENT_EXAMPLES
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +18,7 @@ try:
     import sys
     import os
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from utils.azure_embeddings import get_azure_embeddings
+    from services.azure_embeddings import get_azure_embeddings
     EMBEDDINGS_AVAILABLE = True
 except ImportError:
     logger.error("❌ Azure embeddings not available!")
@@ -39,7 +39,7 @@ def generate_and_save_embeddings():
     print("\n⏳ Initializing Azure OpenAI Embeddings...")
     
     # Force fresh initialization by clearing singleton
-    import utils.azure_embeddings as azure_emb_module
+    import services.azure_embeddings as azure_emb_module
     azure_emb_module._azure_embeddings = None
     
     embeddings_service = get_azure_embeddings()
@@ -67,9 +67,10 @@ def generate_and_save_embeddings():
     
     print(f"\n✅ All embeddings generated!")
     
-    # Save to file in the agents directory (where this script lives)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_file = os.path.join(script_dir, "intent_embeddings_cache.pkl")
+    # Save to file in the classifiers directory (where embedded_classifier.py lives)
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    classifiers_dir = os.path.join(script_dir, "classifiers")
+    output_file = os.path.join(classifiers_dir, "intent_embeddings_cache.pkl")
     print(f"\n⏳ Saving to {output_file}...")
     
     with open(output_file, 'wb') as f:

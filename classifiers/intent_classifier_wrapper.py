@@ -5,14 +5,14 @@ Provides unified interface to switch between:
 - CVS Production-Ready Classifier (new, 28+ intents)
 
 Usage:
-    from agents.intent_classifier_wrapper import classify_intent_unified
+    from classifiers.intent_classifier_wrapper import classify_intent_unified
     
     result = classify_intent_unified(query="What's my claim status?")
     print(result['intent'], result['confidence'])
 """
 
 from typing import Dict, Any
-from core.config import settings
+from config.config import settings
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,7 +45,7 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
         if settings.use_embedding_classifier:
             # Use Embedding-based Classifier (semantic understanding)
             logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
-            from agents.embedded_classifier import CVSIntentEmbedded
+            from classifiers.embedded_classifier import CVSIntentEmbedded
             
             try:
                 classifier = CVSIntentEmbedded()
@@ -64,7 +64,7 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
         else:
             # Use Keyword-based Classifier (fast, rule-based)
             logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
-            from agents.keyword_classifier import get_cvs_intent_classifier
+            from classifiers.keyword_classifier import get_cvs_intent_classifier
             
             classifier = get_cvs_intent_classifier()
             result = classifier.classify(query)
@@ -78,7 +78,7 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
     else:
         # Use Original EDGAR-style Classifier
         logger.info("🟢 Using Original EDGAR Intent Classifier")
-        from agents.intent_classifier import get_intent_classifier
+        from classifiers.intent_classifier import get_intent_classifier
         
         classifier = get_intent_classifier()
         result = classifier.classify(query)
@@ -108,7 +108,7 @@ def extract_entities_unified(query: str, intent: str = None) -> Dict[str, Any]:
             - needs_validation: bool
             - missing_required: list
     """
-    from agents.entity_extractor import get_entity_extractor
+    from utils.entity_extractor import get_entity_extractor
     
     extractor = get_entity_extractor()
     result = extractor.extract(query)
@@ -136,8 +136,8 @@ def compare_classifiers(query: str) -> Dict[str, Any]:
             'confidence_diff': float
         }
     """
-    from agents.intent_classifier import get_intent_classifier as get_original
-    from agents.keyword_classifier import get_cvs_intent_classifier
+    from classifiers.intent_classifier import get_intent_classifier as get_original
+    from classifiers.keyword_classifier import get_cvs_intent_classifier
     
     original_classifier = get_original()
     cvs_classifier = get_cvs_intent_classifier()

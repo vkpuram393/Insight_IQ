@@ -39,6 +39,7 @@ data/telemetry.db
 data/telemetry.db-wal
 data/telemetry.db-shm
 data/telemetry_test.db*
+data/*.corrupted.*
 
 # Environment & secrets
 .env

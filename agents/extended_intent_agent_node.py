@@ -20,7 +20,7 @@ from typing import Dict, Any
 from state.schema import AgentState
 from core.logger import get_logger
 from core.logging_context import log_state_snapshot
-from agents.intent_classifier_wrapper import classify_intent_unified, extract_entities_unified
+from classifiers.intent_classifier_wrapper import classify_intent_unified, extract_entities_unified
 from config.api_routing_config import get_api_config  # NEW: Get API endpoint from config
 
 logger = get_logger(__name__)

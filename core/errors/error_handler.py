@@ -5,13 +5,13 @@ This file ensures every exception in the orchestrator is normalized to AgentErro
 
 import traceback
 from typing import Optional
-from core.error_models import (
+from core.errors.models import (
     AgentError,
     create_api_error,
     create_internal_error,
     create_validation_error
 )
-from tools.exceptions import APIBaseError, ExternalAPIError, ToolTimeoutError
+from core.errors.exceptions import APIBaseError, ExternalAPIError, ToolTimeoutError
 
 # ============================================================================
 # TO AGENT ERROR 

@@ -6,7 +6,7 @@ import os
 from typing import Any, Dict, List, Optional
 from google import genai
 from google.genai import types
-from core.config import settings
+from config.config import settings
 
 # ------------------------------------------------------------------
 # Config (env vars or defaults)

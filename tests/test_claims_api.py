@@ -20,8 +20,8 @@ from tools.claims_api import (
     ENTITY_MAP
 )
 from core.node_models import ToolResult, ToolExecutionStatus, API_REPOSITORY
-from core.error_models import AgentError, ErrorCode
-from tools.exceptions import ExternalAPIError, ToolTimeoutError
+from core.errors.models import AgentError, ErrorCode
+from core.errors.exceptions import ExternalAPIError, ToolTimeoutError
 from core.logger import get_logger
 
 logger = get_logger(__name__)
