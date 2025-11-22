@@ -62,6 +62,7 @@ class AgentState(TypedDict):
     required_entities_list: Optional[List[str]]  # Required entities for this intent
     requires_llm: bool                           # Intent needs LLM (no API)
     is_complex: bool                             # Query needs complex analysis (aggregations, comparisons)
+    embedding_failed: bool                       # Embedding classifier failed - route to LLM
 
     # === CLARIFICATION ===
     needs_clarification: bool                    # Ask user question?
@@ -122,6 +123,7 @@ def create_initial_state(
         required_entities_list=None,
         requires_llm=False,
         is_complex=False,
+        embedding_failed=False,
         # Other fields
         needs_clarification=False,
         clarifying_question=None,

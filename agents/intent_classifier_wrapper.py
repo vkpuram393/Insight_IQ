@@ -45,14 +45,26 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
         if settings.use_embedding_classifier:
             # Use Embedding-based Classifier (semantic understanding)
             logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
-            from agents.cvs_intent_embedded import CVSIntentEmbedded
+            from agents.embedded_classifier import CVSIntentEmbedded
             
-            classifier = CVSIntentEmbedded()
-            result = classifier.classify(query)
+            try:
+                classifier = CVSIntentEmbedded()
+                result = classifier.classify(query)
+            except RuntimeError as e:
+                # Embeddings unavailable - return special flag to route to LLM
+                logger.error(f"❌ Embedding classifier failed: {e}")
+                logger.info("🔄 Routing query directly to Response LLM Agent")
+                return {
+                    'intent': 'embedding_failed',
+                    'confidence': 0.0,
+                    'needs_clarification': False,
+                    'embedding_failed': True,  # Special flag for router
+                    'fallback_reason': str(e)
+                }
         else:
             # Use Keyword-based Classifier (fast, rule-based)
             logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
-            from agents.cvs_intent_classifier import get_cvs_intent_classifier
+            from agents.keyword_classifier import get_cvs_intent_classifier
             
             classifier = get_cvs_intent_classifier()
             result = classifier.classify(query)
@@ -125,7 +137,7 @@ def compare_classifiers(query: str) -> Dict[str, Any]:
         }
     """
     from agents.intent_classifier import get_intent_classifier as get_original
-    from agents.cvs_intent_classifier import get_cvs_intent_classifier
+    from agents.keyword_classifier import get_cvs_intent_classifier
     
     original_classifier = get_original()
     cvs_classifier = get_cvs_intent_classifier()

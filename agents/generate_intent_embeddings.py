@@ -7,7 +7,7 @@ import numpy as np
 import pickle
 import logging
 from typing import Dict
-from cvs_intent_embedded import CVS_INTENT_EXAMPLES
+from embedded_classifier import CVS_INTENT_EXAMPLES
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

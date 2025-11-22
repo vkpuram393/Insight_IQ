@@ -48,15 +48,16 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     """Route based on confidence, entity completeness, and query complexity.
 
     THREE-WAY ROUTING:
-      1. clarification: Missing required entities
+      1. clarification: Missing required entities OR high confidence + no entities
       2. build_context → API: Simple query with entities
-      3. response_agent: Complex queries needing LLM reasoning (skip API)
+      3. response_agent: Complex queries OR low confidence + has entities OR embedding failed
 
     Rules:
+      0. If embedding_failed=True -> response_agent (embedding classifier unavailable)
       1. If query is_complex=True -> response_agent (LLM handles directly)
       2. If needs_clarification=True -> clarification (missing required slots)
-      3. If confidence < threshold AND no entities -> response_agent (LLM fallback)
-      4. If confidence < threshold but has entities -> build_context (trust entities)
+      3. If confidence >= threshold AND no entities -> clarification (needs more info)
+      4. If confidence < threshold AND has entities -> response_agent (LLM with context)
       5. Else -> build_context
     """
     config = _load_config()
@@ -66,8 +67,15 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     missing_slots = state.get("missing_slots") or []
     needs_clarification = state.get("needs_clarification", False)
     is_complex = state.get("is_complex", False)
+    embedding_failed = state.get("embedding_failed", False)
     entities = state.get("entities", {})
     confidence_check_passed = state.get("metadata", {}).get("confidence_check_passed", False)
+
+    # RULE 0: Embedding classifier failed - route directly to LLM
+    if embedding_failed:
+        logger.info(f"❌ Embedding classifier failed -> Response Agent (LLM fallback)")
+        logger.info("   Reason: .pkl cache corrupted or Azure OpenAI unavailable")
+        return "response_agent"
 
     # RULE 1: Query is complex (CRITICAL: Route to LLM BEFORE checking slots!)
     # Complex queries like "summarize all my claims" need LLM reasoning, skip API
@@ -91,19 +99,29 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         logger.info(f"⚠️ Missing required slots: {missing_slots} -> Clarification")
         return "clarification"
 
-    # RULE 3 & 4: Low confidence routing
-    if confidence < threshold:
-        has_any_entity = any(entities.values()) if isinstance(entities, dict) else False
-        
+    # RULE 3: High confidence + NO entities -> Clarification (user needs to provide more info)
+    # RULE 4: Low confidence + HAS entities -> Response Agent (LLM with context)
+    has_any_entity = any(entities.values()) if isinstance(entities, dict) else False
+    
+    if confidence >= threshold:
+        # High confidence
         if not has_any_entity:
-            logger.info(f"⚠️ Low confidence ({confidence:.2f}) + no entities -> Response Agent (LLM)")
+            logger.info(f"✅ High confidence ({confidence:.2f}) but NO entities -> Clarification")
+            logger.info("   Reason: Need entity (claim ID, member ID, etc.) to proceed")
+            return "clarification"
+        else:
+            logger.info(f"✅ High confidence ({confidence:.2f}) + has entities -> Build Context")
+            return "build_context"
+    else:
+        # Low confidence
+        if has_any_entity:
+            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but HAS entities -> Response Agent (LLM)")
+            logger.info("   Reason: Let LLM interpret ambiguous query with entity context")
             return "response_agent"
         else:
-            logger.info(f"⚠️ Low confidence ({confidence:.2f}) but has entities -> Build Context")
-            return "build_context"
-
-    logger.info(f"✅ Confidence OK ({confidence:.2f}) -> Build Context")
-    return "build_context"
+            logger.info(f"⚠️ Low confidence ({confidence:.2f}) + no entities -> Response Agent (LLM)")
+            logger.info("   Reason: LLM fallback for unclear query")
+            return "response_agent"
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
     """

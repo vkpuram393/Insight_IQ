@@ -27,7 +27,7 @@ else:
 
 # CVS Intent Classifier (NO dependencies required)
 # These can be imported directly:
-#   from agents.cvs_intent_classifier import get_cvs_intent_classifier
+#   from agents.keyword_classifier import get_cvs_intent_classifier
 #   from agents.entity_extractor import get_entity_extractor
 #   from agents.intent_classifier_wrapper import classify_intent_unified
 #   from agents.cvs_intent_agent_node import cvs_intent_agent_node

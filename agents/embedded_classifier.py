@@ -3,12 +3,12 @@ CVS Intent Classifier - Embedding-Based (Zero-Shot)
 Uses Azure OpenAI embeddings + cosine similarity for intent classification
 NO TRAINING required - semantic understanding through embeddings
 
-This classifier returns the same structure as cvs_intent_classifier.py
+This classifier returns the same structure as keyword_classifier.py
 so it can be used as a drop-in replacement for A/B testing.
 
 Comparison:
-- cvs_intent_classifier.py: Keyword-based (fast, rule-based)
-- cvs_intent_embedded.py: Embedding-based (semantic understanding)
+- keyword_classifier.py: Keyword-based (fast, rule-based)
+- embedded_classifier.py: Embedding-based (semantic understanding)
 """
 
 import numpy as np
@@ -114,17 +114,23 @@ class CVSIntentEmbedded:
         
         for intent, examples in self.intent_examples.items():
             if EMBEDDINGS_AVAILABLE:
-                # Get embeddings for ALL examples at once (batch API call)
-                embeddings_service = get_azure_embeddings()
-                embeddings = embeddings_service.embed(examples)  # Single batch call for all 20 examples
-                
-                # Convert to numpy array
-                intent_embeddings[intent] = np.array(embeddings)
-                
-                logger.debug(f"   {intent}: {len(examples)} examples embedded (batch)")
+                try:
+                    # Get embeddings for ALL examples at once (batch API call)
+                    embeddings_service = get_azure_embeddings()
+                    embeddings = embeddings_service.embed(examples)  # Single batch call for all 20 examples
+                    
+                    # Convert to numpy array
+                    intent_embeddings[intent] = np.array(embeddings)
+                    
+                    logger.debug(f"   {intent}: {len(examples)} examples embedded (batch)")
+                except Exception as e:
+                    logger.error(f"❌ Azure OpenAI embedding failed for {intent}: {e}")
+                    logger.error("❌ CRITICAL: Cannot generate embeddings. Routing to LLM fallback.")
+                    raise RuntimeError("Embedding generation failed - no cache and API unavailable") from e
             else:
-                # Mock embeddings for testing
-                intent_embeddings[intent] = np.random.rand(len(examples), 1536)
+                # NO mock embeddings - raise error to route to LLM
+                logger.error("❌ CRITICAL: Azure embeddings not available and no cache found")
+                raise RuntimeError("Embedding service unavailable - routing to LLM fallback")
         
         logger.info(f"✅ All examples embedded successfully (30 batch calls instead of 600 individual calls)")
         
@@ -148,6 +154,9 @@ class CVSIntentEmbedded:
             
         Returns:
             Dict with same structure as CVSIntentClassifier
+            
+        Raises:
+            RuntimeError: If embeddings are unavailable (routes to LLM fallback)
         """
         query_lower = query.lower().strip()
         
@@ -162,11 +171,16 @@ class CVSIntentEmbedded:
                 'needs_clarification': False
             }
         
-        # Get query embedding
-        if EMBEDDINGS_AVAILABLE:
-            query_embedding = get_embedding(query)
+        # Get query embedding - FAIL if unavailable (no mock fallback)
+        if EMBEDDINGS_AVAILABLE and self.embeddings_service is not None:
+            try:
+                query_embedding = get_embedding(query)
+            except Exception as e:
+                logger.error(f"❌ Failed to get query embedding: {e}")
+                raise RuntimeError("Query embedding failed - routing to LLM fallback") from e
         else:
-            query_embedding = np.random.rand(1536)
+            logger.error("❌ Embeddings service unavailable")
+            raise RuntimeError("Embeddings service unavailable - routing to LLM fallback")
         
         # Calculate similarity scores for all intents
         intent_scores = {}
