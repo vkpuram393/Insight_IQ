@@ -20,12 +20,15 @@ ARCHITECTURE:
     [response_safety_pii_postcheck_node] ← Unmask for user
 """
 
+import traceback
 from typing import Dict, Any
 from langgraph.graph import END
 from state.schema import AgentState
 from config.config import settings
 from core.logger import get_logger
+from core.errors.models import create_internal_error
 from core.logging_context import extract_logging_context, log_state_snapshot
+from persistence import PersistenceStoreFactory
 from services.pii_protection import (
     get_safety_checker,
     get_pii_service
@@ -65,6 +68,7 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         Passed → Continue with PII/PHI intact for downstream nodes
     """
     node_name = "safety_precheck"
+    log_ctx = extract_logging_context(state)
     
     logger.info("\n" + "="*70)
     logger.info("🛡️  SAFETY PRECHECK NODE - Unified Safety Check")
@@ -126,17 +130,47 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         return result_dict
         
     except Exception as e:
-        logger.error(f"❌ Safety precheck failed: {e}", exc_info=True)
+        tb = traceback.format_exc()
+        error = create_internal_error(
+            error_message=f"Safety precheck failed: {str(e)}",
+            stacktrace=tb,
+            session_id=log_ctx["session_id"],
+            node_name=node_name
+        )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
+            node_name=node_name,
+            stacktrace=error.stacktrace,
+            metadata=error.metadata,
+            user_id=log_ctx["user_id"]
+        )
+        
+        logger.error(f"❌ Safety precheck failed: {e}\n{tb}")
         # Fail closed - block on error
-        return {
+        result = {
             "safety_precheck_passed": False,
             "threat_detected": True,
             "threat_reason": f"Safety check error: {str(e)}",
             "response": (
                 "I'm unable to process your request at this time. "
                 "Please try again later."
-            )
+            ),
+            "metadata": {
+                **state.get("metadata", {}),
+                "error_occurred": True,
+                "error_code": error.error_code.value
+            }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 
 # ============================================================================
@@ -164,6 +198,7 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
         Response agent works with MASKED data (safe)
     """
     node_name = "response_safety_pii_precheck"
+    log_ctx = extract_logging_context(state)
     
     logger.info("\n" + "="*70)
     logger.info("🔐 RESPONSE SAFETY PII PRECHECK - Masking before Response LLM")
@@ -207,7 +242,30 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
         return result
         
     except Exception as e:
-        logger.error(f"❌ Response PII masking failed: {e}", exc_info=True)
+        tb = traceback.format_exc()
+        error = create_internal_error(
+            error_message=f"Response PII masking failed: {str(e)}",
+            stacktrace=tb,
+            session_id=log_ctx["session_id"],
+            node_name=node_name
+        )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
+            node_name=node_name,
+            stacktrace=error.stacktrace,
+            metadata=error.metadata,
+            user_id=log_ctx["user_id"]
+        )
+        
+        logger.error(f"❌ Response PII masking failed: {e}\n{tb}")
         # Fail-safe: continue with original text (not ideal but prevents blocking)
         result = {
             "metadata": {
@@ -216,7 +274,9 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
                     "has_pii": False,
                     "masked_count": 0,
                     "error": str(e)
-                }
+                },
+                "error_occurred": True,
+                "error_code": error.error_code.value
             }
         }
         await log_state_snapshot(state, node_name, result)
@@ -251,6 +311,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         No leakage → Unmask tokens, return to user
     """
     node_name = "response_safety_pii_postcheck"
+    log_ctx = extract_logging_context(state)
     
     logger.info("\n" + "="*70)
     logger.info("🔍 RESPONSE SAFETY PII POSTCHECK - Leakage Check + Unmasking")
@@ -346,13 +407,21 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         # Unmask tokens in response
         unmasked_response = pii_service.unmask_pii_phi(response, combined_token_mapping)
         
+        # CRITICAL: Also unmask text field so conversation history stores unmasked data
+        text = state.get("text", "")
+        unmasked_text = pii_service.unmask_pii_phi(text, text_token_mapping) if text_token_mapping else text
+        
         tokens_unmasked = sum(1 for token in combined_token_mapping.keys() if token in response)
+        text_tokens_unmasked = sum(1 for token in text_token_mapping.keys() if token in text) if text_token_mapping else 0
         
         logger.info(f"🔓 Unmasked {tokens_unmasked} tokens in final response")
-        logger.debug(f"   Masked: {response[:100]}...")
-        logger.debug(f"   Unmasked: {unmasked_response[:100]}...")
+        if text_tokens_unmasked > 0:
+            logger.info(f"🔓 Unmasked {text_tokens_unmasked} tokens in text field (for conversation history)")
+        logger.debug(f"   Masked response: {response[:100]}...")
+        logger.debug(f"   Unmasked response: {unmasked_response[:100]}...")
         
         result = {
+            "text": unmasked_text,  # ← CRITICAL: Unmask text so conversation history stores real values
             "response": unmasked_response,  # ← CRITICAL: Replace with unmasked
             "safety_postcheck_passed": True,
             "metadata": {
@@ -360,6 +429,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                 "leakage_check": {"has_leakage": False},
                 "response_pii_unmasking": {
                     "tokens_unmasked": tokens_unmasked,
+                    "text_tokens_unmasked": text_tokens_unmasked,
                     "token_types": list(set(
                         data["entity_type"] 
                         for data in combined_token_mapping.values()
@@ -371,16 +441,43 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         return result
         
     except Exception as e:
-        logger.error(f"❌ Response postcheck failed: {e}", exc_info=True)
+        tb = traceback.format_exc()
+        error = create_internal_error(
+            error_message=f"Response postcheck failed: {str(e)}",
+            stacktrace=tb,
+            session_id=log_ctx["session_id"],
+            node_name=node_name
+        )
+        
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        await persistence_store.log_exception(
+            error_code=error.error_code.value,
+            category=error.category.value,
+            severity=error.severity.value,
+            message=error.message,
+            user_message=error.user_message,
+            session_id=log_ctx["session_id"],
+            request_id=log_ctx["request_id"],
+            node_name=node_name,
+            stacktrace=error.stacktrace,
+            metadata=error.metadata,
+            user_id=log_ctx["user_id"]
+        )
+        
+        logger.error(f"❌ Response postcheck failed: {e}\n{tb}")
         # Fail-safe: Return response as-is (may contain tokens)
-        return {
+        result = {
             "response": response,
             "safety_postcheck_passed": True,
             "metadata": {
                 **state.get("metadata", {}),
-                "response_pii_unmasking": {"error": str(e)}
+                "response_pii_unmasking": {"error": str(e)},
+                "error_occurred": True,
+                "error_code": error.error_code.value
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 
 # ============================================================================

@@ -95,8 +95,9 @@ pip install --cert certs/CVSHealthRoot.cer -r requirements.txt
 The `.env` file is already configured with defaults. Key settings:
 
 ```bash
-# LLM
-USE_MOCK_LLM=True                    # Use mock LLM (no API keys needed)
+# LLM Configuration
+USE_MOCK_LLM=False                    # Set to True for mock mode (no API calls)
+GEMINI_API_KEY=your-gemini-api-key    # Required when USE_MOCK_LLM=False
 
 # Memory Store
 MEMORY_STORE_TYPE=inmemory           # Use in-memory cache (no Redis needed)
@@ -432,14 +433,41 @@ PERSISTENCE_STORE_TYPE=firestore
 ```
 pss-myclaims-ai-agent/
 ├── agents/              # AI agents (intent, response)
-├── nodes/               # Graph nodes (cache, safety, etc.)
+├── nodes/               # Graph nodes (cache, safety, context, etc.)
 ├── tools/               # External tools (claims API)
+├── classifiers/         # Intent classification modules
+│   ├── intent_classifier.py
+│   ├── keyword_classifier.py
+│   ├── embedded_classifier.py
+│   └── intent_classifier_wrapper.py
+├── services/            # External service integrations
+│   ├── llm_connection.py    # Gemini LLM client
+│   ├── pii_protection.py     # PII masking/unmasking
+│   └── azure_embeddings.py  # Embedding generation
 ├── memory/              # Memory store facade
 ├── persistence/         # Persistence store facade
-├── utils/               # Test endpoints
+├── utils/               # Utility functions and test endpoints
+│   ├── entity_extractor.py
+│   ├── retry.py
+│   ├── serialization.py
+│   └── test_endpoints.py
 ├── api/                 # FastAPI routes
-├── core/                # Config, logging, telemetry
+├── config/              # Configuration
+│   ├── config.py            # Settings (moved from core/)
+│   ├── api_routing_config.py
+│   └── domain_config.json
+├── core/                # Core functionality
+│   ├── errors/              # Error handling (consolidated)
+│   │   ├── exceptions.py
+│   │   ├── error_handler.py
+│   │   └── models.py
+│   ├── logger.py
+│   ├── logging_context.py
+│   ├── node_models.py
+│   └── telemetry.py
 ├── state/               # State schema
+├── scripts/             # Utility scripts
+│   └── generate_intent_embeddings.py
 ├── data/                # SQLite databases
 ├── certs/               # SSL certificates
 └── .env                 # Configuration
@@ -543,9 +571,10 @@ Or create manually:
 - Line 35: `async def chat()` - Chat endpoint entry
 
 **Agent Logic**:
-- `agents/intent_classifier.py` - Intent classification
-- `agents/intent_agent.py` - Intent agent processing
-- `agents/response_agent.py` - Response generation
+- `classifiers/intent_classifier_wrapper.py` - Unified intent classification
+- `agents/intent_agent.py` - Intent agent processing (uses Gemini LLM)
+- `agents/response_agent.py` - Response generation (uses Gemini LLM)
+- `services/llm_connection.py` - Gemini LLM client wrapper
 
 **Nodes**:
 - `nodes/safety.py` - Safety checks
@@ -593,7 +622,7 @@ curl -X POST http://localhost:8000/api/v1/chat \
 
 #### Debugging Intent Classification
 
-1. Set breakpoint in `agents/intent_classifier.py`
+1. Set breakpoint in `classifiers/intent_classifier_wrapper.py` or `agents/intent_agent.py`
 2. Use test endpoint:
 ```bash
 curl -X POST http://localhost:8000/utils/test-intent \
@@ -628,12 +657,35 @@ tail -f logs/app.log
 **Add Custom Logging:**
 ```python
 from core.logger import get_logger
+from core.logging_context import log_state_snapshot
+from persistence import PersistenceStoreFactory
+
 logger = get_logger(__name__)
 
+# Standard logging
 logger.debug("Detailed debug info")
 logger.info("General info")
 logger.warning("Warning message")
 logger.error("Error occurred", exc_info=True)
+
+# State snapshot logging (for nodes)
+result = {"intent": "claim_status", "confidence": 0.95}
+await log_state_snapshot(state, "my_node", result)
+
+# Exception logging (for error handling)
+persistence = PersistenceStoreFactory.get_instance()
+await persistence.log_exception(
+    error_code="E001",
+    category="validation",
+    severity="error",
+    message=str(e),
+    user_message="An error occurred",
+    session_id=state.get("session_id"),
+    request_id=state.get("uuid"),
+    node_name="my_node",
+    stacktrace=traceback.format_exc(),
+    metadata={"additional": "context"}
+)
 ```
 
 ### Telemetry/Analytics for Debugging
@@ -725,11 +777,11 @@ Create tests in `tests/` directory:
 ```python
 # tests/test_intent_classifier.py
 import pytest
-from agents.intent_classifier import classify_intent
+from classifiers.intent_classifier_wrapper import classify_intent_unified
 
 @pytest.mark.asyncio
 async def test_claim_status_intent():
-    result = await classify_intent("claim 12345 status", {})
+    result = await classify_intent_unified("claim 12345 status", {})
     assert result["intent"] == "claim_status"
     assert result["confidence"] > 0.8
 ```
@@ -890,9 +942,57 @@ curl http://localhost:8000/api/v1/analytics
 
 - **Main README:** `README.md` - Project overview
 - **Test Endpoints:** `TEMP_ENDPOINTS.md` - Complete testing guide
-- **Intent Specs:** `INTENT_CLASSIFIER_REQUIREMENTS.md` - Requirements
-- **Code Walkthrough:** `walkthrough.md` - Architecture details
+- **Intent Specs:** `docs/INTENT_CLASSIFIER_REQUIREMENTS.md` - Requirements
 - **LangGraph Studio:** `docs/LANGGRAPH_STUDIO.md` - External tool
+- **Postman Testing:** `docs/POSTMAN_TEST_SCRIPT.js` - Postman test scripts with visual indicators
+
+## Recent Changes (November 2024)
+
+### Codebase Reorganization
+- **Config moved**: `core/config.py` → `config/config.py`
+- **Error handling consolidated**: All error-related files moved to `core/errors/`
+  - `tools/exceptions.py` → `core/errors/exceptions.py`
+  - `tools/error_handler.py` → `core/errors/error_handler.py`
+  - `core/error_models.py` → `core/errors/models.py`
+- **Services created**: External service integrations moved to `services/`
+  - `core/llm_connection.py` → `services/llm_connection.py`
+  - `core/pii_protection.py` → `services/pii_protection.py`
+  - `utils/azure_embeddings.py` → `services/azure_embeddings.py`
+- **Classifiers organized**: Intent classification modules moved to `classifiers/`
+  - `agents/intent_classifier.py` → `classifiers/intent_classifier.py`
+  - `agents/keyword_classifier.py` → `classifiers/keyword_classifier.py`
+  - `agents/embedded_classifier.py` → `classifiers/embedded_classifier.py`
+  - `agents/intent_classifier_wrapper.py` → `classifiers/intent_classifier_wrapper.py`
+- **Utils expanded**: Utility functions organized in `utils/`
+  - `tools/retry.py` → `utils/retry.py`
+  - `agents/entity_extractor.py` → `utils/entity_extractor.py`
+- **Scripts folder**: Utility scripts moved to `scripts/`
+  - `agents/generate_intent_embeddings.py` → `scripts/generate_intent_embeddings.py`
+
+### LLM Integration
+- **Gemini Integration**: Intent and response agents now use Google Gemini instead of OpenAI
+- **Mock Mode**: Configurable via `USE_MOCK_LLM` environment variable
+- **Markdown Handling**: Intent agent strips markdown code blocks from Gemini responses
+
+### Logging Improvements
+- **State Snapshots**: All nodes now log complete state snapshots after successful execution
+- **Exception Logging**: Standardized exception logging across all nodes
+- **SQLite WAL Mode**: Enabled Write-Ahead Logging for better concurrency
+- **Test Database Isolation**: Separate test database (`data/telemetry_test.db`) for unit tests
+
+### Import Path Updates
+All imports have been updated to reflect the new structure:
+```python
+# Old imports (deprecated)
+from core.config import settings
+from tools.exceptions import AgentError
+from agents.intent_classifier import classify_intent
+
+# New imports (current)
+from config.config import settings
+from core.errors.exceptions import AgentError
+from classifiers.intent_classifier_wrapper import classify_intent_unified
+```
 
 ---
 

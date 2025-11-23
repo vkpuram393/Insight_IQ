@@ -160,7 +160,7 @@ async def _handle_empty_input(
         processing_time_ms=0.0
     )
     
-    return {
+    result_dict = {
         "text": "",  # CRITICAL: safety_precheck expects string
         "uuid": state["uuid"],
         "error": error.error_code.value,
@@ -170,6 +170,8 @@ async def _handle_empty_input(
             "original_text": ""
         }
     }
+    await log_state_snapshot(state, "orchestrator", result_dict)
+    return result_dict
 
 
 async def _handle_invalid_type(
@@ -285,7 +287,7 @@ async def _handle_normalization_error(
         error=to_dict(error)
     )
     
-    return {
+    result_dict = {
         "text": fallback_text,
         "uuid": state["uuid"],
         "error": error.error_code.value,
@@ -295,6 +297,8 @@ async def _handle_normalization_error(
             "original_text": fallback_text
         }
     }
+    await log_state_snapshot(state, "orchestrator", result_dict)
+    return result_dict
 
 
 # ============================================================================

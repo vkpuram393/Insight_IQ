@@ -84,16 +84,16 @@ echo -e "   Reload: ${GREEN}$RELOAD${NC}"
 echo -e "   Working Directory: ${GREEN}$SCRIPT_DIR${NC}"
 echo ""
 
-# Check if port is already in use
+# Kill any existing process on the port
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     echo -e "${YELLOW}⚠️  Port $PORT is already in use${NC}"
-    echo -e "${YELLOW}💡 To use a different port, set PORT environment variable:${NC}"
-    echo -e "${YELLOW}   PORT=8001 ./start_server.sh${NC}"
-    echo ""
-    read -p "Do you want to continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t)
+    if [ ! -z "$PID" ]; then
+        echo -e "${YELLOW}🔪 Killing existing process (PID: $PID) on port $PORT...${NC}"
+        kill -9 $PID 2>/dev/null || true
+        # Wait a moment for the port to be released
+        sleep 1
+        echo -e "${GREEN}✅ Process killed${NC}"
     fi
 fi
 

@@ -17,6 +17,7 @@ from nodes import (
     clarification_node,
     confidence_check_router,
     confidence_checker_node,
+    llm_judge_node,
     update_memory_node,
     cache_response_node,
     response_safety_pii_precheck_node,
@@ -59,6 +60,41 @@ def should_continue_after_cache(state: AgentState) -> str:
     # Cache not fully implemented - always go to intent_agent
     return "intent_agent"
 
+
+def route_after_response_postcheck(state: AgentState) -> str:
+    """
+    After response safety PII postcheck, decide next step
+    
+    ROUTING:
+        If intent_reclassified == True (coming from llm_judge): route to confidence_checker for re-evaluation
+        Otherwise (coming from response_agent): route to update_memory (normal response flow)
+    """
+    intent_reclassified = state.get("intent_reclassified", False)
+    
+    if intent_reclassified:
+        logger.info("🔄 Coming from LLM judge - routing to confidence_checker for re-evaluation")
+        return "confidence_checker"
+    else:
+        logger.info("✅ Normal response flow - routing to update_memory")
+        return "update_memory"
+
+def route_after_update_memory(state: AgentState) -> str:
+    """
+    After updating memory, decide next step
+    
+    ROUTING:
+        If this is a clarification response → END (skip cache, not useful)
+        If this is a normal response → cache_response (cache the final answer)
+    """
+    # Check if this is a clarification (has needs_clarification flag)
+    if state.get("needs_clarification", False):
+        logger.info("📝 Clarification response - skipping cache, going to END")
+        return END
+    
+    # Normal response - cache it
+    logger.info("💾 Normal response - caching before END")
+    return "cache_response"
+
 # Workflow builder -----------------------------------------------------------
 
 def _build_workflow() -> StateGraph:
@@ -99,10 +135,12 @@ def _build_workflow() -> StateGraph:
     # Add all nodes
     workflow.add_node("orchestrator", orchestrator_node)
     workflow.add_node("safety_precheck", safety_precheck_node)
+    workflow.add_node("safety_precheck_for_llm", response_safety_pii_precheck_node)  # PII-only masking for LLM judge path
     workflow.add_node("check_cache", check_cache_node)
     workflow.add_node("cache_response", cache_response_node)
     workflow.add_node("intent_agent", intent_agent_node)
     workflow.add_node("confidence_checker", confidence_checker_node)
+    workflow.add_node("llm_judge", llm_judge_node)
     workflow.add_node("build_context", build_context_node)
     workflow.add_node("response_safety_pii_precheck", response_safety_pii_precheck_node)
     workflow.add_node("response_agent", response_agent_node)
@@ -131,34 +169,60 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Three-way routing
-    # - clarification: Missing required entities
-    # - build_context: Simple query → API call
-    # - response_agent: Complex query → Direct LLM (skip API)
+    # Confidence Checker → Routing (updated to include llm_judge)
+    # - llm_judge: Low confidence/complex AND intent_reclassified == False
+    # - clarification: Missing entities OR low confidence after LLM judge
+    # - build_context: High confidence + has entities
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
+            "llm_judge": "safety_precheck_for_llm",  # Route through PII masking before llm_judge
             "clarification": "clarification",
-            "build_context": "build_context",
-            "response_agent": "response_safety_pii_precheck"  # Complex queries skip API, go straight to LLM
+            "build_context": "build_context"
         }
     )
     
-    # Clarification → END (immediate return to user)
-    workflow.add_edge("clarification", END)
+    # Safety Precheck (for LLM Judge) → LLM Judge (PII-only masking, always continues)
+    workflow.add_edge("safety_precheck_for_llm", "llm_judge")
+    
+    # LLM Judge → Response Safety PII Postcheck → Confidence Checker (unmask PII before re-evaluation)
+    workflow.add_edge("llm_judge", "response_safety_pii_postcheck")
+    
+    # Clarification → Update Memory → END (template-based, no LLM call, skip cache)
+    workflow.add_edge("clarification", "update_memory")
     
     # Build Context → Call Claims Tool
     workflow.add_edge("build_context", "call_claims_tool")
-    
-    workflow.add_edge("clarification", "update_memory")
     
     # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
     workflow.add_edge("response_safety_pii_precheck", "response_agent")
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
-    workflow.add_edge("response_safety_pii_postcheck", "update_memory")
-    workflow.add_edge("update_memory", "cache_response")
+    
+    # Response Safety PII Postcheck → Conditional routing
+    # - If coming from llm_judge: route to confidence_checker (for re-evaluation)
+    # - If coming from response_agent: route to update_memory (normal response flow)
+    workflow.add_conditional_edges(
+        "response_safety_pii_postcheck",
+        route_after_response_postcheck,
+        {
+            "confidence_checker": "confidence_checker",
+            "update_memory": "update_memory"
+        }
+    )
+    
+    # Update Memory → Conditional routing (clarification skips cache, normal responses cache)
+    workflow.add_conditional_edges(
+        "update_memory",
+        route_after_update_memory,
+        {
+            "cache_response": "cache_response",
+            END: END
+        }
+    )
+    
+    # Cache Response → END
     workflow.add_edge("cache_response", END)
     
     return workflow

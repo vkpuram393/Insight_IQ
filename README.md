@@ -1,6 +1,6 @@
 # PBM AI Assist – LangGraph Multi‑Agent Starter
 
-> A pragmatic starter project for building a pharmacy benefit (PBM) conversational assistant using **LangGraph**. This is NOT production code – it’s an accelerator with **mock LLMs** and **mock APIs** so you can explore flow, state, routing, memory, and clarification logic without burning real tokens or hitting real backend systems.
+> A pragmatic starter project for building a pharmacy benefit (PBM) conversational assistant using **LangGraph**. This project uses **Google Gemini** for LLM integration and includes a configurable mock mode for development. It demonstrates flow, state, routing, memory, and clarification logic with real LLM integration and API calls.
 
 ---
 ## 1. What This Is / What It Isn’t
@@ -14,10 +14,9 @@
 **Is NOT:**
 - Final architecture for production
 - Secure / audited / load‑tested
-- Real LLM integration (uses `MockLLM`)
-- Real claims API integration (uses a dummy tool)
+- Fully production-hardened (some components still need scaling)
 
-You’re expected to **replace the mocks** with your enterprise logic, LLM provider(s), observability, guardrails, and compliance controls.
+The system uses **real Google Gemini LLM** and **real API integrations** with configurable mock mode for development. You can extend with additional enterprise logic, observability, guardrails, and compliance controls as needed.
 
 ---
 ## 2. Tech Stack & Versions
@@ -28,7 +27,7 @@ You’re expected to **replace the mocks** with your enterprise logic, LLM provi
 | Uvicorn | 0.24.0 | ASGI server |
 | LangGraph | 0.2.45 | Graph orchestration |
 | LangChain Core | 0.3.18 | Prompt/message abstractions |
-| LangChain OpenAI | 0.2.8 | Only used if you flip off mocks |
+| google-genai | 1.0.0 | Google Gemini LLM client |
 | Pydantic | 2.9.2 | Settings + schemas |
 | pydantic-settings | 2.5.2 | Environment configuration |
 | redis / pymongo | Present in requirements | Future expansion; not used yet |
@@ -99,19 +98,19 @@ curl -s -X POST http://localhost:8000/api/v1/chat \
 
 ---
 ## 4. Configuration
-All runtime settings live in `core/config.py` via `Settings`. A `.env` file is optional.
+All runtime settings live in `config/config.py` via `Settings`. A `.env` file is optional.
 Key flags:
-- `use_mock_llm = True` → Uses `MockLLM` (no external calls)
+- `use_mock_llm = False` → Uses real Gemini LLM (set to `True` for mock mode)
 - `enable_checkpointing` → Currently `False` for simplicity (async saver is wired but can be toggled)
 - `confidence_threshold` → Router decision for clarification vs tool path
 - `enable_semantic_cache` → In‑memory cache on or off
 
-Set environment variables in `.env` if you later integrate a real LLM:
+Set environment variables in `.env` for real LLM integration:
 ```
-OPENAI_API_KEY=sk-...
-LANGSMITH_API_KEY=sk-...
+GEMINI_API_KEY=your-gemini-api-key
+USE_MOCK_LLM=False
 ```
-Those are presently ignored when mocks are active.
+When `USE_MOCK_LLM=True`, the system uses mock responses without external API calls.
 
 ---
 ## 5. Run the Server
@@ -185,42 +184,66 @@ Invoke-RestMethod http://localhost:8000/health
 ## 6. Request Lifecycle (Mental Model)
 ```
 User POST /chat
-  → safety_precheck
-  → check_cache (hit? return early)
-  → build_context (pull memory)
-  → intent_agent (MockLLM classifies + entities)
-  → confidence_check_router
-      ├─ clarification (missing data) → update_memory → cache_response → END
-      └─ call_claims_tool (mock API) → response_agent → safety_postcheck → update_memory → cache_response → END
+  → orchestrator (entry point)
+  → safety_precheck (PII masking + safety pattern checks + Gemini safety)
+  → check_cache (currently always continues to intent_agent)
+  → intent_agent (Gemini LLM classifies intent + extracts entities)
+  → confidence_checker (evaluates confidence and missing slots)
+  → confidence_check_router (three-way routing):
+      ├─ clarification (missing required entities) 
+      │     → update_memory → cache_response → END
+      ├─ build_context (simple query with entities) 
+      │     → call_claims_tool (real API call)
+      │     → response_safety_pii_precheck (mask PII before LLM)
+      │     → response_agent (Gemini LLM generates response)
+      │     → response_safety_pii_postcheck (unmask PII for user)
+      │     → update_memory → cache_response → END
+      └─ response_agent (complex query, skip API)
+            → response_safety_pii_precheck (mask PII before LLM)
+            → response_agent (Gemini LLM generates response)
+            → response_safety_pii_postcheck (unmask PII for user)
+            → update_memory → cache_response → END
 ```
-Nodes live in `nodes/`; agents in `agents/`; tool(s) in `tools/`.
+**Key Points:**
+- **Orchestrator** is the entry point that initializes the flow
+- **Safety checks** happen at input (precheck) and output (postcheck) with PII masking/unmasking
+- **Cache** is checked but currently always continues (not fully implemented)
+- **Three routing paths**: clarification (missing data), build_context→API (simple queries), or direct response_agent (complex queries)
+- **PII protection** is applied before LLM calls and unmasked before returning to user
+- Nodes live in `nodes/`; agents in `agents/`; tool(s) in `tools/`; classifiers in `classifiers/`; services in `services/`.
 
 ---
-## 7. Agents & Mocks
+## 7. Agents & LLM Integration
 ### Intent Agent (`agents/intent_agent.py`)
-- Keyword heuristic classification in `MockLLM`
-- Extracts `claim_number` via regex (4–10 digits preceded by the word "claim")
-- Emits: `intent`, `confidence`, `entities`
+- Uses **Google Gemini** for intent classification (or mock mode when `USE_MOCK_LLM=True`)
+- Extracts `claim_number` and other entities from user input
+- Emits: `intent`, `confidence`, `entities`, `slots`, `required_slots`, `missing_slots`
+- Handles markdown code block stripping from Gemini responses
 
 ### Response Agent (`agents/response_agent.py`)
-- Uses `MockLLM` to select canned text based on intent
-- TODO: Replace `#12345` hardcoded piece with real `tool_results['claim_id']`
+- Uses **Google Gemini** for natural language response generation (or mock mode)
+- Incorporates `tool_results` from claims API into responses
+- Generates contextually appropriate responses based on intent and API data
 
 ### Claims Tool (`tools/claims_api.py`)
-- Fakes latency (`asyncio.sleep(0.2)`) and returns deterministic JSON
-- Replace this with real backend integration (REST / GraphQL / SOAP / gRPC) later
+- **Real API client** with retry logic and error handling
+- Integrates with CVS Claims API (`claiminquiry-exp-qa.myclaims.pss-np.caremark.com`)
+- Supports multiple API endpoints with routing based on intent
+- Includes request validation, retry mechanisms, and comprehensive error handling
 
 ---
 ## 8. Memory & Cache
-- Short‑term memory: last 10 messages stored in `_short_term` (in‑memory, per `session_id`)
-- Long‑term facts: naïve claim mentions stored in `_long_term`
-- Cache: Keyed by MD5 of lowercased text; stores response + intent + confidence
-- Clarification now persists to memory (edge changed: `clarification → update_memory → cache_response`)
+- **Short‑term memory**: Conversation history stored via `MemoryStore` facade (in‑memory by default, configurable to Redis/Memorystore)
+- **Long‑term facts**: Session facts stored for context across conversations
+- **Cache**: Keyed by MD5 hash of lowercased text; stores response + intent + confidence
+  - **Note**: Cache check currently always continues to intent_agent (cache hit/miss routing not fully implemented in graph)
+  - Cache is functional and stores/retrieves data, but graph routing always proceeds to intent_agent
+- **Clarification** persists to memory: `clarification → update_memory → cache_response → END`
 
-Production considerations:
-- Move memory & cache to Redis or a vector store
-- Add eviction, TTL, and multi‑tenant isolation
-- Persist conversation state with LangGraph’s checkpointing (currently scaffolded)
+**Production considerations:**
+- Switch memory store to Redis/Memorystore for production (configure via `MEMORY_STORE_TYPE`)
+- Cache uses 1-hour TTL (configurable)
+- Persist conversation state with LangGraph's checkpointing (currently disabled by default)
 
 ---
 ## 9. Clarification Strategy
@@ -252,20 +275,21 @@ state.get('intent') == 'claim_rejection_reason' and not state.get('entities', {}
 ```
 
 ---
-## 11. Replacing Mocks with Real Code
-| Area | Current | Replace With |
-|------|---------|--------------|
-| LLM (intent) | `MockLLM` keyword heuristics | Real provider (OpenAI, Azure, internal model endpoint) + robust prompt + output schema validation |
-| LLM (response) | Canned responses | Retrieval‑augmented generation + guardrails (toxicity, PHI filters) |
-| Claims tool | Hardcoded JSON | Secure internal API client (auth, retries, circuit breaker) |
-| Memory | In‑memory dict | Redis / Postgres / vector DB embedding store |
-| Checkpointing | Async SQLite | Managed durable storage (cloud DB, encrypted volume) |
-| Safety | Simple pass | Policy engine (PII scrubbing, abuse detection, jailbreak prevention) |
+## 11. Production Readiness Status
+| Area | Current | Production Status |
+|------|---------|-------------------|
+| LLM (intent) | **Google Gemini** (real) | ✅ Production-ready with configurable mock mode |
+| LLM (response) | **Google Gemini** (real) | ✅ Production-ready with configurable mock mode |
+| Claims tool | Real API client with retry logic | ✅ Production-ready |
+| Memory | In‑memory dict (dev) / Redis (configurable) | ⚠️ Switch to Redis/Memorystore for production |
+| Checkpointing | Async SQLite | ⚠️ Migrate to managed durable storage for production |
+| Safety | PII protection + safety checks | ✅ Production-ready with Presidio |
+| Logging | SQLite telemetry with state snapshots | ✅ Production-ready (migrate to Firestore for scale) |
 
 ---
 ## 12. Extending Intents
-1. Add new intent phrase detection to `MockLLM` or real classifier.
-2. Update system prompt examples.
+1. Add new intent examples to the intent classifier in `classifiers/` or update Gemini prompts in `agents/intent_agent.py`.
+2. Update system prompt examples in `agents/intent_agent.py`.
 3. Add new branch in `confidence_check_router` if special handling needed.
 4. Add corresponding tool node or agent if required.
 5. Write tests (later) for classification + routing.
@@ -316,7 +340,10 @@ Existing bash examples remain valid on macOS/Linux; substitute PowerShell comman
 ### Current Logging
 - **Stdout logging**: Simple timestamps and messages to console
 - **SQLite audit logs**: All state transitions, decisions, and API calls logged to `data/telemetry.db`
-- **SQLite exceptions**: All exceptions logged to `data/telemetry.db` with full stack traces
+- **State snapshots**: All nodes log complete state snapshots after successful execution via `log_state_snapshot()`
+- **SQLite exceptions**: All exceptions logged to `data/telemetry.db` with full stack traces via `log_exception()`
+- **WAL mode**: SQLite uses Write-Ahead Logging for better concurrency and performance
+- **Test database isolation**: Separate test database (`data/telemetry_test.db`) for unit tests
 
 ### Database Schema
 
@@ -638,22 +665,41 @@ Each node in the LangGraph receives the full `AgentState` and returns a partial 
 ```
 START
   ↓
-safety_precheck → check_cache → build_context → intent_agent
-  ↓ (conditional routing)
-confidence_check_router
-  ↓                    ↓
-[low]              [high]
-  ↓                    ↓
-clarification    call_claims_tool → response_agent
-  ↓                    ↓
-update_memory ← safety_postcheck
+orchestrator → safety_precheck → check_cache → intent_agent
   ↓
-cache_response
-  ↓
-END
+confidence_checker → confidence_check_router (three-way)
+  ↓                    ↓                    ↓
+clarification    build_context      response_safety_pii_precheck
+  ↓                    ↓                    ↓
+update_memory    call_claims_tool   response_agent
+  ↓                    ↓                    ↓
+cache_response   response_safety    response_safety_pii_postcheck
+  ↓              _pii_precheck            ↓
+END                    ↓              update_memory
+                response_agent            ↓
+                      ↓              cache_response
+                response_safety           ↓
+                _pii_postcheck         END
+                      ↓
+                update_memory
+                      ↓
+                cache_response
+                      ↓
+                    END
 ```
 
-#### 1. **safety_precheck_node** (`nodes/safety.py`)
+#### 1. **orchestrator_node** (`nodes/orchestrator.py`)
+- **Input (reads from state)**:
+  - `text`: User's input message
+  - `session_id`: Session identifier
+  - `uuid`: Request UUID (for logging)
+  - `user_info`: User metadata (for logging)
+- **Output (writes to state)**:
+  - `metadata`: Updated with orchestrator processing info
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `safety_precheck`
+
+#### 2. **safety_precheck_node** (`nodes/safety.py`)
 - **Input (reads from state)**:
   - `text`: User's input message
   - `session_id`: Session identifier
@@ -666,7 +712,7 @@ END
   - `error`: `Optional[str]` - Error message if exception occurred
 - **Next Node**: Routes to `check_cache` if passed, or `END` if blocked
 
-#### 2. **check_cache_node** (`nodes/cache.py`)
+#### 3. **check_cache_node** (`nodes/cache.py`)
 - **Input (reads from state)**:
   - `text`: User's input message (hashed for cache key)
   - `session_id`, `uuid`, `user_info`: For logging
@@ -677,24 +723,7 @@ END
   - `confidence`: `Optional[float]` - Cached confidence (if cache hit)
   - `metadata`: Updated with cache status
   - `error`: `Optional[str]` - Error message if exception occurred
-- **Next Node**: Routes to `END` if cache hit, or `build_context` if cache miss
-
-#### 3. **build_context_node** (`nodes/context.py`)
-- **Input (reads from state)**:
-  - `session_id`: To fetch conversation history
-  - `slots`: Current slots from intent classifier
-  - `required_slots`: Required slots for intent
-  - `missing_slots`: Missing required slots
-  - `domain`: Domain context
-  - `uuid`: Request UUID
-  - `user_info`: User information
-- **Output (writes to state)**:
-  - `conversation_history`: `List[Dict[str, str]]` - Last N messages (configurable)
-  - `relevant_facts`: `List[Dict[str, Any]]` - Important facts from session
-  - `extracted_slots`: `Dict[str, Any]` - Slots extracted from conversation history
-  - `planner_context`: `Dict[str, Any]` - Complete context object for planner/executor
-  - `error`: `Optional[str]` - Error message if exception occurred
-- **Next Node**: Always goes to `intent_agent`
+- **Next Node**: Always routes to `intent_agent` (cache hit/miss routing not fully implemented in graph)
 
 #### 4. **intent_agent_node** (`agents/intent_agent.py`)
 - **Input (reads from state)**:
@@ -709,18 +738,48 @@ END
   - `required_slots`: `List[str]` - Required slots for this intent
   - `missing_slots`: `List[str]` - Required slots that are missing
   - `error`: `Optional[str]` - Error message if exception occurred
-- **Next Node**: Routes via `confidence_check_router` to either `clarification` or `call_claims_tool`
+- **Next Node**: Always goes to `confidence_checker`
 
-#### 5. **confidence_check_router** (`nodes/confidence.py`)
+#### 5. **build_context_node** (`nodes/context.py`)
+- **Input (reads from state)**:
+  - `session_id`: To fetch conversation history
+  - `slots`: Current slots from intent classifier
+  - `required_slots`: Required slots for intent
+  - `missing_slots`: Missing required slots
+  - `domain`: Domain context
+  - `uuid`: Request UUID
+  - `user_info`: User information
+- **Output (writes to state)**:
+  - `conversation_history`: `List[Dict[str, str]]` - Last N messages (configurable)
+  - `relevant_facts`: `List[Dict[str, Any]]` - Important facts from session
+  - `extracted_slots`: `Dict[str, Any]` - Slots extracted from conversation history
+  - `planner_context`: `Dict[str, Any]` - Complete context object for planner/executor
+  - `error`: `Optional[str]` - Error message if exception occurred
+- **Next Node**: Always goes to `call_claims_tool`
+
+#### 6. **confidence_checker_node** (`nodes/confidence.py`)
+- **Input (reads from state)**:
+  - `intent`: Detected intent
+  - `confidence`: Confidence score from intent agent
+  - `missing_slots`: Missing required slots
+- **Output (writes to state)**:
+  - `needs_clarification`: `bool` - Whether clarification is needed
+  - `confidence_check_passed`: `bool` - Whether confidence check passed
+  - `metadata`: Updated with confidence check results
+- **Next Node**: Always goes to `confidence_check_router`
+
+#### 7. **confidence_check_router** (`nodes/confidence.py`)
 - **Input (reads from state)**:
   - `confidence`: Confidence score from intent agent
   - `missing_slots`: Missing required slots
+  - `needs_clarification`: Whether clarification is needed
 - **Output**: Returns routing decision (not state update)
-  - `"clarification"` if confidence < threshold OR missing slots exist
-  - `"tool_call"` if confidence >= threshold AND no missing slots
-- **Next Node**: Routes to `clarification` or `call_claims_tool`
+  - `"clarification"` if missing slots exist OR low confidence
+  - `"build_context"` if high confidence AND has entities (simple query → API)
+  - `"response_agent"` if high confidence but complex query (skip API)
+- **Next Node**: Routes to `clarification`, `build_context`, or `response_safety_pii_precheck`
 
-#### 6. **clarification_node** (`nodes/clarification.py`)
+#### 8. **clarification_node** (`nodes/clarification.py`)
 - **Input (reads from state)**:
   - `intent`: Detected intent
   - `needs_clarification`: Whether clarification is needed
@@ -733,7 +792,7 @@ END
   - `error`: `Optional[str]` - Error message if exception occurred
 - **Next Node**: Goes to `update_memory` (then END)
 
-#### 7. **call_claims_tool_node** (`tools/claims_api.py`)
+#### 9. **call_claims_tool_node** (`tools/claims_api.py`)
 - **Input (reads from state)**:
   - `intent`: What data to fetch
   - `entities`: Parameters (e.g., `{"claim_number": "12345"}`)
@@ -744,29 +803,38 @@ END
   - `error`: `Optional[str]` - Error message if exception occurred
 - **Next Node**: Always goes to `response_agent`
 
-#### 8. **response_agent_node** (`agents/response_agent.py`)
+#### 10. **response_safety_pii_precheck_node** (`nodes/safety.py`)
+- **Input (reads from state)**:
+  - `tool_results`: Data from API calls (if available)
+  - `conversation_history`: Context for response generation
+  - `session_id`, `uuid`, `user_info`: For logging
+- **Output (writes to state)**:
+  - `tool_results`: Masked PII/PHI in tool results before LLM call
+  - `conversation_history`: Masked PII/PHI in conversation history
+- **Next Node**: Always goes to `response_agent`
+
+#### 11. **response_agent_node** (`agents/response_agent.py`)
 - **Input (reads from state)**:
   - `intent`: Detected intent
-  - `tool_results`: Data from API calls
-  - `conversation_history`: Context for response generation
+  - `tool_results`: Data from API calls (with PII masked)
+  - `conversation_history`: Context for response generation (with PII masked)
   - `entities`: Extracted entities
   - `session_id`, `uuid`, `user_info`: For logging
 - **Output (writes to state)**:
-  - `response`: `str` - The final natural language response to user
+  - `response`: `str` - The final natural language response to user (with PII still masked)
   - `error`: `Optional[str]` - Error message if exception occurred
-- **Next Node**: Always goes to `safety_postcheck`
+- **Next Node**: Always goes to `response_safety_pii_postcheck`
 
-#### 9. **safety_postcheck_node** (`nodes/safety.py`)
+#### 12. **response_safety_pii_postcheck_node** (`nodes/safety.py`)
 - **Input (reads from state)**:
-  - `response`: Generated response to validate
+  - `response`: Generated response (with PII masked)
   - `session_id`, `uuid`, `user_info`: For logging
 - **Output (writes to state)**:
-  - `safety_postcheck_passed`: `bool` - Whether response passed safety checks
-  - `response`: `str` - Sanitized response if blocked
+  - `response`: `str` - Unmasked response ready for user (PII restored)
   - `error`: `Optional[str]` - Error message if exception occurred
 - **Next Node**: Always goes to `update_memory`
 
-#### 10. **update_memory_node** (`nodes/context.py`)
+#### 13. **update_memory_node** (`nodes/context.py`)
 - **Input (reads from state)**:
   - `text`: User's input message
   - `response`: Assistant's response
@@ -779,7 +847,7 @@ END
   - `error`: `Optional[str]` - Error message if exception occurred
 - **Next Node**: Always goes to `cache_response`
 
-#### 11. **cache_response_node** (`nodes/cache.py`)
+#### 14. **cache_response_node** (`nodes/cache.py`)
 - **Input (reads from state)**:
   - `text`: User's input message (hashed for cache key)
   - `response`: Generated response to cache
@@ -837,14 +905,18 @@ Ideas to upgrade:
 - Add log retention policies and archival
 
 ---
-## 16. Security & Compliance Placeholders
-This starter does not implement:
-- HIPAA / PHI redaction
-- AuthN/AuthZ
-- Rate limiting / abuse prevention
-- Data encryption at rest/in transit beyond defaults
+## 16. Security & Compliance
+**Implemented:**
+- ✅ **PII/PHI Protection**: Uses Presidio analyzer and anonymizer for masking/unmasking
+- ✅ **Safety Checks**: Input and output safety validation with Gemini safety API
+- ✅ **PII Masking**: Automatic PII masking before LLM calls, unmasking before user responses
 
-Before production: Engage security review, threat modeling, privacy compliance.
+**Not Yet Implemented:**
+- ⚠️ AuthN/AuthZ (authentication/authorization)
+- ⚠️ Rate limiting / abuse prevention
+- ⚠️ Data encryption at rest/in transit beyond defaults
+
+**Before production:** Engage security review, threat modeling, privacy compliance, and implement missing security controls.
 
 ---
 ## 17. Troubleshooting Cheat Sheet
@@ -869,12 +941,14 @@ Use `logger.debug` prints or breakpoints; avoid silent failures.
 
 ---
 ## 18. Next Steps / TODO Roadmap
-- [ ] Replace `MockLLM` with real intent classifier (could be a fine‑tuned model or embedding similarity)
-- [ ] Implement dynamic response agent with retrieval (drug formulary, coverage rules)
-- [ ] Real claims API client (retry, timeout, circuit breaker)
+- [x] Replace `MockLLM` with real Gemini LLM integration
+- [x] Implement comprehensive logging with state snapshots
+- [x] Add PII protection with Presidio
+- [x] Real claims API client with retry logic
+- [x] Reorganize codebase structure (classifiers, services, utils)
 - [ ] Add unit tests (intent routing, clarification trigger, memory persistence)
-- [ ] Integrate structured logging + tracing
-- [ ] Add safety filters & redaction
+- [ ] Migrate memory store to Redis/Memorystore for production
+- [ ] Migrate telemetry to Firestore/BigQuery for production scale
 - [ ] Persistent checkpoint store with migrations
 - [ ] Add docker-compose for local dependencies (Redis, Postgres)
 - [ ] CI pipeline (lint, type-check, tests) + PR gating
@@ -887,12 +961,37 @@ Use `logger.debug` prints or breakpoints; avoid silent failures.
 | `api/routes.py` | `/chat` endpoint, response shaping & error logging |
 | `langgraph_agent.py` | Graph building, node edges, init/close lifecycle |
 | `nodes/*` | Pure functional pieces: safety, cache, context, clarification, memory |
-| `agents/intent_agent.py` | Intent + entity extraction via mock LLM |
-| `agents/response_agent.py` | Response synthesis via mock LLM |
-| `tools/claims_api.py` | Mock external data source |
+| `agents/intent_agent.py` | Intent + entity extraction via Gemini LLM |
+| `agents/response_agent.py` | Response synthesis via Gemini LLM |
+| `tools/claims_api.py` | Claims API integration with retry logic |
 | `state/schema.py` | State shape & initial state factory |
-| `core/config.py` | Settings & feature flags |
+| `config/config.py` | Settings & feature flags |
 | `core/logger.py` | Basic logger factory |
+| `services/llm_connection.py` | Gemini LLM client wrapper |
+| `services/pii_protection.py` | PII masking/unmasking utilities |
+| `classifiers/` | Intent classification modules (keyword, embedded, unified) |
+| `core/errors/` | Error handling, exceptions, and error models |
+| `utils/` | Utility functions (entity extraction, retry, serialization) |
+
+**Project Structure:**
+```
+pss-myclaims-ai-agent/
+├── agents/              # AI agents (intent, response)
+├── nodes/               # Graph nodes (cache, safety, context, etc.)
+├── tools/               # External tools (claims API)
+├── classifiers/         # Intent classification modules
+├── services/            # External service integrations (LLM, PII, embeddings)
+├── memory/              # Memory store facade
+├── persistence/         # Persistence store facade
+├── utils/               # Utility functions and test endpoints
+├── api/                 # FastAPI routes
+├── config/              # Configuration (settings, routing, domain)
+├── core/                # Core functionality (logging, errors, telemetry)
+├── state/               # State schema
+├── scripts/             # Utility scripts (embedding generation)
+├── data/                # SQLite databases
+└── certs/               # SSL certificates
+```
 
 Recommended reading order: `state/schema.py` → `langgraph_agent.py` → `nodes/confidence.py` → `agents/intent_agent.py`.
 

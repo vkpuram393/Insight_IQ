@@ -2,7 +2,9 @@
 Clarification Node - Ask questions when unsure
 """
 
+import json
 import traceback
+from pathlib import Path
 from typing import Dict, Any
 from state.schema import AgentState
 from config.config import settings
@@ -12,6 +14,22 @@ from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 
 logger = get_logger(__name__)
+
+def _load_config() -> Dict[str, Any]:
+    """Load domain config from JSON file"""
+    config_path = Path(__file__).parent.parent / "config" / "domain_config.json"
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
+        # Return defaults
+        return {
+            "clarification_messages": {
+                "low_confidence": "I'm not quite sure what you're asking. Could you rephrase your question?",
+                "missing_entity_template": "Could you provide your {missing_entity}?"
+            }
+        }
 
 async def clarification_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -31,24 +49,35 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
     try:
         logger.info("❓ Node: Clarification")
 
-        intent = state.get("intent", "unknown")
-
-        # Predefined questions for each intent
-        questions = {
-            "claim_status": "Could you provide your claim number?",
-            "claim_rejection_reason": "Which claim are you asking about?",
-            "unknown": "I'm not sure I understand. Are you asking about a claim?"
-        }
-
-        question = questions.get(intent, questions["unknown"])
-
-        logger.info(f"❓ Generated: {question}")
+        # Load config for clarification templates
+        config = _load_config()
+        clarification_messages = config.get("clarification_messages", {})
+        
+        # Get state values
+        missing_slots = state.get("missing_slots", [])
+        metadata = state.get("metadata", {})
+        clarification_reason = metadata.get("clarification_reason", "low_confidence")
+        
+        # Generate clarification question based on reason
+        if clarification_reason == "missing_entity" and missing_slots:
+            # Use template for missing entity
+            template = clarification_messages.get("missing_entity_template", "Could you provide your {missing_entity}?")
+            missing_slot_name = missing_slots[0].replace("_", " ")
+            clarifying_question = template.format(missing_entity=missing_slot_name)
+            logger.info(f"❓ Generated (missing entity): {clarifying_question}")
+        else:
+            # Use low confidence template
+            clarifying_question = clarification_messages.get("low_confidence", "I'm not quite sure what you're asking. Could you rephrase your question?")
+            logger.info(f"❓ Generated (low confidence): {clarifying_question}")
 
         result = {
             "needs_clarification": True,
-            "clarifying_question": question,
-            "response": question,
-            "metadata": {**state.get("metadata", {}), "clarification": True}
+            "clarifying_question": clarifying_question,
+            "response": clarifying_question,
+            "metadata": {
+                **state.get("metadata", {}),
+                "clarification": True
+            }
         }
         await log_state_snapshot(state, node_name, result)
         return result
@@ -79,7 +108,7 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in clarification: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "needs_clarification": True,
             "clarifying_question": error.user_message,
@@ -91,3 +120,5 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
                 "clarification": True
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
