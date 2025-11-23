@@ -7,12 +7,15 @@ import sys
 import os
 from typing import Dict, List
 
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 from classifiers.keyword_classifier import get_cvs_intent_classifier
 from classifiers.embedded_classifier import CVSIntentEmbedded
-from test_use_cases import TEST_CASES
+from tests.test_use_cases import TEST_CASES
 
 print("=" * 120)
 print("🔬 CLASSIFIER COMPARISON: Keywords vs Embeddings")
