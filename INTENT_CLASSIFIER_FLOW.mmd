@@ -15,7 +15,7 @@ flowchart TD
     
     IntentMatch --> ConfScore[Confidence Score<br/>cosine_similarity score<br/>0.0 to 1.0]
     
-    ConfScore --> RegexEntity[Regex Entity Extraction<br/>Patterns:<br/>• CLM\d+ or \d{15} → claim_id<br/>• MEM\d+ → member_id<br/>• RX\d+ → prescription_id<br/>• Dates, Amounts]
+    ConfScore --> RegexEntity[Regex Entity Extraction<br/>Patterns:<br/>• CLM12345 or 253152732536005 → claim_id<br/>• MEM12345 → member_id<br/>• RX12345 → prescription_id<br/>• Dates, Amounts]
     
     RegexEntity --> ComplexCheck[Complexity Detection<br/>Keywords:<br/>• all, total, summarize<br/>• compare, versus<br/>• between, since, until<br/>• and, both, each]
     
