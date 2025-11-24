@@ -499,7 +499,7 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         logger.error(f"🚨 Exception in response agent: {e}\n{tb}")
         
         # Return graceful error state (pattern from agents/intent_agent.py)
-        return {
+        result = {
             "error": error.user_message,
             "response": error.user_message,
             "metadata": {
@@ -508,6 +508,8 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 
 # ============================================================================

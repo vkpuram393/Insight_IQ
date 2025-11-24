@@ -213,7 +213,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in context building: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "conversation_history": [],
             "relevant_facts": [],
@@ -225,6 +225,8 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 async def update_memory_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -303,7 +305,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in memory update: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "conversation_history": state.get("conversation_history", []),
             "relevant_facts": state.get("relevant_facts", []),
@@ -314,3 +316,5 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
                 "memory_updated": False
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result

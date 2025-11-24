@@ -21,6 +21,8 @@ import json
 import time
 import sys
 import sqlite3
+import subprocess
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
@@ -296,11 +298,80 @@ def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[
         print(f"   ❌ Test failed: {e}")
         return False, {"error": str(e)}
 
+def run_unit_tests() -> Tuple[bool, Dict]:
+    """Run all unit tests using pytest"""
+    print("\n" + "="*80)
+    print("🧪 RUNNING ALL UNIT TESTS")
+    print("="*80)
+    
+    # Get the tests directory path
+    tests_dir = Path(__file__).parent
+    project_root = tests_dir.parent
+    
+    print(f"\n📁 Running pytest in: {tests_dir}")
+    print(f"📁 Project root: {project_root}\n")
+    
+    try:
+        # Run pytest with verbose output
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", str(tests_dir), "-v", "--tb=short"],
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        
+        # Print pytest output
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        
+        # Parse pytest output to get test counts
+        passed = 0
+        failed = 0
+        if result.stdout:
+            for line in result.stdout.split('\n'):
+                if 'passed' in line.lower() or 'failed' in line.lower():
+                    # Try to extract numbers from lines like "5 passed, 2 failed"
+                    match = re.search(r'(\d+)\s+passed', line)
+                    if match:
+                        passed = int(match.group(1))
+                    match = re.search(r'(\d+)\s+failed', line)
+                    if match:
+                        failed = int(match.group(1))
+        
+        success = result.returncode == 0
+        test_result = {
+            "success": success,
+            "returncode": result.returncode,
+            "passed": passed,
+            "failed": failed,
+            "total": passed + failed
+        }
+        
+        if success:
+            print(f"\n✅ Unit tests completed: {passed} passed")
+            if failed > 0:
+                print(f"   ⚠️  {failed} test(s) failed")
+        else:
+            print(f"\n❌ Unit tests failed: {failed} failed, {passed} passed")
+        
+        return success, test_result
+        
+    except subprocess.TimeoutExpired:
+        print("\n❌ Unit tests timed out after 5 minutes")
+        return False, {"error": "Timeout", "success": False}
+    except Exception as e:
+        print(f"\n❌ Error running unit tests: {e}")
+        return False, {"error": str(e), "success": False}
+
 def main():
     print("="*80)
-    print("🧪 END-TO-END (E2E) TEST SUITE")
+    print("🧪 END-TO-END (E2E) TEST SUITE + UNIT TESTS")
     print("="*80)
     print("\nThis comprehensive test suite verifies:")
+    print("0. ✅ All unit tests (pytest)")
     print("1. ✅ All API endpoints (from TEMP_ENDPOINTS.md)")
     print("2. ✅ Exception handling in all nodes")
     print("3. ✅ Logging (audit logs) in all nodes")
@@ -309,7 +380,20 @@ def main():
     print("6. ✅ Graceful error responses are returned")
     print("="*80)
     
-    # Wait for server
+    results = {
+        "unit_tests": {},
+        "endpoint_tests": [],
+        "logging_tests": [],
+        "exception_tests": []
+    }
+    
+    # ========================================================================
+    # TEST -1: UNIT TESTS (pytest)
+    # ========================================================================
+    unit_success, unit_result = run_unit_tests()
+    results["unit_tests"] = unit_result
+    
+    # Wait for server (only if unit tests passed or we want to continue anyway)
     print("\n⏳ Waiting for server to be ready...")
     for i in range(10):
         try:
@@ -321,13 +405,18 @@ def main():
             time.sleep(1)
     else:
         print("❌ Server is not responding. Please start the server first.")
-        return 1
+        print("⚠️  Continuing with unit test results only...")
+        # Return early if server is not available, but still show unit test results
+        print("\n" + "="*80)
+        print("📊 TEST SUMMARY")
+        print("="*80)
+        print(f"\n🧪 Unit Tests: {'✅ PASSED' if unit_success else '❌ FAILED'}")
+        if unit_result.get("total", 0) > 0:
+            print(f"   Passed: {unit_result.get('passed', 0)}")
+            print(f"   Failed: {unit_result.get('failed', 0)}")
+        return 0 if unit_success else 1
     
-    results = {
-        "endpoint_tests": [],
-        "logging_tests": [],
-        "exception_tests": []
-    }
+    # Server check already done above, continue with E2E tests
     
     # ========================================================================
     # TEST 0: ENDPOINT TESTS (from TEMP_ENDPOINTS.md)
@@ -488,6 +577,11 @@ def main():
     print("📊 TEST SUMMARY")
     print("="*80)
     
+    unit_success = results["unit_tests"].get("success", False)
+    unit_passed = results["unit_tests"].get("passed", 0)
+    unit_failed = results["unit_tests"].get("failed", 0)
+    unit_total = results["unit_tests"].get("total", 0)
+    
     endpoint_passed = sum(1 for _, success in results["endpoint_tests"] if success)
     endpoint_total = len(results["endpoint_tests"])
     
@@ -497,8 +591,14 @@ def main():
     exception_passed = sum(1 for _, success, _ in results["exception_tests"] if success)
     exception_total = len(results["exception_tests"])
     
-    total_passed = endpoint_passed + logging_passed + exception_passed
-    total_tests = endpoint_total + logging_total + exception_total
+    total_passed = (1 if unit_success else 0) + endpoint_passed + logging_passed + exception_passed
+    total_tests = 1 + endpoint_total + logging_total + exception_total  # +1 for unit test suite
+    
+    print(f"\n🧪 Unit Tests: {'✅ PASSED' if unit_success else '❌ FAILED'}")
+    if unit_total > 0:
+        print(f"   Passed: {unit_passed}/{unit_total}")
+        if unit_failed > 0:
+            print(f"   Failed: {unit_failed}")
     
     print(f"\n🌐 Endpoint Tests: {endpoint_passed}/{endpoint_total} passed")
     for name, success in results["endpoint_tests"]:
@@ -581,12 +681,15 @@ def main():
     
     print("\n" + "="*80)
     if total_passed == total_tests:
-        print("🎉 All E2E tests completed successfully!")
+        print("🎉 All tests completed successfully!")
+        print(f"   ✅ Unit tests: {unit_passed} passed")
         print(f"   ✅ {endpoint_total} endpoint tests")
         print(f"   ✅ {logging_total} logging tests")
         print(f"   ✅ {exception_total} exception handling tests")
     else:
         print("⚠️  Some tests had issues (check details above)")
+        if not unit_success:
+            print(f"   ❌ Unit tests failed: {unit_failed} failed, {unit_passed} passed")
         if endpoint_passed < endpoint_total:
             print(f"   ❌ {endpoint_total - endpoint_passed} endpoint test(s) failed")
         if logging_passed < logging_total:

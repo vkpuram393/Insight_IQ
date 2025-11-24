@@ -216,7 +216,7 @@ async def intent_agent_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in intent agent: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "intent": "unknown",
             "confidence": 0.0,
@@ -227,3 +227,5 @@ async def intent_agent_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
+        await log_state_snapshot(state, node_name, result)
+        return result

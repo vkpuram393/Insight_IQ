@@ -7,10 +7,27 @@ Each worker (node/agent) fills in their section and passes it along.
 In LangGraph, state is THE CORE CONCEPT. Everything reads from and writes to state.
 """
 
-from typing import TypedDict, Optional, List, Dict, Any
+from typing import TypedDict, Optional, List, Dict, Any, Callable
 from typing_extensions import Annotated
 from langgraph.graph import add_messages
 from langchain_core.messages import BaseMessage
+
+def merge_metadata(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Reducer function to merge metadata dictionaries.
+    
+    Merges right into left, with right taking precedence for overlapping keys.
+    For nested dictionaries, performs deep merge.
+    """
+    result = left.copy()
+    for key, value in right.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Deep merge nested dictionaries
+            result[key] = merge_metadata(result[key], value)
+        else:
+            # Overwrite or add new key
+            result[key] = value
+    return result
 
 class AgentState(TypedDict):
     """
@@ -56,6 +73,7 @@ class AgentState(TypedDict):
     slots: Optional[Dict[str, Any]]              # API parameters (from intent classifier)
     required_slots: Optional[List[str]]          # Required slots for this intent (from intent classifier)
     missing_slots: Optional[List[str]]           # Required slots that are missing (from intent classifier)
+    intent_reclassified: bool                    # Has LLM judge re-classified the intent? (prevents infinite loops)
     
     # === API ROUTING (from config via intent_agent) ===
     api_endpoint: Optional[str]                  # Which CVS API to call (from config)
@@ -88,7 +106,7 @@ class AgentState(TypedDict):
     response: str                                # Final answer
 
     # === METADATA ===
-    metadata: Dict[str, Any]                     # Tracking info
+    metadata: Annotated[Dict[str, Any], merge_metadata]  # Tracking info (merged across nodes)
     cache_hit: bool                              # From cache?
     error: Optional[str]                         # Any error
 
@@ -124,6 +142,7 @@ def create_initial_state(
         requires_llm=False,
         is_complex=False,
         embedding_failed=False,
+        intent_reclassified=False,  # Initial classification, not yet reclassified by LLM judge
         # Other fields
         needs_clarification=False,
         clarifying_question=None,
