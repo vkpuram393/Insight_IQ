@@ -350,7 +350,6 @@ class CVSIntentClassifier:
                 'intent': 'out_of_scope',
                 'confidence': 0.0,
                 'all_scores': {},
-                'is_simple': False,
                 'is_complex': False
             }
         
@@ -363,7 +362,6 @@ class CVSIntentClassifier:
                 'intent': 'out_of_scope',
                 'confidence': 0.0,
                 'all_scores': {},
-                'is_simple': False,
                 'is_complex': False
             }
         
@@ -396,21 +394,18 @@ class CVSIntentClassifier:
                 'intent': 'out_of_scope',
                 'confidence': top_score,
                 'all_scores': intent_scores,
-                'is_simple': False,
                 'is_complex': False
             }
         
         # Classify complexity (CRITICAL: Detects aggregations, date ranges, comparisons)
-        is_simple = self._is_simple_query(query_lower, top_intent)
         is_complex = self._is_complex_query(query_lower, top_intent)
         
-        logger.info(f"Intent: {top_intent}, Confidence: {top_score:.2f}, Simple: {is_simple}, Complex: {is_complex}")
+        logger.info(f"Intent: {top_intent}, Confidence: {top_score:.2f}, Complex: {is_complex}")
         
         return {
             'intent': top_intent,
             'confidence': top_score,
             'all_scores': intent_scores,
-            'is_simple': is_simple,
             'is_complex': is_complex,
             'needs_clarification': top_score < 0.4 and top_intent != 'out_of_scope'
         }

@@ -132,7 +132,6 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         "metadata": {
             **state.get("metadata", {}),  # Preserve existing metadata
             "all_scores": intent_result.get('all_scores', {}),  # All intent similarities for debugging
-            "is_simple": intent_result.get('is_simple', False),  # Simple query flag from classifier
             "is_complex": is_complex,  # Complex query flag (single source of truth)
             "classifier_type": "embedding" if settings.use_embedding_classifier else "keyword",  # Which classifier was used
             "intent_classification_metadata": {
