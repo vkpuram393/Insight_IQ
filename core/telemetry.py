@@ -94,6 +94,8 @@ async def log_request_response(
         return request_id
     except Exception as e:
         logger.error(f"Failed to log request: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 
