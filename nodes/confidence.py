@@ -175,8 +175,9 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # Get state values
         intent = state.get("intent")
         confidence = state.get("confidence", 0.0)
+        intent_reclassified = state.get("intent_reclassified", False)
         
-        logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}")
+        logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}, intent_reclassified={intent_reclassified}")
         
         # Determine if confidence is low
         confidence_low = confidence < threshold
@@ -185,9 +186,14 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             # Low confidence -> route to clarification node
             logger.info(f"⚠️ Low confidence -> Routing to Clarification")
             
+            # Reset intent_reclassified to prevent infinite loops
+            # (After LLM judge re-evaluates, subsequent responses should go to update_memory, not back to confidence_checker)
+            reset_flag = {"intent_reclassified": False} if intent_reclassified else {}
+            
             # Just set flags - clarification node will generate the question
             result = {
                 "needs_clarification": True,
+                **reset_flag,
                 "metadata": {
                     **state.get("metadata", {}),
                     "clarification_reason": "low_confidence",
@@ -210,8 +216,13 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
             chat_history = await memory_store.get_session_history(log_ctx["session_id"])
             
+            # Reset intent_reclassified to prevent infinite loops
+            # (After LLM judge re-evaluates, subsequent responses should go to update_memory, not back to confidence_checker)
+            reset_flag = {"intent_reclassified": False} if intent_reclassified else {}
+            
             # Return state to proceed (context builder will be called next)
             proceed_result = {
+                **reset_flag,
                 "metadata": {
                     **state.get("metadata", {}),
                     "confidence_check_passed": True

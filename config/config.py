@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     enable_safety_postcheck: bool = True  # Match remote MVP-1
     
     # LLM Judge (TEMPORARY - for testing only, disables LLM judge path when True)
-    temporarily_disable_llm_judge_path_for_testing: bool = True  # Set to False when LLM judge implementation is complete
+    temporarily_disable_llm_judge_path_for_testing: bool = False  # Set to False when LLM judge implementation is complete
 
     # Cache
     enable_semantic_cache: bool = True
