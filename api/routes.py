@@ -27,6 +27,7 @@ class ChatResponse(BaseModel):
     session_id: str
     intent: Optional[str] = None
     confidence: Optional[float] = None
+    entities: Optional[Dict[str, Any]] = None  # ✅ Extracted entities
     needs_clarification: bool = False
     clarifying_question: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -88,6 +89,7 @@ async def chat(request: ChatRequest):
             session_id=session_id,
             intent=intent,
             confidence=confidence,
+            entities=final_state.get("entities"),  # ✅ Include extracted entities
             needs_clarification=final_state.get("needs_clarification", False),
             clarifying_question=final_state.get("clarifying_question"),
             metadata=metadata,

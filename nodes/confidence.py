@@ -62,6 +62,14 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         1. If confidence >= threshold AND entities present → build_context (expert is confident)
         2. If missing entities OR confidence < threshold → clarification (template-based, no LLM call)
     """
+    # PRIORITY CHECK: Handle embedding classifier failure
+    embedding_failed = state.get("embedding_failed", False)
+    if embedding_failed:
+        logger.warning("❌ Embedding classifier failed - routing to clarification → response_agent (LLM)")
+        logger.info("   Reason: Azure embeddings unavailable, cannot classify intent semantically")
+        logger.info("   Fallback: Will use response_agent (Gemini LLM) to handle query directly")
+        return "clarification"  # This routes to response_agent via clarification engine
+    
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
     
@@ -69,17 +77,16 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     disable_llm_judge = settings.temporarily_disable_llm_judge_path_for_testing
     
     confidence = state.get("confidence", 0.0)
-    intent = state.get("intent", "")
+    intent = state.get("intent", "")  # ✅ Get intent from state
     needs_clarification = state.get("needs_clarification", False)
     is_complex = state.get("is_complex", False)
     intent_reclassified = state.get("intent_reclassified", False)
-    missing_slots = state.get("missing_slots", [])
     entities = state.get("entities") or {}
 
     # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
     INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
 
-    # Check if we have required entities (direct existence check)
+    # Check if we have required entities (direct entity existence check)
     has_entities = bool(entities and any(v is not None for v in entities.values()))
 
     # DECISION LOGIC: Check intent_reclassified flag first
@@ -109,7 +116,7 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
                 logger.info("   Flag: intent_reclassified=False (initial classification)")
                 return "llm_judge"
 
-        # RULE 3: No entities (for intents that require them) → Clarification
+        # RULE 3: No entities → Clarification (except for whitelisted intents)
         if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
             logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
             logger.info(f"   Reason: Intent requires entities but none were found")
@@ -138,17 +145,10 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran)")
             return "build_context"
 
-        # RULE 2: No entities (for intents that require them) → Clarification
-        if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
-            logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
-            logger.info(f"   Reason: Intent requires entities but none were found")
-            logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
-            return "clarification"
-
-        # RULE 3: Low confidence after LLM judge → Clarification (template-based)
-        if confidence < threshold:
-            logger.info(f"⚠️ Low confidence after LLM judge -> Clarification (template)")
-            logger.info(f"   Confidence: {confidence:.2f}")
+        # RULE 2: Missing entities (for intents that need them) OR low confidence → Clarification (template-based)
+        if (not has_entities and intent not in INTENTS_WITHOUT_ENTITIES) or confidence < threshold:
+            logger.info(f"⚠️ Missing entities or low confidence -> Clarification (template)")
+            logger.info(f"   Confidence: {confidence:.2f}, Has entities: {has_entities}")
             logger.info("   Reason: LLM Judge still uncertain - use template clarification")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
             return "clarification"
@@ -161,7 +161,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
     """
     Confidence Checker Node - Checks confidence against threshold and routes accordingly
     
-    If low confidence or missing slots:
+    If low confidence:
         - Sets needs_clarification flag
         - Routes to clarification node (which will generate the question)
     
@@ -169,6 +169,8 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         - Constructs context builder input object
         - Logs to SQLite
         - Returns state to proceed to context builder
+    
+    Note: Entity checking is handled by the router, not this node.
     """
     node_name = "confidence_checker"
     log_ctx = extract_logging_context(state)
@@ -180,27 +182,24 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         
         # Get state values
         intent = state.get("intent")
-        required_slots = state.get("required_slots") or []
-        missing_slots = state.get("missing_slots") or []
         confidence = state.get("confidence", 0.0)
+        intent_reclassified = state.get("intent_reclassified", False)
         
-        logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}")
-        logger.info(f"   Required slots: {required_slots}, Missing slots: {missing_slots}")
+        logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}, intent_reclassified={intent_reclassified}")
         
         # Determine if confidence is low
         confidence_low = confidence < threshold
         
-        if confidence_low or missing_slots:
-            # Low confidence or missing slots -> route to clarification node
-            logger.info(f"⚠️ Low confidence or missing slots -> Routing to Clarification")
+        if confidence_low:
+            # Low confidence -> route to clarification node
+            logger.info(f"⚠️ Low confidence -> Routing to Clarification")
             
             # Just set flags - clarification node will generate the question
             result = {
                 "needs_clarification": True,
                 "metadata": {
                     **state.get("metadata", {}),
-                    "clarification_reason": "missing_entity" if missing_slots else "low_confidence",
-                    "missing_slots": missing_slots,
+                    "clarification_reason": "low_confidence",
                     "confidence": confidence,
                     "threshold": threshold
                 }
