@@ -101,6 +101,13 @@ class AgentState(TypedDict):
     safety_precheck_passed: bool                 # Input safe?
     safety_postcheck_passed: bool                # Output safe?
     safety_block_reason: Optional[str]           # Why blocked
+    
+    # === PII/PHI TOKEN MAPPINGS (source-aware) ===
+    # NEW ARCHITECTURE: Track token mappings by source for accurate unmasking
+    # Priority for unmasking: tool_tokens > text_tokens > context_tokens
+    tool_tokens: Optional[Dict[str, Any]]        # Tokens from tool/API responses
+    text_tokens: Optional[Dict[str, Any]]        # Tokens from user query
+    context_tokens: Optional[Dict[str, Any]]     # Tokens from conversation history/context
 
     # === OUTPUT (to user) ===
     response: str                                # Final answer
@@ -156,6 +163,9 @@ def create_initial_state(
         safety_precheck_passed=False,
         safety_postcheck_passed=False,
         safety_block_reason=None,
+        tool_tokens=None,
+        text_tokens=None,
+        context_tokens=None,
         response="",
         metadata={},
         cache_hit=False,

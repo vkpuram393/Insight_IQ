@@ -31,6 +31,7 @@ from core.logger import get_logger
 from core.logging_context import extract_logging_context, log_state_snapshot
 from config.config import settings
 from persistence import PersistenceStoreFactory
+# Note: PII masking is handled by safety layer, not in tools layer
 
 # ============================================================================
 # LOGGER
@@ -201,17 +202,22 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                         }
                     )
                 
+                # Return raw unmasked data - PII masking will be handled by safety layer
+                # This follows separation of concerns: tools return data, safety layer handles security
+                logger.info(f"✅ Returning raw enriched claim details (PII masking will be done by safety layer)")
+                
                 tool_result = ToolResult(
                     tool_name="claim_details_enriched",
                     status=ToolExecutionStatus.SUCCESS,
-                    data=result if isinstance(result, dict) else {"result": result},
+                    data=result,  # Raw unmasked data
                     error_message=None,
                     error_code=None,
                     agent_error=None,
                     execution_time_ms=elapsed_ms,
                     api_endpoint="/myclaims/claims/v1/details",
                     http_status_code=200,
-                    is_retryable=False
+                    is_retryable=False,
+                    metadata={}
                 )
                 return {"tool_results": tool_result.dict()}
                 
@@ -348,17 +354,22 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                     }
                 )
 
+            # Return raw unmasked data - PII masking will be handled by safety layer
+            # This follows separation of concerns: tools return data, safety layer handles security
+            logger.info(f"✅ Returning raw API response (PII masking will be done by safety layer)")
+
             tool_result = ToolResult(
                 tool_name=getattr(api, "name", "claims_api"),
                 status=ToolExecutionStatus.SUCCESS,
-                data=result if isinstance(result, dict) else {"result": result},
+                data=result,  # Raw unmasked data
                 error_message=None,
                 error_code=None,
                 agent_error=None,
                 execution_time_ms=elapsed_ms,
                 api_endpoint=getattr(api, "full_url", None),
                 http_status_code=200,
-                is_retryable=False
+                is_retryable=False,
+                metadata={}
             )
             result_dict = {"tool_results": tool_result.dict()}
             if isinstance(state, dict):

@@ -121,6 +121,35 @@ class SQLitePersistenceStore(PersistenceStore):
             )
         """)
 
+        # ========================================================================
+        # CONVERSATION HISTORY TABLE (stores unmasked data)
+        # ========================================================================
+        
+        # Conversation History table: stores complete conversation history with UNMASKED data
+        # Data is saved AFTER postcheck node has already unmasked PII/PHI
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS conversation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                
+                -- Unmasked content (actual user message and agent response)
+                user_message TEXT NOT NULL,
+                agent_response TEXT NOT NULL,
+                
+                -- Metadata
+                intent TEXT,
+                tools_used TEXT,
+                metadata_json TEXT,
+                
+                -- Metrics
+                duration_ms REAL,
+                
+                created_at TEXT NOT NULL
+            )
+        """)
+
         # Create indexes for performance
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)")
@@ -136,9 +165,14 @@ class SQLitePersistenceStore(PersistenceStore):
         await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_request ON exceptions(request_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_node ON exceptions(node_name)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_exceptions_timestamp ON exceptions(timestamp)")
+        
+        # Indexes for conversation_history table
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_history_session ON conversation_history(session_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_history_user ON conversation_history(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_history_timestamp ON conversation_history(timestamp)")
 
         await db.commit()
-        logger.info("✅ Database schema initialized")
+        logger.info("✅ Database schema initialized (with conversation_history table)")
 
     async def log_event(
         self,
@@ -491,6 +525,220 @@ class SQLitePersistenceStore(PersistenceStore):
 
         logger.error(f"🚨 Exception logged: {error_code} in {node_name} for session {session_id}")
         return exception_id
+
+    # ========================================================================
+    # CONVERSATION HISTORY PERSISTENCE METHODS
+    # ========================================================================
+
+    async def save_conversation(
+        self,
+        session_id: str,
+        user_id: str,
+        user_message: str,
+        agent_response: str,
+        intent: Optional[str] = None,
+        tools_used: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        duration_ms: Optional[float] = None
+    ) -> int:
+        """
+        Save a conversation turn to database with UNMASKED data.
+        
+        This should be called AFTER postcheck node has already unmasked PII/PHI.
+        We store the actual user message and agent response as-is.
+        
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+            user_message: User message (unmasked, actual text)
+            agent_response: Agent response (unmasked, actual text)
+            intent: Detected intent
+            tools_used: List of tools called
+            metadata: Additional metadata
+            duration_ms: Operation duration in milliseconds
+            
+        Returns:
+            conversation_id: ID of inserted conversation record
+        """
+        db = await self._get_connection()
+        now = datetime.now().isoformat()
+
+        # Insert conversation with unmasked data
+        cursor = await db.execute(
+            """
+            INSERT INTO conversation_history 
+            (session_id, user_id, timestamp, user_message, 
+             agent_response, intent, tools_used, 
+             metadata_json, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                user_id,
+                now,
+                user_message,
+                agent_response,
+                intent,
+                json.dumps(tools_used) if tools_used else None,
+                json.dumps(metadata) if metadata else None,
+                duration_ms,
+                now
+            )
+        )
+        conversation_id = cursor.lastrowid
+        await db.commit()
+        
+        logger.debug(f"💾 Conversation saved (unmasked): session={session_id}, id={conversation_id}")
+        return conversation_id
+
+    async def get_conversation_history(
+        self,
+        session_id: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve conversation history for a session
+        
+        Args:
+            session_id: Session identifier
+            limit: Maximum number of conversation turns to retrieve
+            
+        Returns:
+            List of conversation turns with unmasked messages
+        """
+        db = await self._get_connection()
+
+        async with db.execute(
+            """
+            SELECT * FROM conversation_history 
+            WHERE session_id = ? 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+            """,
+            (session_id, limit)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            
+            conversations = []
+            for row in rows:
+                conv = {
+                    "id": row["id"],
+                    "session_id": row["session_id"],
+                    "user_id": row["user_id"],
+                    "timestamp": row["timestamp"],
+                    "user_message": row["user_message"],
+                    "agent_response": row["agent_response"],
+                    "intent": row["intent"],
+                    "tools_used": json.loads(row["tools_used"]) if row["tools_used"] else [],
+                    "metadata": json.loads(row["metadata_json"]) if row["metadata_json"] else {},
+                    "duration_ms": row["duration_ms"]
+                }
+                conversations.append(conv)
+            
+            # Return in chronological order (oldest first)
+            return list(reversed(conversations))
+
+    async def get_session_stats(
+        self,
+        session_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get statistics for a session
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            Dictionary with session statistics
+        """
+        db = await self._get_connection()
+
+        async with db.execute(
+            """
+            SELECT 
+                COUNT(*) as total_messages,
+                MIN(timestamp) as first_message,
+                MAX(timestamp) as last_message,
+                AVG(duration_ms) as avg_duration_ms
+            FROM conversation_history 
+            WHERE session_id = ?
+            """,
+            (session_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return {
+                "session_id": session_id,
+                "total_messages": row["total_messages"],
+                "first_message": row["first_message"],
+                "last_message": row["last_message"],
+                "avg_duration_ms": round(row["avg_duration_ms"], 2) if row["avg_duration_ms"] else 0.0
+            }
+
+    async def get_user_conversations(
+        self,
+        user_id: str,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all conversations for a user across all sessions
+        
+        Args:
+            user_id: User identifier
+            limit: Maximum number of conversations to retrieve
+            
+        Returns:
+            List of conversations (unmasked)
+        """
+        db = await self._get_connection()
+
+        async with db.execute(
+            """
+            SELECT * FROM conversation_history 
+            WHERE user_id = ? 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+            """,
+            (user_id, limit)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "session_id": row["session_id"],
+                    "user_id": row["user_id"],
+                    "timestamp": row["timestamp"],
+                    "user_message": row["user_message"],
+                    "agent_response": row["agent_response"],
+                    "intent": row["intent"],
+                    "tools_used": json.loads(row["tools_used"]) if row["tools_used"] else []
+                }
+                for row in rows
+            ]
+
+    async def delete_session_conversations(
+        self,
+        session_id: str
+    ) -> int:
+        """
+        Delete all conversations for a session (for privacy/GDPR)
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            Number of conversations deleted
+        """
+        db = await self._get_connection()
+
+        cursor = await db.execute(
+            "DELETE FROM conversation_history WHERE session_id = ?",
+            (session_id,)
+        )
+        await db.commit()
+        
+        deleted_count = cursor.rowcount
+        logger.info(f"🗑️  Deleted {deleted_count} conversations for session {session_id}")
+        return deleted_count
 
     async def close(self) -> None:
         """Close database connection"""

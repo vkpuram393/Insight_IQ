@@ -230,51 +230,131 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
 
 async def update_memory_node(state: AgentState) -> Dict[str, Any]:
     """
-    Store conversation in memory and return updated context.
+    Store conversation in memory and persistent storage.
 
-    After generating response, save it so we remember next time.
+    This node saves the conversation to:
+    1. In-memory store (Redis/Memorystore) for real-time context
+    2. Persistent database (conversation_history table) for long-term storage
+    
+    IMPORTANT: This runs AFTER response_safety_postcheck, so data is UNMASKED.
+    
+    What gets saved:
+    - user_message: Original user query (UNMASKED)
+    - agent_response: Final agent response (UNMASKED)
+    - intent: Classified intent
+    - tools_used: List of tools that were called
+    - metadata: Additional context
+    - duration_ms: Time taken for the request
     """
     node_name = "update_memory"
     log_ctx = extract_logging_context(state)
     
     try:
-        logger.info("💾 Node: Update Memory")
+        print("\n" + "="*80)
+        print("🔥 UPDATE_MEMORY_NODE CALLED! 🔥")
+        print("="*80)
+        logger.info("💾 Node: Update Memory (in-memory + persistent)")
 
         session_id = state["session_id"]
+        user_id = log_ctx.get("user_id") or (state.get("user_info", {}) or {}).get("user_id")
+        
+        # Fix: Provide default user_id if none provided (database requires NOT NULL)
+        if not user_id or user_id.strip() == "":
+            user_id = "anonymous"  # Default user_id for requests without user info
+        
+        # Extract data from state
+        # Use original_text from metadata if available (unmasked), otherwise use text
+        metadata = state.get("metadata", {})
+        user_message = metadata.get("original_text") or state.get("text", "")
+        agent_response = state.get("response", "")
+        intent = state.get("intent")
+        tools_used = state.get("tools_used", [])
+        
+        # Calculate duration if available
+        duration_ms = None
+        if "start_time" in metadata and "end_time" in metadata:
+            try:
+                duration_ms = (metadata["end_time"] - metadata["start_time"]) * 1000
+            except (TypeError, ValueError):
+                duration_ms = None
 
-        # Append user message to memory store
+        # 1. Update in-memory store (for real-time context)
         await _memory_store.append_to_session(
             session_id=session_id,
             role="user",
-            content=state["text"],
+            content=user_message,
             max_messages=10
         )
 
-        # Append assistant response to memory store
         await _memory_store.append_to_session(
             session_id=session_id,
             role="assistant",
-            content=state.get("response", ""),
+            content=agent_response,
             max_messages=10
         )
 
-        # Update long-term memory (extract important facts)
-        if "claim" in state["text"].lower():
+        # Update long-term memory facts (extract important facts)
+        if "claim" in user_message.lower():
             await _memory_store.add_session_fact(
                 session_id=session_id,
                 fact_type="claim_mention",
-                data={"text": state["text"]}
+                data={"text": user_message}
             )
 
-        # Get updated context
+        # 2. Save to persistent conversation_history table
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        
+        print(f"\n📊 DATA TO SAVE:")
+        print(f"   Session: {session_id}")
+        print(f"   User: {user_id}")
+        print(f"   Intent: {intent}")
+        print(f"   Tools: {tools_used}")
+        print(f"   User message length: {len(user_message)}")
+        print(f"   Response length: {len(agent_response)}")
+        print(f"   Duration: {duration_ms}ms" if duration_ms else "   Duration: N/A")
+        
+        logger.info(f"   💾 Saving to conversation_history table:")
+        logger.info(f"      Session: {session_id}")
+        logger.info(f"      User: {user_id}")
+        logger.info(f"      Intent: {intent}")
+        logger.info(f"      Tools: {tools_used}")
+        logger.info(f"      Duration: {duration_ms}ms" if duration_ms else "      Duration: N/A")
+        
+        conversation_saved = False
+        try:
+            await persistence_store.save_conversation(
+                session_id=session_id,
+                user_id=user_id,
+                user_message=user_message,      # UNMASKED - real data
+                agent_response=agent_response,  # UNMASKED - real data
+                intent=intent,
+                tools_used=tools_used,
+                metadata=metadata,
+                duration_ms=duration_ms
+            )
+            logger.info("   ✅ Saved to conversation_history table")
+            print("   ✅ SAVE SUCCESSFUL!")
+            conversation_saved = True
+        except Exception as save_error:
+            logger.error(f"   ❌ Failed to save conversation: {save_error}")
+            print(f"   ❌ SAVE FAILED: {save_error}")
+            import traceback
+            traceback.print_exc()
+            # Continue execution even if save fails - don't break the workflow
+
+        # Get updated context from in-memory store
         updated_history = await _memory_store.get_session_history(session_id)
         updated_facts = await _memory_store.get_session_facts(session_id)
 
-        logger.info("✅ Memory updated")
+        logger.info(f"✅ Memory updated (in-memory + persistent={conversation_saved})")
         result = {
             "conversation_history": updated_history,
             "relevant_facts": updated_facts,
-            "metadata": {**state.get("metadata", {}), "memory_updated": True}
+            "metadata": {
+                **metadata, 
+                "memory_updated": True,
+                "conversation_saved": conversation_saved
+            }
         }
         await log_state_snapshot(state, node_name, result)
         return result
@@ -305,7 +385,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in memory update: {e}\n{tb}")
         
-        result = {
+        return {
             "error": error.user_message,
             "conversation_history": state.get("conversation_history", []),
             "relevant_facts": state.get("relevant_facts", []),
@@ -316,5 +396,3 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
                 "memory_updated": False
             }
         }
-        await log_state_snapshot(state, node_name, result)
-        return result
