@@ -1,0 +1,64 @@
+flowchart TD
+    Start([User Query]) --> Orchestrator[Orchestrator Node<br/>Normalize Text]
+    Orchestrator --> Safety[Safety Precheck<br/>Mask PII]
+    Safety --> Cache{Cache Hit?}
+    Cache -->|No| IntentNode[Intent Agent Node<br/>extended_intent_agent_node]
+    Cache -->|Yes| Return([Return Cached Response])
+    
+    IntentNode --> EmbedGen[Generate Query Embedding<br/>Azure OpenAI API<br/>text-embedding-ada-002]
+    
+    EmbedGen --> LoadPKL[(Load PKL File<br/>intent_embeddings_cache.pkl<br/>600 pre-computed embeddings)]
+    
+    LoadPKL --> Cosine[Cosine Similarity Calculation<br/>Compare query embedding vs<br/>all 600 intent variations]
+    
+    Cosine --> IntentMatch[Match to 30 Intent Categories<br/>claim_status, rejection_reasons,<br/>appeal_info, reversal_info, etc.]
+    
+    IntentMatch --> ConfScore[Confidence Score<br/>cosine_similarity score<br/>0.0 to 1.0]
+    
+    ConfScore --> RegexEntity[Regex Entity Extraction<br/>Patterns:<br/>• CLM12345 or 253152732536005 → claim_id<br/>• MEM12345 → member_id<br/>• RX12345 → prescription_id<br/>• Dates, Amounts]
+    
+    RegexEntity --> ComplexCheck[Complexity Detection<br/>Keywords:<br/>• all, total, summarize<br/>• compare, versus<br/>• between, since, until<br/>• and, both, each]
+    
+    ComplexCheck --> SetFlags[Set State Flags:<br/>• intent<br/>• confidence<br/>• entities<br/>• is_complex<br/>• needs_clarification]
+    
+    SetFlags --> ConfChecker[Confidence Checker Node<br/>Process state & log to DB]
+    
+    ConfChecker --> Router{Confidence Check Router<br/>Route based on:<br/>confidence, is_complex,<br/>needs_clarification}
+    
+    Router -->|is_complex = True| LLMJudge[LLM Judge Agent<br/>Handle complex queries<br/>aggregations, comparisons]
+    
+    Router -->|confidence < 0.7| LLMJudge
+    
+    Router -->|needs_clarification = True<br/>Missing required entities| Clarification[Clarification Engine<br/>Ask user for:<br/>claim_id, member_id, etc.]
+    
+    Router -->|High confidence<br/>+ Has entities| BuildContext[Build Context Node<br/>Gather history, facts, slots]
+    
+    BuildContext --> APICall[Call Claims API<br/>Match intent to endpoint<br/>POST with entities]
+    
+    APICall -->|Success or Failure| ResponseAgent[Response Agent<br/>Google Gemini LLM<br/>Generate natural response]
+    
+    LLMJudge --> ResponseAgent
+    
+    Clarification --> UpdateMem[Update Memory<br/>Store conversation]
+    
+    ResponseAgent --> PostCheck[Safety Postcheck<br/>Unmask PII tokens]
+    
+    PostCheck --> UpdateMem
+    
+    UpdateMem --> CacheStore[Cache Response]
+    
+    CacheStore --> End([Return Response to User])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e1f5ff
+    style EmbedGen fill:#fff3cd
+    style LoadPKL fill:#d4edda
+    style Cosine fill:#fff3cd
+    style IntentMatch fill:#d4edda
+    style RegexEntity fill:#fff3cd
+    style ComplexCheck fill:#fff3cd
+    style Router fill:#f8d7da
+    style LLMJudge fill:#cfe2ff
+    style Clarification fill:#cfe2ff
+    style APICall fill:#d4edda
+    style ResponseAgent fill:#cfe2ff

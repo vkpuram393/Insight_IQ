@@ -69,14 +69,18 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     disable_llm_judge = settings.temporarily_disable_llm_judge_path_for_testing
     
     confidence = state.get("confidence", 0.0)
+    intent = state.get("intent", "")
     needs_clarification = state.get("needs_clarification", False)
     is_complex = state.get("is_complex", False)
     intent_reclassified = state.get("intent_reclassified", False)
     missing_slots = state.get("missing_slots", [])
     entities = state.get("entities") or {}
 
-    # Check if we have required entities
-    has_entities = bool(entities) and not missing_slots
+    # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
+    INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
+
+    # Check if we have required entities (direct existence check)
+    has_entities = bool(entities and any(v is not None for v in entities.values()))
 
     # DECISION LOGIC: Check intent_reclassified flag first
     if not intent_reclassified:
@@ -105,26 +109,46 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
                 logger.info("   Flag: intent_reclassified=False (initial classification)")
                 return "llm_judge"
 
-        # RULE 3: High confidence + Has entities → Build Context (direct path)
-        if confidence >= threshold and has_entities:
-            logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+        # RULE 3: No entities (for intents that require them) → Clarification
+        if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
+            logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
+            logger.info(f"   Reason: Intent requires entities but none were found")
+            logger.info("   Flag: intent_reclassified=False (initial classification)")
+            return "clarification"
+
+        # RULE 4: High confidence + Has entities (or doesn't need them) → Build Context (direct path)
+        if confidence >= threshold and (has_entities or intent in INTENTS_WITHOUT_ENTITIES):
+            if has_entities:
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+            else:
+                logger.info(f"✅ Intent '{intent}' doesn't require entities -> Build Context")
             logger.info("   Reason: Initial classifier is confident enough")
             logger.info("   Flag: intent_reclassified=False (initial classification)")
             return "build_context"
 
     else:
         # LLM judge already ran - route based on updated intent
-        # RULE 1: High confidence + Has entities → Build Context
-        if confidence >= threshold and has_entities:
-            logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+        # RULE 1: High confidence + Has entities (or doesn't need them) → Build Context
+        if confidence >= threshold and (has_entities or intent in INTENTS_WITHOUT_ENTITIES):
+            if has_entities:
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+            else:
+                logger.info(f"✅ Intent '{intent}' doesn't require entities -> Build Context")
             logger.info("   Reason: LLM Judge is confident enough")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran)")
             return "build_context"
 
-        # RULE 2: Missing entities OR low confidence → Clarification (template-based)
-        if needs_clarification or missing_slots or confidence < threshold:
-            logger.info(f"⚠️ Missing entities or low confidence -> Clarification (template)")
-            logger.info(f"   Confidence: {confidence:.2f}, Missing slots: {missing_slots}")
+        # RULE 2: No entities (for intents that require them) → Clarification
+        if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
+            logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
+            logger.info(f"   Reason: Intent requires entities but none were found")
+            logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
+            return "clarification"
+
+        # RULE 3: Low confidence after LLM judge → Clarification (template-based)
+        if confidence < threshold:
+            logger.info(f"⚠️ Low confidence after LLM judge -> Clarification (template)")
+            logger.info(f"   Confidence: {confidence:.2f}")
             logger.info("   Reason: LLM Judge still uncertain - use template clarification")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
             return "clarification"
