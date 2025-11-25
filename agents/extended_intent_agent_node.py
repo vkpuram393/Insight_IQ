@@ -22,6 +22,7 @@ from core.logger import get_logger
 from core.logging_context import log_state_snapshot
 from classifiers.intent_classifier_wrapper import classify_intent_unified, extract_entities_unified
 from config.api_routing_config import get_api_config  # NEW: Get API endpoint from config
+from config.config import settings  # NEW: For classifier_type metadata
 
 logger = get_logger(__name__)
 
@@ -38,6 +39,31 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     # Classify intent using wrapper (respects settings.use_cvs_intent_classifier)
     intent_result = classify_intent_unified(text)
     
+    # ========== CHECK 1: Handle embedding classifier failure ==========
+    if intent_result.get('embedding_failed', False):
+        logger.warning("❌ Embedding classifier failed - setting flag to route to response_agent (LLM)")
+        fallback_reason = intent_result.get('fallback_reason', 'Unknown')
+        
+        result = {
+            "intent": None,
+            "confidence": 0.0,
+            "entities": {},
+            "embedding_failed": True,  # KEY: Router will check this flag
+            "is_complex": False,
+            "needs_clarification": False,
+            "metadata": {
+                "embedding_failure": True,
+                "fallback_reason": fallback_reason
+            }
+        }
+        
+        # Log to telemetry
+        await log_state_snapshot(state, "intent_agent", result)
+        
+        logger.info("🔄 Routing to response_agent (LLM) due to embedding failure")
+        return result
+    
+    # ========== Normal flow (embedding succeeded) ==========
     intent = intent_result['intent']
     confidence = intent_result['confidence']
     
@@ -62,25 +88,12 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     else:
         logger.info(f"💬 No API needed - Intent will use {'LLM' if requires_llm else 'FAQ/Knowledge Base'}")
     
-    # Check query complexity (aggregations, comparisons, date ranges)
-    query_lower = text.lower()
-    complexity_keywords = {
-        'aggregation': ['all', 'total', 'sum', 'count', 'average', 'summarize', 'list all', 'show all'],
-        'comparison': ['compare', 'difference', 'versus', 'vs', 'better', 'worse', 'more than', 'less than'],
-        'range': ['between', 'from', 'to', 'since', 'until', 'last', 'past', 'recent'],
-        'multiple': [' and ', 'both', 'all of', 'each']
-    }
-    
-    is_complex = False
-    complexity_reason = []
-    
-    for category, keywords in complexity_keywords.items():
-        if any(kw in query_lower for kw in keywords):
-            is_complex = True
-            complexity_reason.append(category)
+    # ========== USE CLASSIFIER'S COMPLEXITY DETECTION (no duplicate calculation) ==========
+    is_complex = intent_result.get('is_complex', False)
     
     if is_complex:
-        logger.info(f"🧠 Complex query detected: {', '.join(complexity_reason)}")
+        logger.info(f"🧠 Complex query detected by classifier (is_complex=True)")
+        logger.info("   Query contains aggregations, comparisons, date ranges, or multiple conditions")
     
     # Check if clarification needed (only for missing slots, not low confidence)
     needs_clarification = False
@@ -103,6 +116,7 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
             else:
                 clarifying_question = f"I need more information to help you. Could you provide: {', '.join(missing)}?"
     
+    # ========== BUILD RESULT WITH METADATA ==========
     result = {
         "intent": intent,
         "confidence": confidence,
@@ -114,6 +128,19 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         "api_endpoint": api_endpoint,
         "required_entities_list": required_entities_list,
         "requires_llm": requires_llm,
+        # NEW: Add observability metadata
+        "metadata": {
+            **state.get("metadata", {}),  # Preserve existing metadata
+            "all_scores": intent_result.get('all_scores', {}),  # All intent similarities for debugging
+            "is_simple": intent_result.get('is_simple', False),  # Simple query flag from classifier
+            "is_complex": is_complex,  # Complex query flag (single source of truth)
+            "classifier_type": "embedding" if settings.use_embedding_classifier else "keyword",  # Which classifier was used
+            "intent_classification_metadata": {
+                "top_intent": intent,
+                "top_confidence": confidence,
+                "num_intents_evaluated": len(intent_result.get('all_scores', {})),
+            }
+        }
     }
     
     # Log to telemetry database (same as remote MVP-1's intent_agent.py)

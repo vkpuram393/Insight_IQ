@@ -62,6 +62,14 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         1. If confidence >= threshold AND entities present → build_context (expert is confident)
         2. If missing entities OR confidence < threshold → clarification (template-based, no LLM call)
     """
+    # PRIORITY CHECK: Handle embedding classifier failure
+    embedding_failed = state.get("embedding_failed", False)
+    if embedding_failed:
+        logger.warning("❌ Embedding classifier failed - routing to clarification → response_agent (LLM)")
+        logger.info("   Reason: Azure embeddings unavailable, cannot classify intent semantically")
+        logger.info("   Fallback: Will use response_agent (Gemini LLM) to handle query directly")
+        return "clarification"  # This routes to response_agent via clarification engine
+    
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
     
@@ -186,14 +194,9 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             # Low confidence -> route to clarification node
             logger.info(f"⚠️ Low confidence -> Routing to Clarification")
             
-            # Reset intent_reclassified to prevent infinite loops
-            # (After LLM judge re-evaluates, subsequent responses should go to update_memory, not back to confidence_checker)
-            reset_flag = {"intent_reclassified": False} if intent_reclassified else {}
-            
             # Just set flags - clarification node will generate the question
             result = {
                 "needs_clarification": True,
-                **reset_flag,
                 "metadata": {
                     **state.get("metadata", {}),
                     "clarification_reason": "low_confidence",
@@ -216,13 +219,8 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
             chat_history = await memory_store.get_session_history(log_ctx["session_id"])
             
-            # Reset intent_reclassified to prevent infinite loops
-            # (After LLM judge re-evaluates, subsequent responses should go to update_memory, not back to confidence_checker)
-            reset_flag = {"intent_reclassified": False} if intent_reclassified else {}
-            
             # Return state to proceed (context builder will be called next)
             proceed_result = {
-                **reset_flag,
                 "metadata": {
                     **state.get("metadata", {}),
                     "confidence_check_passed": True

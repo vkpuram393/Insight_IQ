@@ -66,11 +66,18 @@ def route_after_response_postcheck(state: AgentState) -> str:
     After response safety PII postcheck, decide next step
     
     ROUTING:
-        If intent_reclassified == True (coming from llm_judge): route to confidence_checker for re-evaluation
-        Otherwise (coming from response_agent): route to update_memory (normal response flow)
+        If intent_reclassified == True AND no response yet (coming from llm_judge): route to confidence_checker for re-evaluation
+        If response exists (coming from response_agent): route to update_memory (normal response flow)
     """
     intent_reclassified = state.get("intent_reclassified", False)
+    has_response = state.get("response") is not None
     
+    # If we have a response, always go to update_memory (normal flow)
+    if has_response:
+        logger.info("✅ Response generated - routing to update_memory")
+        return "update_memory"
+    
+    # No response yet - check if coming from LLM judge
     if intent_reclassified:
         logger.info("🔄 Coming from LLM judge - routing to confidence_checker for re-evaluation")
         return "confidence_checker"
