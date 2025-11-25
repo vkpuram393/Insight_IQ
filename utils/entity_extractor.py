@@ -25,7 +25,9 @@ class EntityExtractor:
             'member_id': r'\b(MEM\d{3,10})\b',
             'prescription_id': r'\b(RX\d{3,10})\b',
             'amount': r'\$?\d+(?:\.\d{2})?',
-            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
+            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+            # Person name: pattern for names after keywords
+            'person_name': r'(?:for\s+|name\s+is\s+|patient\s+|member\s+)([A-Za-z\s]{2,30})(?:\s|$|[,.;])'
         }
         
         # Compile patterns
@@ -76,7 +78,7 @@ class EntityExtractor:
         }
     
     def _extract_ids(self, query: str) -> Dict[str, Any]:
-        """Extract claim IDs, member IDs, prescription IDs"""
+        """Extract claim IDs, member IDs, prescription IDs, and person names"""
         result = {}
         
         # Claim IDs (support multiple for batch queries)
@@ -93,6 +95,16 @@ class EntityExtractor:
             result['member_id'] = member_ids[0]  # Primary member ID
             if len(member_ids) > 1:
                 result['multiple_member_ids'] = True
+        
+        # Person Names
+        person_names = self.compiled_patterns['person_name'].findall(query)
+        if person_names:
+            # Clean up the extracted names (strip whitespace, title case)
+            cleaned_names = [name.strip().title() for name in person_names]
+            result['person_names'] = cleaned_names
+            result['person_name'] = cleaned_names[0]  # Primary person name
+            if len(cleaned_names) > 1:
+                result['multiple_person_names'] = True
         
         # Prescription IDs
         prescription_ids = self.compiled_patterns['prescription_id'].findall(query)

@@ -235,41 +235,45 @@ Please provide a helpful and factual response following the format guidelines in
         """
         Format tool results (ToolResult structure) for LLM.
         
-        Follows pattern from tools/claims_api.py for ToolResult handling.
-        Uses serialization helpers from utils/serialization.py for consistent formatting.
+        CRITICAL: Uses PII-masked data for LLM consumption to prevent leakage.
+        The response_safety_pii_postcheck_node will unmask the final response for the user.
         
-        Real ToolResult structure:
+        Real ToolResult structure (after PII masking):
         {
             "tool_name": "get_claim_list",
             "status": "success",
             "data": {
-                "claims": [{...claim object with reject codes in messages...}],
-                "success": True,
-                "message": "...",
-                "totalCount": 1
+                "claims": [{...}],  // Contains real PII (for programmatic access)
+                "_masked_response": "...",  // PII-masked text for LLM
+                "_pii_metadata": {...}
             },
             "execution_time_ms": 4381.1,
             ...
         }
         
-        The LLM is smart enough to find reject codes within the claim data structure.
-        System prompt instructs it to prioritize reject analysis information.
-        
         Args:
             tool_results: ToolResult dictionary from claims API
             
         Returns:
-            str: JSON-formatted string for LLM consumption
+            str: PII-masked string for LLM consumption
         """
         try:
             # Extract the data field (contains actual claim data)
             data = tool_results.get("data", {})
             
+            # CRITICAL: Use _masked_response if available (contains PII-masked data for LLM)
+            # This prevents PII leakage in LLM-generated responses
+            if "_masked_response" in data:
+                self.logger.debug("Using _masked_response for LLM (PII-masked)")
+                return data["_masked_response"]
+            
+            # Fallback: Use full data (for backward compatibility with non-masked responses)
+            # Remove internal fields that start with underscore
+            filtered_data = {k: v for k, v in data.items() if not k.startswith("_")}
+            
             # Use standard library json for pretty printing (indent for LLM readability)
-            # Note: to_json() from serialization.py is for Pydantic models
-            # For plain dicts, json.dumps is appropriate
             import json
-            return json.dumps(data, indent=2)
+            return json.dumps(filtered_data, indent=2)
             
         except Exception as e:
             self.logger.error(f"❌ Error formatting tool results: {e}")
@@ -326,8 +330,8 @@ Please provide a helpful and factual response following the format guidelines in
             Exception: If generation fails (caught by caller)
         """
         try:
-            # Use the established pattern from core/llm_connection.py
-            # This ensures consistency with other LLM calls in the system
+            # First attempt: Use default safety settings (let Gemini use its defaults)
+            # Safety filtering is already done in safety_precheck_node with BLOCK_LOW_AND_ABOVE
             req = GenerateRequest(
                 prompt=user_prompt,
                 system_instruction=system_prompt,
@@ -339,6 +343,32 @@ Please provide a helpful and factual response following the format guidelines in
             
             self.logger.info("🔮 Calling Gemini...")
             response = _generate_core(req)
+            
+            # If response is empty, retry with more permissive settings for medical/pharmacy content
+            if not response.text or len(response.text.strip()) == 0:
+                self.logger.warning("⚠️ Empty response from Gemini, retrying with adjusted safety thresholds for medical content...")
+                
+                # Use BLOCK_ONLY_HIGH for medical/pharmacy domain where terms like "rejected", 
+                # "denied", "dangerous drugs" are legitimate professional terminology
+                safety_thresholds = {
+                    "HARM_CATEGORY_HATE_SPEECH": "BLOCK_ONLY_HIGH",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_ONLY_HIGH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_ONLY_HIGH",
+                    "HARM_CATEGORY_HARASSMENT": "BLOCK_ONLY_HIGH"
+                }
+                
+                req_retry = GenerateRequest(
+                    prompt=user_prompt,
+                    system_instruction=system_prompt,
+                    temperature=settings.llm_temperature,
+                    top_p=settings.top_p,
+                    max_output_tokens=settings.max_output_tokens,
+                    model=settings.llm_model,
+                    safety_thresholds=safety_thresholds
+                )
+                
+                self.logger.info("� Retrying with BLOCK_ONLY_HIGH thresholds...")
+                response = _generate_core(req_retry)
             
             self.logger.info(f"✅ Response received: {len(response.text)} chars")
             return response.text
