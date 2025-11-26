@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     azure_client_secret: str = ""
     
     # Embeddings Provider Selection (uses same project_id/location as Gemini LLM)
-    use_google_embeddings: bool = False  # Set to True to use Google Cloud text-embedding-005 instead of Azure
+    use_google_embeddings: bool = True  # Set to True to use Google Cloud text-embedding-005 instead of Azure
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
