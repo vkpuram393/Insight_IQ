@@ -85,16 +85,11 @@ class EntityExtractor:
         claim_ids = self.compiled_patterns['claim_id'].findall(query)
         if claim_ids:
             result['claim_ids'] = claim_ids
-            result['claim_id'] = claim_ids[0]  # Primary claim ID
-            result['has_multiple_claims'] = len(claim_ids) > 1  # Flag for multi-claim handling
         
         # Member IDs
         member_ids = self.compiled_patterns['member_id'].findall(query)
         if member_ids:
             result['member_ids'] = member_ids
-            result['member_id'] = member_ids[0]  # Primary member ID
-            if len(member_ids) > 1:
-                result['multiple_member_ids'] = True
         
         # Person Names
         person_names = self.compiled_patterns['person_name'].findall(query)
@@ -110,9 +105,6 @@ class EntityExtractor:
         prescription_ids = self.compiled_patterns['prescription_id'].findall(query)
         if prescription_ids:
             result['prescription_ids'] = prescription_ids
-            result['prescription_id'] = prescription_ids[0]  # Primary prescription ID
-            if len(prescription_ids) > 1:
-                result['multiple_prescription_ids'] = True
         
         return result
     
@@ -139,8 +131,6 @@ class EntityExtractor:
                     'end': end_date.isoformat(),
                     'display': f"{month_name.capitalize()} {year}"
                 }
-                result['needs_confirmation'] = True
-                result['inferred_year'] = True
                 break
         
         # Check for relative dates
@@ -182,31 +172,44 @@ class EntityExtractor:
                 'end': datetime(current_year, end_month, calendar.monthrange(current_year, end_month)[1]).isoformat(),
                 'display': f"Q{quarter} {current_year}"
             }
-            result['needs_confirmation'] = True
         
         return result if result else None
     
     def _extract_amounts(self, query: str) -> Optional[List[float]]:
-        """Extract dollar amounts from query"""
+        """
+        Extract dollar amounts from query
+        
+        FIXED: Don't extract numbers that are part of IDs (CLM12345, RX123, MEM456, etc.)
+        """
         amounts = []
         
-        # Find all amount patterns
-        amount_pattern = r'\$?(\d+(?:\.\d{2})?)'
-        matches = re.finditer(amount_pattern, query)
+        # Find all amount patterns WITH $ sign or "dollar/cost/pay/price" context
+        # This prevents capturing numbers from IDs like CLM12345
+        amount_contexts = [
+            r'\$(\d+(?:\.\d{2})?)',  # Explicit $ sign
+            r'(\d+(?:\.\d{2})?)\s*(?:dollars?|USD)',  # "50 dollars"
+            r'(?:cost|price|pay|paid|copay|total|amount)[\s:]+\$?(\d+(?:\.\d{2})?)',  # "cost $50" or "paid 50"
+        ]
         
-        for match in matches:
-            try:
-                amount = float(match.group(1))
-                # Filter out obvious non-amounts (like years or IDs)
-                if 1 <= amount <= 100000:  # Reasonable claim amounts
-                    amounts.append(amount)
-            except ValueError:
-                continue
+        for pattern in amount_contexts:
+            matches = re.finditer(pattern, query, re.IGNORECASE)
+            for match in matches:
+                try:
+                    amount = float(match.group(1))
+                    # Filter out obvious non-amounts (like years or very large IDs)
+                    if 0.01 <= amount <= 100000:  # Reasonable claim amounts
+                        amounts.append(amount)
+                except (ValueError, IndexError):
+                    continue
         
         return amounts if amounts else None
     
     def _validate_entities(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate extracted entities"""
+        """
+        Validate extracted entities
+        
+        SIMPLIFIED: Check for actual issues (multiple conflicting IDs)
+        """
         validation = {
             'all_valid': True,
             'errors': [],
@@ -214,29 +217,23 @@ class EntityExtractor:
         }
         
         # Multiple claim IDs are VALID for batch queries (CVS API supports this!)
-        if entities.get('has_multiple_claims'):
+        claim_ids = entities.get('claim_ids', [])
+        if len(claim_ids) > 1:
             validation['warnings'].append({
                 'type': 'multiple_claims',
-                'entity': 'claim_id',
-                'count': len(entities.get('claim_ids', [])),
-                'message': f"Processing {len(entities.get('claim_ids', []))} claims: {entities.get('claim_ids', [])}"
+                'entity': 'claim_ids',
+                'count': len(claim_ids),
+                'message': f"Processing {len(claim_ids)} claims: {claim_ids}"
             })
         
         # Multiple member IDs are AMBIGUOUS (error)
-        if entities.get('multiple_member_ids'):
+        member_ids = entities.get('member_ids', [])
+        if len(member_ids) > 1:
             validation['all_valid'] = False
             validation['errors'].append({
                 'type': 'multiple_entities',
-                'entity': 'member_id',
-                'message': f"Multiple member IDs found: {entities['member_ids']}. Please specify one."
-            })
-        
-        # Check for date confirmation needed
-        if entities.get('needs_confirmation'):
-            validation['warnings'].append({
-                'type': 'needs_confirmation',
-                'entity': 'date_range',
-                'message': f"Please confirm date range: {entities.get('date_range', {}).get('display')}"
+                'entity': 'member_ids',
+                'message': f"Multiple member IDs found: {member_ids}. Please specify one."
             })
         
         return validation
@@ -245,25 +242,28 @@ class EntityExtractor:
         """
         Check if all required slots are present for given intent
         Returns missing slots and validation status
+        
+        UPDATED: Works with list format (claim_ids, member_ids, etc.)
         """
-        # Define required slots per intent
+        # Define required slots per intent (using list format)
         required_slots_map = {
-            'claim_status': ['claim_id'],
-            'claim_details': ['claim_id'],
-            'rejection_reasons': ['claim_id'],
-            'reversal_info': ['claim_id'],
-            'claim_pending': ['claim_id'],
-            'prescription_info': ['prescription_id'],
-            'prescription_status': ['prescription_id'],
-            'member_info': ['member_id'],
-            'benefits_info': ['member_id']
+            'claim_status': ['claim_ids'],
+            'claim_details': ['claim_ids'],
+            'rejection_reasons': ['claim_ids'],
+            'reversal_info': ['claim_ids'],
+            'claim_pending': ['claim_ids'],
+            'prescription_info': ['prescription_ids'],
+            'prescription_status': ['prescription_ids'],
+            'member_info': ['member_ids'],
+            'benefits_info': ['member_ids']
         }
         
         required = required_slots_map.get(intent, [])
         missing = []
         
         for slot in required:
-            if slot not in entities or entities[slot] is None:
+            # Check if slot exists and has at least one value
+            if slot not in entities or not entities[slot] or len(entities[slot]) == 0:
                 missing.append(slot)
         
         return {

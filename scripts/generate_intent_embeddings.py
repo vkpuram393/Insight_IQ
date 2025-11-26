@@ -18,10 +18,18 @@ try:
     import sys
     import os
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-    from services.azure_embeddings import get_azure_embeddings
+    from config.config import settings
+    
+    if getattr(settings, 'use_google_embeddings', False):
+        from services.google_embeddings import get_google_embeddings as get_embeddings
+        EMBEDDINGS_PROVIDER = "Google Cloud Vertex AI"
+    else:
+        from services.azure_embeddings import get_azure_embeddings as get_embeddings
+        EMBEDDINGS_PROVIDER = "Azure OpenAI"
+    
     EMBEDDINGS_AVAILABLE = True
-except ImportError:
-    logger.error("❌ Azure embeddings not available!")
+except ImportError as e:
+    logger.error(f"❌ Embeddings not available: {e}")
     EMBEDDINGS_AVAILABLE = False
     exit(1)
 
@@ -36,14 +44,18 @@ def generate_and_save_embeddings():
     print(f"📊 Total examples: {sum(len(examples) for examples in CVS_INTENT_EXAMPLES.values())}")
     
     # Initialize embeddings service
-    print("\n⏳ Initializing Azure OpenAI Embeddings...")
+    print(f"\n⏳ Initializing {EMBEDDINGS_PROVIDER} Embeddings...")
     
     # Force fresh initialization by clearing singleton
-    import services.azure_embeddings as azure_emb_module
-    azure_emb_module._azure_embeddings = None
+    if EMBEDDINGS_PROVIDER == "Google Cloud Vertex AI":
+        import services.google_embeddings as emb_module
+        emb_module._google_embeddings = None
+    else:
+        import services.azure_embeddings as emb_module
+        emb_module._azure_embeddings = None
     
-    embeddings_service = get_azure_embeddings()
-    print(f"✅ Embeddings service ready")
+    embeddings_service = get_embeddings()
+    print(f"✅ Embeddings service ready ({EMBEDDINGS_PROVIDER})")
     print(f"   Client status: {'Connected' if embeddings_service.client else 'NOT CONNECTED (using mocks)'}")
     print(f"   Auth method: {embeddings_service.auth_method}")
     
@@ -51,7 +63,7 @@ def generate_and_save_embeddings():
     intent_embeddings = {}
     
     print("\n⏳ Generating embeddings (using batch processing)...")
-    print("   This will make ~30 Azure API calls (one per intent)")
+    print(f"   This will make ~30 {EMBEDDINGS_PROVIDER} API calls (one per intent)")
     print("   Estimated time: ~30-40 seconds\n")
     
     for i, (intent, examples) in enumerate(CVS_INTENT_EXAMPLES.items(), 1):

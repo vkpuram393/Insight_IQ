@@ -70,7 +70,10 @@ def route_after_response_postcheck(state: AgentState) -> str:
         If response exists (coming from response_agent): route to update_memory (normal response flow)
     """
     intent_reclassified = state.get("intent_reclassified", False)
-    has_response = state.get("response") is not None
+    response = state.get("response")
+    
+    # Check if we have a real response (not None and not empty string)
+    has_response = response is not None and response != ""
     
     # If we have a response, always go to update_memory (normal flow)
     if has_response:
@@ -79,7 +82,7 @@ def route_after_response_postcheck(state: AgentState) -> str:
     
     # No response yet - check if coming from LLM judge
     if intent_reclassified:
-        logger.info("🔄 Coming from LLM judge - routing to confidence_checker for re-evaluation")
+        logger.info("🔄 Coming from LLM judge (no response yet) - routing to confidence_checker for re-evaluation")
         return "confidence_checker"
     else:
         logger.info("✅ Normal response flow - routing to update_memory")

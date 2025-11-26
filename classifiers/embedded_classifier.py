@@ -17,13 +17,27 @@ from typing import Dict, List, Any, Tuple
 import logging
 from collections import defaultdict
 
-# Import embedding service
+# Import embedding service (dynamic based on config)
+# This happens at module load time, so changes require server restart
 try:
-    from services.azure_embeddings import get_embedding, get_azure_embeddings
-    EMBEDDINGS_AVAILABLE = True
-except ImportError:
+    from config.config import settings
+    
+    if getattr(settings, 'use_google_embeddings', False):
+        # Use Google Cloud Vertex AI embeddings
+        from services.google_embeddings import get_embedding, get_google_embeddings as get_embeddings_service
+        EMBEDDINGS_AVAILABLE = True
+        EMBEDDINGS_PROVIDER = "Google Cloud Vertex AI"
+        logging.info("🟢 Using Google Cloud Vertex AI embeddings for runtime queries")
+    else:
+        # Use Azure OpenAI embeddings (default)
+        from services.azure_embeddings import get_embedding, get_azure_embeddings as get_embeddings_service
+        EMBEDDINGS_AVAILABLE = True
+        EMBEDDINGS_PROVIDER = "Azure OpenAI"
+        logging.info("🔵 Using Azure OpenAI embeddings for runtime queries")
+except ImportError as e:
     EMBEDDINGS_AVAILABLE = False
-    logging.warning("Azure embeddings not available. Using mock embeddings.")
+    EMBEDDINGS_PROVIDER = "Mock"
+    logging.warning(f"Embeddings not available: {e}. Using mock embeddings.")
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +69,11 @@ class CVSIntentEmbedded:
         
         # Cache the embeddings service (singleton)
         if EMBEDDINGS_AVAILABLE:
-            self.embeddings_service = get_azure_embeddings()
+            self.embeddings_service = get_embeddings_service()
+            logger.info(f"✅ Using {EMBEDDINGS_PROVIDER} for intent embeddings")
         else:
             self.embeddings_service = None
+            logger.warning("⚠️ Using mock embeddings (no provider configured)")
         
         # Thresholds
         self.confidence_threshold = 0.50  # Match keyword classifier
@@ -116,7 +132,7 @@ class CVSIntentEmbedded:
             if EMBEDDINGS_AVAILABLE:
                 try:
                     # Get embeddings for ALL examples at once (batch API call)
-                    embeddings_service = get_azure_embeddings()
+                    embeddings_service = get_embeddings_service()
                     embeddings = embeddings_service.embed(examples)  # Single batch call for all 20 examples
                     
                     # Convert to numpy array
