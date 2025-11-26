@@ -3,16 +3,19 @@ API Routes - HTTP endpoints
 """
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncIterator
 import uuid
 from datetime import datetime, timezone
 import traceback
+import json
 
-from langgraph_agent import run_graph
+from langgraph_agent import run_graph, run_graph_stream
 from core.logger import get_logger
 from core.telemetry import log_event, log_request_response, RequestTimer
 from persistence import EventType
+from config.config import settings
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -110,6 +113,160 @@ async def chat(request: ChatRequest):
         )
 
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Streaming chat endpoint using Server-Sent Events (SSE)
+    
+    📍 BREAKPOINT: Set here to debug streaming requests
+    
+    🎯 PURPOSE:
+    This endpoint provides real-time streaming of:
+    1. Node status updates (for observability/debugging)
+    2. Response chunks (after safety validation)
+    3. Final metadata (intent, confidence, etc.)
+    
+    🔒 SECURITY FLOW:
+    - Graph executes normally through all nodes
+    - Response agent generates FULL response (with masked PII)
+    - Safety postcheck validates & unmasks (COMPLETES FULLY)
+    - Only then do we stream the validated response to user
+    - Memory/cache updates happen asynchronously
+    
+    📡 SSE EVENT TYPES:
+    - "node_start": Node execution began (e.g., "Checking safety...")
+    - "node_complete": Node execution finished
+    - "response_chunk": Piece of final response (after postcheck)
+    - "complete": Full response sent, includes metadata
+    - "error": Error occurred
+    
+    🔌 FRONTEND INTEGRATION (for Angular team):
+    
+    Example JavaScript/TypeScript:
+    ```typescript
+    const response = await fetch('/api/v1/chat/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: 'Hello', session_id: 'xyz'})
+    });
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    // Parse SSE events and handle accordingly
+    ```
+    
+    Returns:
+        StreamingResponse with text/event-stream content type
+    """
+    session_id = request.session_id or str(uuid.uuid4())
+    user_id = request.user_info.get("user_id") if request.user_info else None
+
+    # Log incoming request (follows existing pattern)
+    await log_event(
+        EventType.REQUEST_RECEIVED,
+        session_id,
+        {"text": request.text, "user_info": request.user_info, "streaming": True},
+        user_id
+    )
+
+    async def event_generator() -> AsyncIterator[str]:
+        """
+        Generate SSE events from graph execution
+        
+        SSE Format:
+            event: <event_type>\n
+            data: <json_data>\n\n
+        """
+        try:
+            start_time = datetime.now(timezone.utc)
+            
+            # Stream events from graph execution
+            async for event in run_graph_stream(
+                text=request.text,
+                session_id=session_id,
+                user_info=request.user_info or {}
+            ):
+                event_type = event.get("type")
+                event_data = event.get("data")
+                event_metadata = event.get("metadata", {})
+                
+                # Format as SSE event
+                # Note: SSE requires "event:" and "data:" lines, ending with double newline
+                sse_message = f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
+                yield sse_message
+                
+                # Log event for telemetry (optional, configurable)
+                if settings.enable_telemetry and event_type in ["node_start", "error"]:
+                    await log_event(
+                        EventType.STREAM_EVENT,
+                        session_id,
+                        {"event_type": event_type, "node": event_metadata.get("node")},
+                        user_id
+                    )
+                
+                # If error or complete, finalize and stop
+                if event_type in ["error", "complete"]:
+                    end_time = datetime.now(timezone.utc)
+                    duration_ms = (end_time - start_time).total_seconds() * 1000
+                    
+                    if event_type == "complete":
+                        # Log complete request-response cycle (follows existing pattern)
+                        response_data = event_data
+                        await log_request_response(
+                            session_id=session_id,
+                            user_text=request.text,
+                            intent=response_data.get("intent"),
+                            confidence=response_data.get("confidence"),
+                            response=response_data.get("response"),
+                            metadata={
+                                **response_data.get("metadata", {}),
+                                "duration_ms": duration_ms,
+                                "user_id": user_id,
+                                "streaming": True
+                            }
+                        )
+                    elif event_type == "error":
+                        # Log error (follows existing pattern)
+                        await log_event(
+                            EventType.ERROR_OCCURRED,
+                            session_id,
+                            {"error": event_data, "streaming": True},
+                            user_id
+                        )
+                    
+                    logger.info(f"✅ Streaming completed for session {session_id} in {duration_ms:.2f}ms")
+                    break
+            
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f"🚨 Streaming error: {e}\n{tb}")
+            
+            # Log error event (follows existing pattern)
+            await log_event(
+                EventType.ERROR_OCCURRED,
+                session_id,
+                {"error": str(e), "traceback": tb, "streaming": True},
+                user_id
+            )
+            
+            # Send error event to client
+            error_event = f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+            yield error_event
+
+    # Return SSE response
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering if behind proxy
+            "Access-Control-Allow-Origin": "*",  # CORS for Angular frontend
+        }
+    )
 
 
 @router.get("/analytics")

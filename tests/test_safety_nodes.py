@@ -14,9 +14,9 @@ from state.schema import create_initial_state
 from nodes.safety import (
     safety_precheck_node,
     response_safety_pii_precheck_node,
-    response_safety_pii_postcheck_node,
-    should_continue_after_precheck
+    response_safety_pii_postcheck_node
 )
+from langgraph_agent import should_continue_after_precheck
 
 print("\n" + "="*80)
 print("TESTING UNIFIED SAFETY ARCHITECTURE")
