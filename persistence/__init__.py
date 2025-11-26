@@ -25,6 +25,7 @@ class EventType(Enum):
     ERROR_OCCURRED = "error_occurred"
     SAFETY_BLOCKED = "safety_blocked"
     CLARIFICATION_NEEDED = "clarification_needed"
+    STREAM_EVENT = "stream_event"  # For tracking streaming events
 
 
 class PersistenceStore(ABC):

@@ -82,6 +82,23 @@ class Settings(BaseSettings):
     # API Configuration
     swagger_url: str ="https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com" # Base URL for external APIs
 
+    # Streaming Configuration
+    enable_streaming: bool = True  # Master switch for streaming feature
+    streaming_chunk_size: int = 50  # Characters per chunk when streaming response
+    streaming_delay_ms: int = 0  # Artificial delay between chunks (0 for production, 30-50 for demo)
+    stream_node_updates: bool = True  # Stream node status updates for observability
+    
+    # Control which nodes send user-facing status updates (reduces noise, improves UX)
+    # Other nodes are still logged/tracked for telemetry, just not shown to end users
+    # Industry best practice: Show only significant milestones (5-6 key steps)
+    stream_user_facing_nodes: list = [
+        "orchestrator",          # Initial processing
+        "safety_precheck",       # Privacy/safety check (builds trust)
+        "intent_agent",          # AI understanding the question
+        "call_claims_tool",      # Data retrieval (most important to users)
+        "response_agent"         # Final response generation
+    ]
+
     class Config:
         env_file = ".env"
         case_sensitive = False
