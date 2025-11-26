@@ -179,17 +179,19 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Routing (updated to include llm_judge)
+    # Confidence Checker → Routing (updated to include llm_judge and direct response)
     # - llm_judge: Low confidence/complex AND intent_reclassified == False
     # - clarification: Missing entities OR low confidence after LLM judge
-    # - build_context: High confidence + has entities
+    # - build_context: High confidence + has entities (needs API call)
+    # - response_safety_pii_precheck: Greeting/help/out_of_scope (no API needed, direct to LLM)
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
             "llm_judge": "safety_precheck_for_llm",  # Route through PII masking before llm_judge
             "clarification": "clarification",
-            "build_context": "build_context"
+            "build_context": "build_context",
+            "response_safety_pii_precheck": "response_safety_pii_precheck"  # Direct path (no API)
         }
     )
     
@@ -275,9 +277,6 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
-
-
-# Streaming Support -----------------------------------------------------------
 
 async def run_graph_stream(
     text: str, 

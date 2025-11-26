@@ -344,29 +344,7 @@ class CVSIntentEmbedded:
 # ================================================================================
 
 CVS_INTENT_EXAMPLES = {
-    "appeal_info": [
-        "Generate the appeal options available for this claim.",
-        "Show the steps required to initiate an appeal.",
-        "Display the process to challenge the denial for this claim.",
-        "Give me the necessary documentation to file an appeal.",
-        "Tell me how to proceed with an appeal for this claim.",
-        "Provide the guidelines for appealing a rejected claim.",
-        "Retrieve the instructions for submitting an appeal.",
-        "Fetch the appeal procedures for this claim.",
-        "Generate the criteria for overturning a denial.",
-        "Show the appeal submission requirements for this claim.",
-        "Display the timeline for appealing a rejected claim.",
-        "Give me the contact information for the appeals department.",
-        "Tell me what evidence is needed to support an appeal.",
-        "Provide the appeal form for this claim.",
-        "Retrieve the status of any appeal filed.",
-        "Fetch the appeal guidelines for pharmacy claims.",
-        "What can be done to overcome the rejection?",
-        "How to resolve a rejected claim?",
-        "Steps to overturn a rejection for this claim.",
-        "Options to fix a denied claim.",
-    ],
-
+    
     "approval_info": [
         "Provide a detailed approval summary for this claim.",
         "Show which plan overrides were triggered during adjudication.",
@@ -805,6 +783,7 @@ CVS_INTENT_EXAMPLES = {
     ],
 
     "out_of_scope": [
+        # Command format (imperative)
         "Generate a random topic",
         "Show me the weather",
         "Display a joke",
@@ -819,6 +798,18 @@ CVS_INTENT_EXAMPLES = {
         "Give me travel advice",
         "Tell me about history",
         "Provide science facts",
+        # Question format (interrogative) - added for better coverage
+        "Why is the sky blue?",
+        "What is the weather like today?",
+        "How do I cook pasta?",
+        "When is the Super Bowl?",
+        "Who won the election?",
+        "Where can I find good restaurants?",
+        "What time does the movie start?",
+        "How does gravity work?",
+        "Why do birds fly south?",
+        "What's the capital of France?",
+        # General/vague
         "Retrieve unrelated information",
         "Fetch random content",
         "Generate off-topic discussion",
@@ -963,6 +954,10 @@ CVS_INTENT_EXAMPLES = {
         "Show the claim rejection cause.",
         "Display the edits that resulted in the claim denial.",
         "Give me the technical reason for the claim rejection.",
+        "What can be done to overcome the rejection?",
+        "How to resolve a rejected claim?",
+        "Steps to overturn a rejection for this claim.",
+        "Options to fix a denied claim.",
     ],
 
     "reversal_info": [

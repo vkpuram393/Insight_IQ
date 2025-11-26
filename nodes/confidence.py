@@ -44,13 +44,14 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
-def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "llm_judge"]:
+def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "llm_judge", "response_safety_pii_precheck"]:
     """Route based on confidence, entity completeness, query complexity, and intent_reclassified flag.
 
-    UPDATED ROUTING WITH BOOLEAN FLAG:
-      1. llm_judge: Low confidence/complex AND intent_reclassified == False (needs re-classification)
-      2. clarification: Missing entities OR low confidence after LLM judge (template-based)
-      3. build_context: High confidence + has entities (standard API flow)
+    UPDATED ROUTING WITH DIRECT RESPONSE PATH:
+      1. response_safety_pii_precheck: Greeting/help/out_of_scope (no API needed, direct to LLM)
+      2. llm_judge: Low confidence/complex/mixed-intent AND intent_reclassified == False (needs re-classification)
+      3. clarification: Missing entities OR low confidence after LLM judge (template-based)
+      4. build_context: High confidence + has entities (standard API flow)
 
     Rules (Priority Order):
       IF intent_reclassified == False (initial classifier result):
@@ -88,6 +89,39 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
 
     # Check if we have required entities (direct entity existence check)
     has_entities = bool(entities and any(v is not None for v in entities.values()))
+
+    # PRIORITY RULE 0: Handle greeting/help/out_of_scope FIRST (before other rules)
+    if intent in INTENTS_WITHOUT_ENTITIES:
+        # Special case: If entities are present, this might be a mixed intent
+        # Example: "Hello, please check claim 253152732536005"
+        if has_entities and not intent_reclassified:
+            if disable_llm_judge:
+                logger.info(f"⚠️ Mixed intent detected: '{intent}' WITH entities ({list(entities.keys())}) -> Clarification (LLM judge disabled)")
+                logger.info("   Reason: User combined greeting/help with claim request, but LLM judge path is disabled")
+                return "clarification"
+            else:
+                logger.info(f"⚠️ Mixed intent detected: '{intent}' WITH entities -> LLM Judge")
+                logger.info(f"   Reason: User combined greeting/help with claim request (e.g., 'Hello, check claim 123')")
+                logger.info(f"   Entities found: {list(entities.keys())}")
+                logger.info(f"   Action: Route to LLM judge to determine actual intent")
+                return "llm_judge"
+        
+        # Pure greeting/help/out_of_scope without entities
+        # Check if low confidence first
+        if confidence < threshold and not intent_reclassified:
+            if disable_llm_judge:
+                logger.info(f"⚠️ Low confidence ({confidence:.2f}) for '{intent}' -> Clarification (LLM judge disabled)")
+                return "clarification"
+            else:
+                logger.info(f"⚠️ Low confidence ({confidence:.2f}) for '{intent}' -> LLM Judge")
+                logger.info("   Reason: Even though no entities needed, confidence is too low to proceed")
+                return "llm_judge"
+        
+        # High confidence, no entities - direct to response (skip API!)
+        logger.info(f"✅ Intent '{intent}' (high confidence, no entities) - routing directly to response_safety_pii_precheck")
+        logger.info("   Reason: Greeting/help/out-of-scope queries don't require claim data")
+        logger.info("   Action: Skip build_context and call_claims_tool entirely")
+        return "response_safety_pii_precheck"
 
     # DECISION LOGIC: Check intent_reclassified flag first
     if not intent_reclassified:
@@ -135,12 +169,17 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
 
     else:
         # LLM judge already ran - route based on updated intent
-        # RULE 1: High confidence + Has entities (or doesn't need them) → Build Context
-        if confidence >= threshold and (has_entities or intent in INTENTS_WITHOUT_ENTITIES):
-            if has_entities:
-                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
-            else:
-                logger.info(f"✅ Intent '{intent}' doesn't require entities -> Build Context")
+        
+        # PRIORITY: Check if LLM judge re-classified to greeting/help/out_of_scope
+        if intent in INTENTS_WITHOUT_ENTITIES:
+            logger.info(f"✅ LLM Judge re-classified as '{intent}' - routing directly to response_safety_pii_precheck")
+            logger.info("   Reason: Greeting/help/out-of-scope don't need API or context")
+            logger.info("   Action: Skip build_context and call_claims_tool entirely")
+            return "response_safety_pii_precheck"
+        
+        # RULE 1: High confidence + Has entities → Build Context (needs API)
+        if confidence >= threshold and has_entities:
+            logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
             logger.info("   Reason: LLM Judge is confident enough")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran)")
             return "build_context"

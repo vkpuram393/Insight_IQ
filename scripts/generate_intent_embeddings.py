@@ -3,6 +3,11 @@ Generate and save embeddings for all 600 intent examples
 Run this ONCE to create the embeddings file, then use it for fast initialization
 """
 
+import sys
+import os
+# Add parent directory to path BEFORE other imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pickle
 import logging
@@ -15,9 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Import embeddings utility
 try:
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     from config.config import settings
     
     if getattr(settings, 'use_google_embeddings', False):

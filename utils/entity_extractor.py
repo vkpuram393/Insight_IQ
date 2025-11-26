@@ -21,11 +21,12 @@ class EntityExtractor:
         # Entity patterns
         self.patterns = {
             # Claim ID: CLM prefix (CLM12345) OR pure numeric (253152732536005 - exactly 15 digits)
-            'claim_id': r'\b(CLM\d{3,10}|\d{15})\b',
-            'member_id': r'\b(MEM\d{3,10})\b',
-            'prescription_id': r'\b(RX\d{3,10})\b',
-            'amount': r'\$?\d+(?:\.\d{2})?',
-            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+            'claim_id': r'\b(CLM\d{3,10}|\d{15})\b', ###15 digits
+            'member_id': r'\b(MEM\d{3,4})\b', ###member/patient ID
+            'claim_sequence': r'\b(\d{3})\b', ###claim sequence: 3 digits only (e.g., 001, 002, 003)
+            'prescription_id': r'\b(RX\d{3,10})\b',### dont need
+            'amount': r'\$?\d+(?:\.\d{2})?', ###remove
+            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', ###remove
             # Person name: pattern for names after keywords
             'person_name': r'(?:for\s+|name\s+is\s+|patient\s+|member\s+)([A-Za-z\s]{2,30})(?:\s|$|[,.;])'
         }
@@ -90,6 +91,26 @@ class EntityExtractor:
         member_ids = self.compiled_patterns['member_id'].findall(query)
         if member_ids:
             result['member_ids'] = member_ids
+        
+        # Claim Sequences - SMART EXTRACTION
+        # Step 1: Try context-aware extraction (with keywords)
+        context_pattern = re.compile(r'(?:sequence|seq|line)\s*(\d{3})\b', re.IGNORECASE)
+        claim_sequences = context_pattern.findall(query)
+        
+        # Step 2: If no context-aware match, try standalone 3-digit NOT part of longer number
+        if not claim_sequences:
+            # Create a query with claim IDs masked to avoid extracting from them
+            masked_query = query
+            if claim_ids:
+                for claim_id in claim_ids:
+                    masked_query = masked_query.replace(claim_id, 'CLAIM_MASKED')
+            
+            # Now extract 3-digit sequences that aren't part of longer numbers
+            standalone_pattern = re.compile(r'(?<!\d)\b(\d{3})\b(?!\d)')
+            claim_sequences = standalone_pattern.findall(masked_query)
+        
+        if claim_sequences:
+            result['claim_sequences'] = claim_sequences
         
         # Person Names
         person_names = self.compiled_patterns['person_name'].findall(query)
@@ -236,6 +257,16 @@ class EntityExtractor:
                 'message': f"Multiple member IDs found: {member_ids}. Please specify one."
             })
         
+        # Multiple claim sequences are AMBIGUOUS (error)
+        claim_sequences = entities.get('claim_sequences', [])
+        if len(claim_sequences) > 1:
+            validation['all_valid'] = False
+            validation['errors'].append({
+                'type': 'multiple_entities',
+                'entity': 'claim_sequences',
+                'message': f"Multiple claim sequences found: {claim_sequences}. Please specify one."
+            })
+        
         return validation
     
     def extract_required_slots(self, intent: str, entities: Dict[str, Any]) -> Dict[str, Any]:
@@ -243,7 +274,7 @@ class EntityExtractor:
         Check if all required slots are present for given intent
         Returns missing slots and validation status
         
-        UPDATED: Works with list format (claim_ids, member_ids, etc.)
+        UPDATED: Works with list format (claim_ids, member_ids, claim_sequences, etc.)
         """
         # Define required slots per intent (using list format)
         required_slots_map = {
