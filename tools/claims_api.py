@@ -469,6 +469,8 @@ ENTITY_MAP ={
     "date_to":"dateTo",
     "claim_sequence":"claimSequence",
     "claim_id":"claimId",
+    "claim_ids":"claimId",  # Map plural to singular for API
+    "claim_sequences":"claimSequence",  # Map plural sequences
 }
 
 # --- Helper Function to handle Pydantic model extraction ---
@@ -497,7 +499,14 @@ def normalize_entities(entities_obj) -> Dict[str, Any]:
     normalized_entities = {}
     for k, v in all_entities.items():
         # Use the mapped name if available, otherwise use the original key
-        target_key = ENTITY_MAP.get(k, k) 
+        target_key = ENTITY_MAP.get(k, k)
+        
+        # Handle list values - take first element for singular API parameters
+        if isinstance(v, list) and len(v) > 0:
+            # For plural entity names mapping to singular API params, use first value
+            if k in ['claim_ids', 'member_ids'] and target_key in ['claimId', 'memberId']:
+                v = v[0]  # Take first claim/member ID
+        
         normalized_entities[target_key] = v
         
     return normalized_entities

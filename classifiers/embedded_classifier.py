@@ -17,13 +17,27 @@ from typing import Dict, List, Any, Tuple
 import logging
 from collections import defaultdict
 
-# Import embedding service
+# Import embedding service (dynamic based on config)
+# This happens at module load time, so changes require server restart
 try:
-    from services.azure_embeddings import get_embedding, get_azure_embeddings
-    EMBEDDINGS_AVAILABLE = True
-except ImportError:
+    from config.config import settings
+    
+    if getattr(settings, 'use_google_embeddings', False):
+        # Use Google Cloud Vertex AI embeddings
+        from services.google_embeddings import get_embedding, get_google_embeddings as get_embeddings_service
+        EMBEDDINGS_AVAILABLE = True
+        EMBEDDINGS_PROVIDER = "Google Cloud Vertex AI"
+        logging.info("🟢 Using Google Cloud Vertex AI embeddings for runtime queries")
+    else:
+        # Use Azure OpenAI embeddings (default)
+        from services.azure_embeddings import get_embedding, get_azure_embeddings as get_embeddings_service
+        EMBEDDINGS_AVAILABLE = True
+        EMBEDDINGS_PROVIDER = "Azure OpenAI"
+        logging.info("🔵 Using Azure OpenAI embeddings for runtime queries")
+except ImportError as e:
     EMBEDDINGS_AVAILABLE = False
-    logging.warning("Azure embeddings not available. Using mock embeddings.")
+    EMBEDDINGS_PROVIDER = "Mock"
+    logging.warning(f"Embeddings not available: {e}. Using mock embeddings.")
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +69,11 @@ class CVSIntentEmbedded:
         
         # Cache the embeddings service (singleton)
         if EMBEDDINGS_AVAILABLE:
-            self.embeddings_service = get_azure_embeddings()
+            self.embeddings_service = get_embeddings_service()
+            logger.info(f"✅ Using {EMBEDDINGS_PROVIDER} for intent embeddings")
         else:
             self.embeddings_service = None
+            logger.warning("⚠️ Using mock embeddings (no provider configured)")
         
         # Thresholds
         self.confidence_threshold = 0.50  # Match keyword classifier
@@ -116,7 +132,7 @@ class CVSIntentEmbedded:
             if EMBEDDINGS_AVAILABLE:
                 try:
                     # Get embeddings for ALL examples at once (batch API call)
-                    embeddings_service = get_azure_embeddings()
+                    embeddings_service = get_embeddings_service()
                     embeddings = embeddings_service.embed(examples)  # Single batch call for all 20 examples
                     
                     # Convert to numpy array
@@ -328,29 +344,7 @@ class CVSIntentEmbedded:
 # ================================================================================
 
 CVS_INTENT_EXAMPLES = {
-    "appeal_info": [
-        "Generate the appeal options available for this claim.",
-        "Show the steps required to initiate an appeal.",
-        "Display the process to challenge the denial for this claim.",
-        "Give me the necessary documentation to file an appeal.",
-        "Tell me how to proceed with an appeal for this claim.",
-        "Provide the guidelines for appealing a rejected claim.",
-        "Retrieve the instructions for submitting an appeal.",
-        "Fetch the appeal procedures for this claim.",
-        "Generate the criteria for overturning a denial.",
-        "Show the appeal submission requirements for this claim.",
-        "Display the timeline for appealing a rejected claim.",
-        "Give me the contact information for the appeals department.",
-        "Tell me what evidence is needed to support an appeal.",
-        "Provide the appeal form for this claim.",
-        "Retrieve the status of any appeal filed.",
-        "Fetch the appeal guidelines for pharmacy claims.",
-        "What can be done to overcome the rejection?",
-        "How to resolve a rejected claim?",
-        "Steps to overturn a rejection for this claim.",
-        "Options to fix a denied claim.",
-    ],
-
+    
     "approval_info": [
         "Provide a detailed approval summary for this claim.",
         "Show which plan overrides were triggered during adjudication.",
@@ -789,6 +783,7 @@ CVS_INTENT_EXAMPLES = {
     ],
 
     "out_of_scope": [
+        # Command format (imperative)
         "Generate a random topic",
         "Show me the weather",
         "Display a joke",
@@ -803,6 +798,18 @@ CVS_INTENT_EXAMPLES = {
         "Give me travel advice",
         "Tell me about history",
         "Provide science facts",
+        # Question format (interrogative) - added for better coverage
+        "Why is the sky blue?",
+        "What is the weather like today?",
+        "How do I cook pasta?",
+        "When is the Super Bowl?",
+        "Who won the election?",
+        "Where can I find good restaurants?",
+        "What time does the movie start?",
+        "How does gravity work?",
+        "Why do birds fly south?",
+        "What's the capital of France?",
+        # General/vague
         "Retrieve unrelated information",
         "Fetch random content",
         "Generate off-topic discussion",
@@ -947,6 +954,10 @@ CVS_INTENT_EXAMPLES = {
         "Show the claim rejection cause.",
         "Display the edits that resulted in the claim denial.",
         "Give me the technical reason for the claim rejection.",
+        "What can be done to overcome the rejection?",
+        "How to resolve a rejected claim?",
+        "Steps to overturn a rejection for this claim.",
+        "Options to fix a denied claim.",
     ],
 
     "reversal_info": [

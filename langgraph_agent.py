@@ -70,7 +70,10 @@ def route_after_response_postcheck(state: AgentState) -> str:
         If response exists (coming from response_agent): route to update_memory (normal response flow)
     """
     intent_reclassified = state.get("intent_reclassified", False)
-    has_response = state.get("response") is not None
+    response = state.get("response")
+    
+    # Check if we have a real response (not None and not empty string)
+    has_response = response is not None and response != ""
     
     # If we have a response, always go to update_memory (normal flow)
     if has_response:
@@ -79,7 +82,7 @@ def route_after_response_postcheck(state: AgentState) -> str:
     
     # No response yet - check if coming from LLM judge
     if intent_reclassified:
-        logger.info("🔄 Coming from LLM judge - routing to confidence_checker for re-evaluation")
+        logger.info("🔄 Coming from LLM judge (no response yet) - routing to confidence_checker for re-evaluation")
         return "confidence_checker"
     else:
         logger.info("✅ Normal response flow - routing to update_memory")
@@ -176,17 +179,19 @@ def _build_workflow() -> StateGraph:
     # Intent Agent → Confidence Checker
     workflow.add_edge("intent_agent", "confidence_checker")
     
-    # Confidence Checker → Routing (updated to include llm_judge)
+    # Confidence Checker → Routing (updated to include llm_judge and direct response)
     # - llm_judge: Low confidence/complex AND intent_reclassified == False
     # - clarification: Missing entities OR low confidence after LLM judge
-    # - build_context: High confidence + has entities
+    # - build_context: High confidence + has entities (needs API call)
+    # - response_safety_pii_precheck: Greeting/help/out_of_scope (no API needed, direct to LLM)
     workflow.add_conditional_edges(
         "confidence_checker", 
         confidence_check_router, 
         {
             "llm_judge": "safety_precheck_for_llm",  # Route through PII masking before llm_judge
             "clarification": "clarification",
-            "build_context": "build_context"
+            "build_context": "build_context",
+            "response_safety_pii_precheck": "response_safety_pii_precheck"  # Direct path (no API)
         }
     )
     
@@ -272,9 +277,6 @@ async def run_graph(text: str, session_id: str, user_info: dict = None):
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
-
-
-# Streaming Support -----------------------------------------------------------
 
 async def run_graph_stream(
     text: str, 

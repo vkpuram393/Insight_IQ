@@ -101,8 +101,13 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
         new_intent = original_intent
         new_entities = original_entities
         
+        # IMPORTANT: Clear needs_clarification flag if confidence is now high
+        # This allows confidence_checker to re-evaluate and proceed normally
+        needs_clarification = new_confidence < threshold
+        
         logger.info(f"📤 Output - Intent: {new_intent}, Confidence: {new_confidence:.2f}")
         logger.info(f"   Entities: {new_entities}")
+        logger.info(f"   needs_clarification: {needs_clarification} (based on new confidence)")
         logger.info(f"   Setting: intent_reclassified = True (prevents infinite loop)")
         
         # Construct result
@@ -110,7 +115,8 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             "intent": new_intent,
             "confidence": new_confidence,
             "entities": new_entities,
-            "intent_reclassified": True  # KEY: Set flag to True to prevent infinite loops
+            "intent_reclassified": True,  # KEY: Set flag to True to prevent infinite loops
+            "needs_clarification": needs_clarification  # Clear if high confidence
         }
         
         # Log state snapshot
