@@ -83,8 +83,18 @@ class AgentState(TypedDict):
     embedding_failed: bool                       # Embedding classifier failed - route to LLM
 
     # === CLARIFICATION ===
-    needs_clarification: bool                    # Ask user question?
-    clarifying_question: Optional[str]           # The question
+    needs_clarification: bool                    # Ask user question? (Also used by response_agent to determine mode)
+    clarifying_question: Optional[str]           # The question (after generation)
+    clarification_context: Optional[Dict[str, Any]]  # Context for clarification generation
+    # clarification_context structure:
+    # {
+    #     "reason": "low_confidence" | "missing_entity" | "ambiguous_intent",
+    #     "confidence": float,
+    #     "intent": str,
+    #     "user_query": str,
+    #     "missing_entities": List[str],
+    #     "intent_candidates": List[Tuple[str, float]]
+    # }
 
     # === CONTEXT ===
     conversation_history: List[Dict[str, str]]   # Recent messages
@@ -153,6 +163,7 @@ def create_initial_state(
         # Other fields
         needs_clarification=False,
         clarifying_question=None,
+        clarification_context=None,
         conversation_history=[],
         relevant_facts=[],
         extracted_slots=None,

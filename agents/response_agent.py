@@ -47,6 +47,53 @@ class ResponseAgent:
         self.logger = get_logger(__name__)
         self.client = gemini_client
     
+    def _get_followup_system_prompt(self) -> str:
+        """
+        System prompt for generating follow-up clarification questions
+        
+        Used when needs_clarification=True in state.
+        Instructs LLM to generate targeted, context-aware follow-up questions.
+        
+        Returns:
+            str: Follow-up question generation prompt
+        """
+        return """You are a specialized pharmacy claims assistant designed to enhance user interactions by asking targeted follow-up questions when user queries are unclear or incomplete.
+
+## Your Role
+When a user's question lacks clarity or essential details, generate one specific and relevant follow-up question to help clarify their intent. Your goal is to ensure that you gather the necessary information to assist the user effectively with their pharmacy claims inquiries.
+
+## Guidelines
+
+Generate ONE specific, conversational follow-up question to get missing information.
+
+CRITICAL: Before asking, check CONVERSATION HISTORY - the user may have already mentioned the information in a previous turn. Never ask for something they already provided.
+
+Key Points:
+• ONE question at a time (never ask for multiple things)
+• Be conversational and acknowledge what they've told you
+• Masked tokens like [CLAIM_ID_XXX] mean data is provided
+• If user mentioned claim X123 earlier, use it - don't ask again
+
+You'll receive:
+- USER QUERY: Current question
+- CONVERSATION HISTORY: Previous messages ← CHECK THIS FIRST
+- MISSING ENTITIES: What appears missing
+- PROVIDED ENTITIES: What's in current message
+
+Output: Just the follow-up question, no explanations.
+
+Good examples:
+✅ "I can help with that rejection. Could you provide your claim number?"
+✅ "To look that up for you, which claim are you asking about?"
+✅ "I'd be happy to help! Are you asking about a specific claim or all recent claims?"
+
+Bad examples:
+❌ "Which claim?" (when they just mentioned CLM123 in previous turn)
+❌ "Please provide claim number, date, and pharmacy." (too many things)
+❌ "Error: missing parameter claim_id" (robotic)
+
+Generate one clear, helpful question."""
+    
     def _get_system_prompt(self) -> str:
         """
         Get the default system prompt for pharmacy claims assistant.
@@ -56,37 +103,56 @@ class ResponseAgent:
         
         Returns:
             str: Complete system prompt
-        """
+"""
         return """# Pharmacy Claim Assistant System Prompt
 
 You are a specialized pharmacy claims assistant with expertise in interpreting and explaining claim information. Your role is to provide clear, concise information about pharmacy claims based on their status (Paid, Rejected, or Reversed).
 
-## Response Structure Guidelines
+## Response Strategy
 
-1. Always begin with a one-line or two-line summary of the claim status and key information.
-2. Format your responses in a concise, easy-to-scan format using bullet points, short tables, or brief sections.
-3. Avoid wordiness and unnecessary explanations.
-4. Tailor information based on claim status as follows:
-5. Strictly follow the format and structure of the example response formats below.
+**CRITICAL: Answer ONLY what the user asks for. Do NOT provide a full summary unless explicitly requested.**
 
-### For PAID or REVERSED claims, include:
-- One-line summary (including claim date, drug name, and status)
-- Member demographics (basic info only)
-- Financial information (patient cost, copay, deductible)
-- Accumulation details (toward deductible, out-of-pocket maximum)
+### Intent-Based Response Guidelines:
+
+**For specific queries, provide ONLY the relevant section:**
+
+- **claim_status, approval_info**: SUMMARY only (status, date, drug name)
+- **pricing_info, settlement_info, cob_info, reimbursement_info**: FINANCIAL section only
+  - Patient paid, Plan paid, Accumulation/deductible
+- **drug_info, rx_details**: DRUG section only
+  - Drug name, dosage, quantity, days supply, NDC
+- **pharmacy_info**: PHARMACY section only
+  - Name, location, NCPDP ID
+- **rejection_reasons**: REJECTION section
+  - Rejection code, message, recommended actions
+- **beneficiary_info, member_info**: MEMBER section only
+- **General/unclear queries**: Provide relevant sections based on query context
+
+### Response Formatting:
+
+1. Use bullet points for easy scanning
+2. Be concise - avoid wordiness and unnecessary explanations
+3. Maintain professional pharmacy terminology
+4. For follow-up questions, acknowledge previous context: "For the claim we discussed earlier..."
+
+### For FULL claim summaries (when requested), include:
+
+#### PAID or REVERSED claims:
+- One-line summary (claim date, drug name, status)
+- Financial information (patient cost, plan paid, accumulation)
 - Drug information (name, dosage, quantity, days supply)
-- Pharmacy information (name, location, provider ID)
+- Member demographics (basic info)
+- Pharmacy information (name, location)
 
-### For REJECTED claims, include:
-- One-line summary (including claim date, drug name, and rejection reason)
+#### REJECTED claims:
+- One-line summary (claim date, drug name, rejection reason)
 - Drug information (name, dosage, quantity)
-- Member demographics (basic info only)
-- Pharmacy information (name, location, provider ID)
-- Rejection code(s) and corresponding message(s)
-- Additional rejection context (if available)
-- Provide next steps to resolve the rejected claim (if available) - this is very important
+- Member demographics (basic info)
+- Pharmacy information (name, location)
+- Rejection code(s) and message(s)
+- Next steps to resolve (CRITICAL - very important)
 
-**CRITICAL FOR REJECTED CLAIMS**: When REJECT ANALYSIS data is provided in the prompt, ALWAYS prioritize using the detailed explanations, reasons, and actions from the REJECT ANALYSIS section over any basic rejection information in the CLAIM DATA. The REJECT ANALYSIS contains expert-level, persona-specific explanations that are far more valuable than raw claim rejection codes. Use the REJECT ANALYSIS descriptions, reasons, and recommended actions instead of generic claim rejection messages.
+**CRITICAL FOR REJECTED CLAIMS**: When REJECT ANALYSIS data is provided, ALWAYS prioritize the detailed explanations, reasons, and actions from REJECT ANALYSIS over basic claim rejection information. The REJECT ANALYSIS contains expert-level, persona-specific guidance that is more valuable than raw rejection codes.
 
 ## Handling Questions
 
@@ -182,33 +248,102 @@ Remember to maintain this structured, concise format for all responses, includin
     
     def _build_user_prompt(self, state: AgentState) -> str:
         """
-        Build user prompt from state data using ChatPromptTemplate.
+        Build user prompt from state data - handles both modes with separate variables
+        
+        MODES:
+        - Normal mode (needs_clarification=False): Uses tool_results for claim responses
+        - Clarification mode (needs_clarification=True): Uses clarification_context for questions
         
         Uses LangChain's ChatPromptTemplate for structured prompt management,
         following pattern from agents/intent_agent.py.
         
         Args:
-            state: Current agent state with user query, intent, and tool results
+            state: Current agent state with query, intent, and mode-specific data
             
         Returns:
             str: Formatted prompt for LLM
         """
-        # Extract data from state
-        user_text = state.get("text", "")
-        intent = state.get("intent", "unknown")
-        tool_results = state.get("tool_results")
-        history = state.get("conversation_history", [])
+        # Check mode first
+        needs_clarification = state.get("needs_clarification", False)
         
-        # Format tool results and history
-        claim_data = self._format_tool_results(tool_results) if tool_results else "No claim data available"
-        history_str = self._format_conversation_history(history) if history else "No previous conversation"
-        
-        # Use ChatPromptTemplate for structured prompt (following intent_agent.py pattern)
-        # This is better than string concatenation - cleaner and more maintainable
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("user", """USER QUERY: {user_query}
+        if needs_clarification:
+            # ===== CLARIFICATION MODE: Generate follow-up question =====
+            self.logger.info("🔍 Building clarification prompt (using clarification_context)")
+            
+            # Extract clarification context (not tool_results!)
+            clarification_ctx = state.get("clarification_context")
+            
+            # DEFENSIVE: Handle None case (should be dict but sometimes isn't)
+            if clarification_ctx is None:
+                self.logger.warning("⚠️ clarification_context is None, using defaults")
+                clarification_ctx = {}
+            
+            # Defensive check
+            if state.get("tool_results"):
+                self.logger.warning("⚠️ Unexpected: needs_clarification=True but tool_results present")
+            
+            # Extract context fields with defaults
+            reason = clarification_ctx.get("reason", "unknown")
+            user_query = clarification_ctx.get("user_query") or state.get("text", "")  # Fallback to state.text
+            intent = clarification_ctx.get("intent") or state.get("intent", "unknown")  # Fallback to state.intent
+            confidence = clarification_ctx.get("confidence") or state.get("confidence", 0.0)  # Fallback to state.confidence
+            missing_entities = clarification_ctx.get("missing_entities", [])
+            provided_entities = clarification_ctx.get("provided_entities", [])
+            
+            # Format history (may provide context for question)
+            history = state.get("conversation_history", [])
+            history_str = self._format_conversation_history(history) if history else "No previous conversation"
+            
+            # Build clarification prompt
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("user", """REASON FOR CLARIFICATION: {reason}
 
-INTENT: {intent}
+USER QUERY: {user_query}
+
+INTENT: {intent} (confidence: {confidence:.2f})
+
+MISSING ENTITIES: {missing_entities}
+PROVIDED ENTITIES: {provided_entities}
+
+=== CONVERSATION HISTORY ===
+{conversation_history}
+
+Generate ONE specific, helpful follow-up question to get the missing information. Just the question, no explanation.""")
+            ])
+            
+            messages = prompt_template.format_messages(
+                reason=reason,
+                user_query=user_query,
+                intent=intent,
+                confidence=confidence,
+                missing_entities=", ".join(missing_entities) if missing_entities else "None",
+                provided_entities=", ".join(provided_entities) if provided_entities else "None",
+                conversation_history=history_str
+            )
+            
+        else:
+            # ===== NORMAL MODE: Generate claim response =====
+            self.logger.info("💬 Building normal response prompt (using tool_results)")
+            
+            # Extract data from state (not clarification_context!)
+            user_text = state.get("text", "")
+            intent = state.get("intent", "unknown")
+            tool_results = state.get("tool_results")
+            history = state.get("conversation_history", [])
+            
+            # Defensive check
+            if state.get("clarification_context"):
+                self.logger.warning("⚠️ Unexpected: needs_clarification=False but clarification_context present")
+            
+            # Format tool results and history
+            claim_data = self._format_tool_results(tool_results) if tool_results else "No claim data available"
+            history_str = self._format_conversation_history(history) if history else "No previous conversation"
+            
+            # Build normal response prompt
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("user", """USER QUERY: {user_query}
+
+INTENT: {intent} <- Focus your response on this specific intent
 
 === CLAIM DATA ===
 {claim_data}
@@ -216,16 +351,15 @@ INTENT: {intent}
 === CONVERSATION HISTORY ===
 {conversation_history}
 
-Please provide a helpful and factual response following the format guidelines in your system instructions.""")
-        ])
-        
-        # Format the template with actual values
-        messages = prompt_template.format_messages(
-            user_query=user_text,
-            intent=intent,
-            claim_data=claim_data,
-            conversation_history=history_str
-        )
+Provide a targeted response that directly answers the user's question based on the INTENT above. Only include sections relevant to their specific query. Do not provide a full summary unless the query is general or asks for comprehensive information.""")
+            ])
+            
+            messages = prompt_template.format_messages(
+                user_query=user_text,
+                intent=intent,
+                claim_data=claim_data,
+                conversation_history=history_str
+            )
         
         # Extract the formatted text from the message
         # ChatPromptTemplate returns a list of messages, we need the content
@@ -421,7 +555,14 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
     persistence_store = None
     
     try:
-        logger.info("🤖 AGENT 2: Response Generation")
+        # Detect mode
+        needs_clarification = state.get("needs_clarification", False)
+        
+        if needs_clarification:
+            logger.info("🤖 AGENT 2: Follow-Up Question Generation (Clarification Mode)")
+        else:
+            logger.info("🤖 AGENT 2: Response Generation (Normal Mode)")
+        
         logger.info(f"⚙️ LLM Mode: {'Mock' if settings.use_mock_llm else 'Real Gemini'}")
 
         # Log node entry for audit trail (pattern from tools/claims_api.py)
@@ -433,7 +574,11 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 user_id=log_ctx.get("user_id"),
                 node_name=node_name,
                 event_type="node_entry",
-                data={"node": node_name, "intent": state.get("intent", "unknown")}
+                data={
+                    "node": node_name, 
+                    "intent": state.get("intent", "unknown"),
+                    "needs_clarification": needs_clarification
+                }
             )
         
         # Check if mock mode (for development only) 
@@ -449,17 +594,26 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         logger.info("🔧 Initializing Response Agent with Gemini...")
         agent = ResponseAgent()
         
-        # Get system prompt
-        system_prompt = agent._get_system_prompt()
+        # Get appropriate system prompt based on mode
+        if needs_clarification:
+            system_prompt = agent._get_followup_system_prompt()
+            logger.info("📝 Using follow-up question system prompt")
+        else:
+            system_prompt = agent._get_system_prompt()
+            logger.info("📝 Using standard response system prompt")
+        
         logger.debug(f"📋 System prompt: {len(system_prompt)} characters")
         
-        # Build user prompt from state
+        # Build user prompt from state (mode-aware)
         user_prompt = agent._build_user_prompt(state)
         logger.debug(f"📋 User prompt: {len(user_prompt)} characters")
         logger.debug(f"📋 Intent: {state.get('intent', 'unknown')}")
         
         # Generate response using Gemini
-        logger.info("🔮 Generating response with Gemini...")
+        if needs_clarification:
+            logger.info("🔮 Generating follow-up question with Gemini...")
+        else:
+            logger.info("🔮 Generating response with Gemini...")
         
         # Call generation method (synchronous but safe to call from async context)
         response_text = agent.generate_response(system_prompt, user_prompt)
@@ -467,10 +621,17 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Validate response
         if not response_text or not response_text.strip():
             logger.warning("⚠️ Empty response received from Gemini")
-            response_text = "I apologize, but I received an empty response. Please try again."
+            if needs_clarification:
+                response_text = "Could you please provide more details about your question?"
+            else:
+                response_text = "I apologize, but I received an empty response. Please try again."
         
-        logger.info(f"✅ Response generated: {len(response_text)} chars")
-        logger.info(f"💬 Preview: {response_text[:100]}...")
+        if needs_clarification:
+            logger.info(f"✅ Follow-up question generated: {len(response_text)} chars")
+            logger.info(f"❓ Question: {response_text}")
+        else:
+            logger.info(f"✅ Response generated: {len(response_text)} chars")
+            logger.info(f"💬 Preview: {response_text[:100]}...")
         
         # Log successful generation (telemetry pattern from tools/claims_api.py)
         if log_ctx and persistence_store:
@@ -479,15 +640,24 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 request_id=log_ctx.get("request_id"),
                 user_id=log_ctx.get("user_id"),
                 node_name=node_name,
-                event_type="response_generated",
+                event_type="followup_question_generated" if needs_clarification else "response_generated",
                 data={
                     "response_length": len(response_text),
                     "model": settings.llm_model,
-                    "temperature": settings.llm_temperature
+                    "temperature": settings.llm_temperature,
+                    "needs_clarification": needs_clarification
                 }
             )
         
+        # Build result - always use 'response' field for both modes
+        # The 'needs_clarification' flag in state already indicates if this is a question
         result = {"response": response_text}
+        
+        if needs_clarification:
+            logger.info("📝 Set 'response' field with clarification question")
+        else:
+            logger.info("📝 Set 'response' field with normal answer")
+        
         await log_state_snapshot(state, node_name, result)
         return result
         

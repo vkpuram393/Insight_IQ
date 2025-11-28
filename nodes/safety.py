@@ -21,14 +21,18 @@ ARCHITECTURE:
 """
 
 import traceback
+import time
 from typing import Dict, Any
 from langgraph.graph import END
 from state.schema import AgentState
 from config.config import settings
 from core.logger import get_logger
-from core.errors.models import create_internal_error
 from core.logging_context import extract_logging_context, log_state_snapshot
-from persistence import PersistenceStoreFactory
+from core.node_models import SafetyResult, SafetyCheckType, SafetyViolationType, create_safety_result
+from core.errors.models import create_safety_error, create_internal_error
+from core.telemetry import log_event
+from utils.serialization import to_dict
+from persistence import PersistenceStoreFactory, EventType
 from services.pii_protection import (
     get_safety_checker,
     get_pii_service
@@ -59,6 +63,102 @@ def _is_masked_token(text: str) -> bool:
     return bool(re.match(r'^\[[A-Z_]+_[A-F0-9]+\]$', text.strip()))
 
 
+def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
+    """
+    Determine if a detected PII entity is contextual data vs actual leakage
+    
+    Allows common contextual patterns that LLMs generate in normal responses:
+    - Generic location terms (state abbreviations, generic terms)
+    - API versions, error codes, status words
+    - Pharmaceutical terms (NDC codes, drug names)
+    - Truncated terms with "..." that are clearly non-personal
+    - Short numeric codes and ZIP codes
+    
+    Args:
+        entity_text: The detected PII text
+        entity_type: The type of PII entity
+        
+    Returns:
+        True if this is likely contextual data, False if it's potential leakage
+    """
+    import re
+    
+    # PERSON entities: Allow generic drug/medical terms that get misclassified
+    if entity_type == "PERSON":
+        generic_terms = [
+            'pharmacy', 'pharmacist', 'prescriber', 'patient', 'member',
+            'doctor', 'physician', 'nurse', 'provider', 'caregiver',
+            'male', 'female', 'adult', 'child', 'senior',
+            # Common drug/system terms misclassified as PERSON
+            'generic', 'brand', 'retail', 'mail', 'specialty'
+        ]
+        if entity_text.lower() in generic_terms:
+            return True
+        
+        # CRITICAL: Allow field names (camelCase, snake_case) misclassified as PERSON
+        # E.g., "groupNumber", "member_id", "claim_id"
+        field_name_patterns = [
+            r'^[a-z]+[A-Z]',  # camelCase (groupNumber, memberId)
+            r'^\w+_\w+$',      # snake_case (group_number, member_id)
+            r'^[A-Z_]+$',      # CONSTANT_CASE (GROUP_NUMBER)
+        ]
+        for pattern in field_name_patterns:
+            if re.match(pattern, entity_text):
+                return True
+        
+        # CRITICAL: Allow masked token IDs misclassified as PERSON
+        # E.g., "NDC_D0B47B08", "CLAIM_ID_ABC123" (without brackets)
+        if re.match(r'^[A-Z_]+_[A-F0-9]{8}$', entity_text):
+            return True
+        
+        # Allow truncated contextual terms (but NOT names with "...")
+        if entity_text.endswith('...'):
+            base_text = entity_text[:-3].lower()
+            # Only allow clearly non-personal contextual terms
+            safe_bases = ['pharmacy', 'drug', 'medication', 'prescription', 'claim']
+            if any(base in base_text for base in safe_bases):
+                return True
+            # Allow token IDs with "..." (truncated in logs)
+            if re.match(r'^[A-Z_]+_[A-F0-9]+$', base_text.replace('_', '_').upper()):
+                return True
+    
+    # LOCATION entities: Allow generic terms and state codes
+    elif entity_type == "LOCATION":
+        # Allow US state abbreviations (2 letters)
+        if len(entity_text) == 2 and entity_text.isupper():
+            return True
+        
+        # Allow generic location terms
+        generic_locations = ['usa', 'us', 'united states', 'pharmacy', 'store', 'retail']
+        if entity_text.lower() in generic_locations:
+            return True
+        
+        # Allow truncated ZIP codes (e.g., "35115...")
+        if re.match(r'^\d{5}\.\.\.$', entity_text):
+            return True
+    
+    # US_DRIVER_LICENSE: These are often false positives for system codes
+    elif entity_type == "US_DRIVER_LICENSE":
+        # Allow short alphanumeric codes (likely system codes, not real licenses)
+        if len(entity_text) <= 4:
+            return True
+        
+        # Allow API versions (v1, v2, etc.)
+        if re.match(r'^v\d+$', entity_text.lower()):
+            return True
+    
+    # NDC codes: These are drug codes, not personal information
+    elif entity_type == "NDC":
+        # Allow all NDC codes (they're pharmaceutical identifiers, not PII)
+        return True
+    
+    # Short codes that are likely system codes
+    if len(entity_text) <= 3:
+        return True
+    
+    return False
+
+
 # ============================================================================
 # NODE 1: UNIFIED SAFETY PRECHECK (All-in-One)
 # ============================================================================
@@ -81,55 +181,133 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
     OUTPUT (to state):
         - text: Safe, unmasked query with PII/PHI intact
         - safety_precheck_passed: bool
-        - threat_detected: bool
-        - threat_reason: str (if blocked)
+        - threat_detected: bool (for backward compatibility)
+        - threat_reason: str (for backward compatibility)
+        - safety_block_reason: str (if blocked)
         - response: error message (if blocked)
         - metadata.pii_metadata: PII detection metadata
+        - metadata.safety_precheck_metadata: SafetyResult metadata
     
     FLOW:
         Blocked → END (safety violation)
         Passed → Continue with PII/PHI intact for downstream nodes
     """
     node_name = "safety_precheck"
-    log_ctx = extract_logging_context(state)
+    start_time = time.time()
     
     logger.info("\n" + "="*70)
     logger.info("🛡️  SAFETY PRECHECK NODE - Unified Safety Check")
     logger.info("="*70)
     
+    # Extract logging context
+    log_ctx = extract_logging_context(state)
+    session_id = log_ctx["session_id"]
+    request_id = log_ctx["request_id"]
+    
+    # Check if safety precheck is enabled
     if not settings.enable_safety_precheck:
         logger.info("⭐ Safety precheck disabled in config")
-        result = {"safety_precheck_passed": True}
+        
+        # Create result for disabled case
+        processing_time_ms = (time.time() - start_time) * 1000
+        safety_obj = create_safety_result(
+            check_type=SafetyCheckType.PRECHECK,
+            passed=True,
+            block_reason="Safety precheck disabled in configuration",
+            processing_time_ms=processing_time_ms
+        )
+        
+        result = {
+            "safety_precheck_passed": True,
+            "threat_detected": False,
+            "threat_reason": None,
+            "safety_block_reason": None,
+            "metadata": {
+                **state.get("metadata", {}),
+                "safety_precheck_metadata": to_dict(safety_obj)
+            }
+        }
         await log_state_snapshot(state, node_name, result)
         return result
     
     text = state.get("text", "")
-    session_id = state.get("session_id", "default")
     
     try:
         # Get safety checker instance
         safety_checker = get_safety_checker()
         
         # Run complete safety pipeline (Method 3)
-        result = await safety_checker.check_harmful_content(text, session_id)
+        logger.info(f"🔍 Running safety checks for session: {session_id}")
+        safety_result = await safety_checker.check_harmful_content(text, session_id)
         
-        if not result["is_safe"]:
+        processing_time_ms = (time.time() - start_time) * 1000
+        
+        if not safety_result["is_safe"]:
             # Safety violation detected
-            reason = result.get("reason", "Content safety violation")
-            violation_categories = result.get("violation_categories", [])
+            reason = safety_result.get("reason", "Content safety violation")
+            violation_categories = safety_result.get("violation_categories", [])
             
             logger.warning(f"🚫 BLOCKED: {reason}")
             if violation_categories:
                 logger.warning(f"   Categories: {', '.join(violation_categories)}")
             
-            result_dict = {
-                "safety_precheck_passed": False,
-                "threat_detected": True,
-                "threat_reason": reason,
-                "response": (
+            # Log to telemetry
+            await log_event(
+                event_type=EventType.SAFETY_BLOCKED,
+                session_id=session_id,
+                data={
+                    "reason": reason,
+                    "violation_categories": violation_categories,
+                    "text_length": len(text),
+                    "processing_time_ms": processing_time_ms
+                }
+            )
+            
+            # Create SafetyResult object
+            safety_obj = create_safety_result(
+                check_type=SafetyCheckType.PRECHECK,
+                passed=False,
+                violation_type=SafetyViolationType.INAPPROPRIATE_CONTENT,
+                block_reason=reason,
+                confidence_score=1.0,
+                user_message=(
                     "I'm here to help with pharmacy claims and coverage questions. "
                     "I can't assist with that type of request."
-                )
+                ),
+                processing_time_ms=processing_time_ms
+            )
+            
+            # Log to persistence store
+            persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+            error = create_safety_error(
+                reason=reason,
+                is_precheck=True,
+                session_id=session_id
+            )
+            await persistence_store.log_exception(
+                error_code=error.error_code.value,
+                category=error.category.value,
+                severity=error.severity.value,
+                message=error.message,
+                user_message=error.user_message,
+                session_id=session_id,
+                request_id=request_id,
+                node_name=node_name,
+                stacktrace=error.stacktrace,
+                user_id=log_ctx.get("user_id", "unknown")
+            )
+            
+            result_dict = {
+                "safety_precheck_passed": False,
+                "threat_detected": True,  # Backward compatibility
+                "threat_reason": reason,  # Backward compatibility
+                "safety_block_reason": reason,
+                "response": safety_obj.user_message,
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "safety_precheck_metadata": to_dict(safety_obj),
+                    "violation_categories": violation_categories
+                }
             }
             await log_state_snapshot(state, node_name, result_dict)
             return result_dict
@@ -137,57 +315,118 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         # Safety check passed - return unmasked text with PII/PHI
         logger.info("✅ Safety check passed - Query is safe")
         logger.info(f"   PII/PHI intact for downstream processing")
+        logger.info(f"   Processing time: {processing_time_ms:.2f}ms")
         
         # Store PII metadata for later use
+        pii_metadata = safety_result.get("pii_metadata", {})
         metadata = state.get("metadata", {})
-        metadata["pii_metadata"] = result.get("pii_metadata", {})
+        metadata["pii_metadata"] = pii_metadata
+        
+        # Create SafetyResult object for passed case
+        detected_keywords = []
+        if pii_metadata.get("has_pii"):
+            detected_keywords = pii_metadata.get("entities_detected", [])
+        
+        safety_obj = create_safety_result(
+            check_type=SafetyCheckType.PRECHECK,
+            passed=True,
+            violation_type=SafetyViolationType.NONE,
+            block_reason=None,
+            detected_keywords=detected_keywords,
+            confidence_score=1.0,
+            processing_time_ms=processing_time_ms
+        )
+        
+        metadata["safety_precheck_metadata"] = to_dict(safety_obj)
+        
+        # Log successful check to telemetry
+        await log_event(
+            event_type=EventType.REQUEST_RECEIVED,
+            session_id=session_id,
+            data={
+                "node": "safety_precheck",
+                "passed": True,
+                "text_length": len(text),
+                "has_pii": pii_metadata.get("has_pii", False),
+                "pii_count": pii_metadata.get("masked_count", 0),
+                "processing_time_ms": processing_time_ms,
+                "mock_mode": safety_result.get("mock_mode", False)
+            }
+        )
         
         result_dict = {
-            "text": result["text"],  # Unmasked text with PII/PHI intact
+            "text": safety_result["text"],  # Unmasked text with PII/PHI intact
             "safety_precheck_passed": True,
-            "threat_detected": False,
-            "threat_reason": None,
+            "threat_detected": False,  # Backward compatibility
+            "threat_reason": None,  # Backward compatibility
+            "safety_block_reason": None,
             "metadata": metadata
         }
         await log_state_snapshot(state, node_name, result_dict)
         return result_dict
         
     except Exception as e:
+        processing_time_ms = (time.time() - start_time) * 1000
         tb = traceback.format_exc()
+        logger.error(f"❌ Safety precheck failed: {e}\n{tb}")
+        
+        # Create error result
+        safety_obj = create_safety_result(
+            check_type=SafetyCheckType.PRECHECK,
+            passed=False,
+            violation_type=SafetyViolationType.MALICIOUS_INPUT,
+            block_reason=f"Safety check error: {str(e)}",
+            user_message=(
+                "I'm unable to process your request at this time. "
+                "Please try again later."
+            ),
+            processing_time_ms=processing_time_ms
+        )
+        
+        # Log error to persistence store
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
         error = create_internal_error(
             error_message=f"Safety precheck failed: {str(e)}",
             stacktrace=tb,
-            session_id=log_ctx["session_id"],
+            session_id=session_id,
             node_name=node_name
         )
-        
-        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
         await persistence_store.log_exception(
             error_code=error.error_code.value,
             category=error.category.value,
             severity=error.severity.value,
             message=error.message,
             user_message=error.user_message,
-            session_id=log_ctx["session_id"],
-            request_id=log_ctx["request_id"],
+            session_id=session_id,
+            request_id=request_id,
             node_name=node_name,
-            stacktrace=error.stacktrace,
+            stacktrace=tb,
             metadata=error.metadata,
-            user_id=log_ctx["user_id"]
+            user_id=log_ctx.get("user_id", "unknown")
         )
         
-        logger.error(f"❌ Safety precheck failed: {e}\n{tb}")
+        # Log to telemetry
+        await log_event(
+            event_type=EventType.ERROR_OCCURRED,
+            session_id=session_id,
+            data={
+                "node": "safety_precheck",
+                "error": str(e),
+                "text_length": len(text),
+                "processing_time_ms": processing_time_ms
+            }
+        )
+        
         # Fail closed - block on error
         result = {
             "safety_precheck_passed": False,
-            "threat_detected": True,
-            "threat_reason": f"Safety check error: {str(e)}",
-            "response": (
-                "I'm unable to process your request at this time. "
-                "Please try again later."
-            ),
+            "threat_detected": True,  # Backward compatibility
+            "threat_reason": f"Safety check error: {str(e)}",  # Backward compatibility
+            "safety_block_reason": f"Safety check error: {str(e)}",
+            "response": safety_obj.user_message,
             "metadata": {
                 **state.get("metadata", {}),
+                "safety_precheck_metadata": to_dict(safety_obj),
                 "error_occurred": True,
                 "error_code": error.error_code.value
             }
@@ -209,11 +448,13 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
     INPUT (from state):
         - text: UNMASKED text (with PII/PHI from previous nodes)
         - tool_results: May contain PII/PHI
+        - conversation_history: UNMASKED history (may contain PII/PHI from previous turns)
         - session_id: For token storage
     
     OUTPUT (to state):
         - text: MASKED text
         - tool_results: MASKED (if contains PII/PHI)
+        - conversation_history: MASKED (previous conversation with PII/PHI protected)
         - metadata.response_pii_masking: Masking metadata
     
     FLOW:
@@ -229,70 +470,114 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
     
     text = state.get("text", "")
     tool_results = state.get("tool_results", {})
+    conversation_history = state.get("conversation_history", [])
     session_id = state.get("session_id", "default")
     
     try:
         pii_service = get_pii_service()
         
-        # Check if tool_results already contain masked data (_masked_response)
-        # If so, skip re-masking to avoid double masking with different tokens
-        tool_data = tool_results.get("data", {}) if tool_results else {}
-        tool_already_masked = "_masked_response" in tool_data
+        # Mask text (user input PII)
+        masked_text, text_metadata = pii_service.mask_pii_phi(text, session_id)
         
-        if tool_already_masked:
-            logger.info("🔒 Tool results already contain _masked_response, skipping tool masking")
-            logger.info("   (Preventing double masking with different tokens)")
-            # Use existing PII metadata from tool results
-            tool_metadata = tool_data.get("_pii_metadata", {
+        # Mask tool results using mask_api_response (handles structured data properly)
+        # This will reuse tokens from text_metadata if same PII appears, and track API-sourced PII separately
+        if tool_results and isinstance(tool_results, dict):
+            logger.info(f"🔍 Masking tool results (API data)...")
+            existing_token_mapping = text_metadata.get("token_mapping", {})
+            masked_tool_results, combined_token_mapping = pii_service.mask_api_response(
+                api_response=tool_results,
+                session_id=session_id,
+                existing_token_mapping=existing_token_mapping
+            )
+            
+            # Calculate tool-specific masked count (new tokens created for API data)
+            tool_masked_count = len(combined_token_mapping) - len(existing_token_mapping)
+            
+            # Build tool_metadata with proper structure
+            tool_metadata = {
+                "has_pii": tool_masked_count > 0,
+                "masked_count": tool_masked_count,
+                "entities_detected": [
+                    data["entity_type"] 
+                    for token, data in combined_token_mapping.items() 
+                    if token not in existing_token_mapping
+                ],
+                "token_mapping": combined_token_mapping  # Full combined mapping
+            }
+            
+            logger.info(f"🎭 Masked {tool_masked_count} NEW PII/PHI entities from API data")
+        else:
+            masked_tool_results = tool_results
+            tool_metadata = {
                 "has_pii": False,
                 "masked_count": 0,
                 "entities_detected": [],
-                "token_mapping": {}
-            })
+                "token_mapping": text_metadata.get("token_mapping", {})
+            }
+        
+        # CRITICAL: Mask conversation history (previous turns may contain PII/PHI)
+        masked_history = []
+        history_masked_count = 0
+        if conversation_history:
+            logger.info(f"🔍 Masking conversation history ({len(conversation_history)} messages)...")
+            current_token_mapping = tool_metadata["token_mapping"].copy()
+            
+            for msg in conversation_history:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                
+                if content:
+                    # Mask content using existing tokens to avoid duplicate masking
+                    masked_content, _ = pii_service.mask_pii_phi(content, session_id)
+                    
+                    # Count how many NEW PII entities were found in history
+                    # (Don't double-count if already in tool_metadata)
+                    content_pii = pii_service.detect_pii_phi(content)
+                    history_masked_count += len(content_pii)
+                    
+                    masked_history.append({
+                        "role": role,
+                        "content": masked_content
+                    })
+                else:
+                    masked_history.append(msg)
+            
+            logger.info(f"🎭 Masked {history_masked_count} PII/PHI entities in conversation history")
         else:
-            # Mask tool results (convert to string, mask, keep structure)
-            logger.info("🔐 Masking tool results (no _masked_response found)")
-            tool_results_str = str(tool_results)
-            masked_tool_results_str, tool_metadata = pii_service.mask_pii_phi(tool_results_str, session_id)
+            masked_history = conversation_history
         
-        # Always mask text field (user query may have PII)
-        masked_text, text_metadata = pii_service.mask_pii_phi(text, session_id)
-        
-        total_masked = text_metadata["masked_count"] + tool_metadata["masked_count"]
+        total_masked = text_metadata["masked_count"] + tool_metadata["masked_count"] + history_masked_count
         
         if total_masked > 0:
-            logger.info(f"🎭 Masked {total_masked} PII/PHI entities before response LLM")
+            logger.info(f"🎭 Total masked: {total_masked} PII/PHI entities before response LLM")
+            logger.info(f"   - Text (user input): {text_metadata['masked_count']} entities")
+            logger.info(f"   - Tool results (API data): {tool_metadata['masked_count']} entities")
+            logger.info(f"   - Conversation history: {history_masked_count} entities")
             logger.debug(f"   Original text: {text[:100]}...")
             logger.debug(f"   Masked text: {masked_text[:100]}...")
         else:
             logger.info("ℹ️  No PII/PHI detected - data unchanged")
         
-        # ===== NEW: Store tokens by source (tool, text, context) =====
-        # This enables source-aware unmasking with proper priority
-        tool_token_mapping = tool_metadata.get("token_mapping", {})
-        text_token_mapping = text_metadata.get("token_mapping", {})
-        
-        # Store in state for source-aware unmasking
-        result = {
-            "text": masked_text,
-            "tool_tokens": tool_token_mapping if tool_token_mapping else None,
-            "text_tokens": text_token_mapping if text_token_mapping else None,
-            # context_tokens will be set by context builder if needed
-        }
-        
-        # Keep legacy metadata for backward compatibility (if needed by other code)
+        # Store metadata for unmasking (with FULL token mappings)
         metadata = state.get("metadata", {})
         metadata["response_pii_masking"] = {
             "text_metadata": text_metadata,
             "tool_metadata": tool_metadata
         }
-        result["metadata"] = metadata
         
+        result = {
+            "text": masked_text,
+            "tool_results": masked_tool_results,  # Pass masked tool results to response agent
+            "conversation_history": masked_history,  # Pass masked conversation history to response agent
+            "metadata": metadata
+        }
         await log_state_snapshot(state, node_name, result)
         return result
         
     except Exception as e:
         tb = traceback.format_exc()
+        logger.error(f"❌ Response PII masking failed: {e}\n{tb}")
+        
         error = create_internal_error(
             error_message=f"Response PII masking failed: {str(e)}",
             stacktrace=tb,
@@ -315,7 +600,6 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
             user_id=log_ctx["user_id"]
         )
         
-        logger.error(f"❌ Response PII masking failed: {e}\n{tb}")
         # Fail-safe: continue with original text (not ideal but prevents blocking)
         result = {
             "metadata": {
@@ -352,6 +636,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
     
     OUTPUT (to state):
         - response: UNMASKED response (real values restored)
+        - text: UNMASKED text (for conversation history)
         - safety_postcheck_passed: bool
         - metadata.response_pii_unmasking: Unmasking stats
         - metadata.leakage_check: Leakage detection results
@@ -368,6 +653,7 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
     logger.info("="*70)
     
     response = state.get("response", "")
+    session_id = state.get("session_id", "default")
     
     if not response:
         logger.warning("⚠️  No response to postcheck")
@@ -377,50 +663,18 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
     
     try:
         pii_service = get_pii_service()
-        session_id = log_ctx["session_id"]
-        text = state.get("text", "")
-        
-        # ===== NEW: Get source-aware token mappings =====
-        # Priority for unmasking: tool_tokens > text_tokens > context_tokens
-        tool_token_mapping = state.get("tool_tokens") or {}
-        text_token_mapping = state.get("text_tokens") or {}
-        context_token_mapping = state.get("context_tokens") or {}
-        
-        # Build combined mapping with source tracking
-        # Higher priority sources override lower priority (tool > text > context)
-        combined_token_mapping = {}
-        source_tracker = {}  # Track which source each token came from
-        
-        # Add in reverse priority order (so higher priority overwrites lower)
-        for token, data in context_token_mapping.items():
-            combined_token_mapping[token] = data
-            source_tracker[token] = "context"
-        
-        for token, data in text_token_mapping.items():
-            combined_token_mapping[token] = data
-            source_tracker[token] = "text"
-        
-        for token, data in tool_token_mapping.items():
-            combined_token_mapping[token] = data
-            source_tracker[token] = "tool"
-        
-        # Legacy support: fallback to metadata if new fields not populated
         metadata = state.get("metadata", {})
         response_pii_masking = metadata.get("response_pii_masking", {})
-        if not combined_token_mapping and response_pii_masking:
-            logger.info("⚠️  Using legacy token mapping from metadata (new token fields not populated)")
-            text_metadata = response_pii_masking.get("text_metadata", {})
-            tool_metadata = response_pii_masking.get("tool_metadata", {})
-            
-            legacy_text_tokens = text_metadata.get("token_mapping", {})
-            legacy_tool_tokens = tool_metadata.get("token_mapping", {})
-            
-            combined_token_mapping = {**legacy_text_tokens, **legacy_tool_tokens}
-            # Track sources for legacy tokens too
-            for token in legacy_text_tokens.keys():
-                source_tracker[token] = "text_legacy"
-            for token in legacy_tool_tokens.keys():
-                source_tracker[token] = "tool_legacy"
+        
+        # Get token mappings
+        text_metadata = response_pii_masking.get("text_metadata", {})
+        tool_metadata = response_pii_masking.get("tool_metadata", {})
+        
+        text_token_mapping = text_metadata.get("token_mapping", {})
+        tool_token_mapping = tool_metadata.get("token_mapping", {})
+        
+        # Combine token mappings
+        combined_token_mapping = {**text_token_mapping, **tool_token_mapping}
         
         # ===== STEP 1: Check for PII Leakage =====
         logger.info("Step 1: Leakage detection")
@@ -433,25 +687,44 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             entity_text = entity["text"]
             entity_type = entity["entity_type"]
             
-            # CRITICAL: Skip if this is a masked token (e.g., [CLAIM_ID_ABC123])
+            # STEP 1: Skip if this is a masked token (e.g., [CLAIM_ID_ABC123])
             # These are legitimate masked tokens, not leaked PII
             if _is_masked_token(entity_text):
-                logger.debug(f"   Skipping token: {entity_text} (legitimate masked token)")
+                logger.debug(f"   ✓ Skipping token: {entity_text} (legitimate masked token)")
                 continue
             
-            # Check if this PII value was in original input
+            # STEP 2: Check if this PII value was in original input or API data
+            # This checks against BOTH text_token_mapping (user input) AND tool_token_mapping (API data)
             is_expected = any(
                 entity_text == data["original"] 
                 for data in combined_token_mapping.values()
             )
             
-            # 🔧 TRIAL 1: Allow contextual data that LLM generates as part of normal response
-            is_contextual_data = _is_contextual_entity(entity_text, entity_type)
+            # STEP 2b: For PERSON entities, also check name variations (first/last order)
+            # E.g., "Chloe Roberts" in API but "Roberts Chloe" in response
+            if not is_expected and entity_type == "PERSON" and ' ' in entity_text:
+                parts = entity_text.split()
+                if len(parts) == 2:
+                    # Try reversed name order
+                    reversed_name = f"{parts[1]} {parts[0]}"
+                    is_expected = any(
+                        reversed_name == data["original"]
+                        for data in combined_token_mapping.values()
+                        if data.get("entity_type") == "PERSON"
+                    )
             
-            if not is_expected and not is_contextual_data:
-                # NEW PII detected that isn't contextual - this is a leak!
-                logger.warning(f"   Potential leak detected: {entity_type} = {entity_text[:20]}...")
+            # STEP 3: Check if this is contextual data (generic terms, system codes, etc.)
+            is_contextual = _is_contextual_entity(entity_text, entity_type)
+            
+            if not is_expected and not is_contextual:
+                # NEW PII detected that isn't contextual - this is a REAL leak!
+                logger.warning(f"   ⚠️  Potential leak: {entity_type} = {entity_text[:20]}...")
                 leaked_entities.append(entity)
+            else:
+                if is_expected:
+                    logger.debug(f"   ✓ Expected PII: {entity_type} (from input or API data)")
+                if is_contextual:
+                    logger.debug(f"   ✓ Contextual data: {entity_type} = {entity_text[:20]}...")
         
         if leaked_entities:
             logger.error(
@@ -499,41 +772,17 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             await log_state_snapshot(state, node_name, result)
             return result
         
-        # DEBUG: Check what tokens we have vs what's in response
-        logger.info(f"📋 Available tokens for unmasking: {len(combined_token_mapping)}")
-        response_tokens = [token for token in combined_token_mapping.keys() if token in response]
-        logger.info(f"🔍 Tokens found in response: {len(response_tokens)}")
-        if len(response_tokens) != len(combined_token_mapping):
-            logger.warning(f"⚠️  Response contains different tokens than expected!")
-            # Find tokens in response that aren't in our mapping
-            import re
-            response_token_pattern = r'\[([A-Z_]+)_[A-F0-9]+\]'
-            found_tokens_full = re.findall(response_token_pattern, response)
-            found_tokens_types = re.findall(r'\[([A-Z_]+)_[A-F0-9]+\]', response)
-            logger.warning(f"   Token types in response: {found_tokens_types}")
-            available_types = [data["entity_type"] for data in combined_token_mapping.values()]
-            logger.warning(f"   Available token types: {set(available_types)}")
-        
-        # Enhanced unmasking: Handle tokens that LLM might have generated
-        unmasked_response = _unmask_with_fallback(response, combined_token_mapping, pii_service)
+        # Unmask tokens in response
+        unmasked_response = pii_service.unmask_pii_phi(response, combined_token_mapping)
         
         # CRITICAL: Also unmask text field so conversation history stores unmasked data
+        text = state.get("text", "")
         unmasked_text = pii_service.unmask_pii_phi(text, text_token_mapping) if text_token_mapping else text
         
-        # Count tokens unmasked by source
         tokens_unmasked = sum(1 for token in combined_token_mapping.keys() if token in response)
         text_tokens_unmasked = sum(1 for token in text_token_mapping.keys() if token in text) if text_token_mapping else 0
         
-        # NEW: Track which sources were used for unmasking
-        tokens_by_source = {"tool": 0, "text": 0, "context": 0, "tool_legacy": 0, "text_legacy": 0}
-        for token in combined_token_mapping.keys():
-            if token in response:
-                source = source_tracker.get(token, "unknown")
-                if source in tokens_by_source:
-                    tokens_by_source[source] += 1
-        
         logger.info(f"🔓 Unmasked {tokens_unmasked} tokens in final response")
-        logger.info(f"   📊 By source: {', '.join(f'{src}={cnt}' for src, cnt in tokens_by_source.items() if cnt > 0)}")
         if text_tokens_unmasked > 0:
             logger.info(f"🔓 Unmasked {text_tokens_unmasked} tokens in text field (for conversation history)")
         logger.debug(f"   Masked response: {response[:100]}...")
@@ -549,7 +798,6 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                 "response_pii_unmasking": {
                     "tokens_unmasked": tokens_unmasked,
                     "text_tokens_unmasked": text_tokens_unmasked,
-                    "tokens_by_source": tokens_by_source,  # NEW: Source tracking
                     "token_types": list(set(
                         data["entity_type"] 
                         for data in combined_token_mapping.values()
@@ -562,6 +810,8 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         
     except Exception as e:
         tb = traceback.format_exc()
+        logger.error(f"❌ Response postcheck failed: {e}\n{tb}")
+        
         error = create_internal_error(
             error_message=f"Response postcheck failed: {str(e)}",
             stacktrace=tb,
@@ -584,7 +834,6 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             user_id=log_ctx["user_id"]
         )
         
-        logger.error(f"❌ Response postcheck failed: {e}\n{tb}")
         # Fail-safe: Return response as-is (may contain tokens)
         result = {
             "response": response,
@@ -601,184 +850,20 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# ROUTERS
 # ============================================================================
 
-def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
+def should_continue_after_precheck(state: AgentState) -> str:
     """
-    Determine if a detected PII entity is contextual data generated by LLM vs actual leakage
-    
-    TRIAL 1: Allow common contextual patterns that LLMs generate as part of normal responses
-    TRIAL 2: Expanded allowed location entities (state abbreviations, generic terms)
-    TRIAL 3: Allow API versions, error codes, status words, and system timestamps
-    TRIAL 4: Allow pharmaceutical terms (NDC), time periods (annual, days), and truncated terms (...)
-    TRIAL 5: Allow ZIP codes and system numeric codes in truncated format
-    
-    Args:
-        entity_text: The detected PII text
-        entity_type: The type of PII entity
-        
-    Returns:
-        True if this is likely contextual data, False if it's potential leakage
-    """
-    import re
-    
-    # Allow certain types of contextual data that LLMs commonly generate
-    if entity_type == "DATE_TIME":
-        # Allow reasonable date patterns for claims processing
-        if re.match(r'202[0-9]-\d{2}-\d{2}', entity_text):  # Recent dates like 2025-05-01
-            return True
-        if entity_text.lower() in ['today', 'yesterday', 'recently', 'last month']:
-            return True
-        
-        # TRIAL 3: Allow system timestamps (ISO format with timezone)
-        if re.match(r'202[0-9]-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', entity_text):
-            return True
-        if '+' in entity_text and ':' in entity_text:  # Timezone info
-            return True
-        
-        # TRIAL 4: Allow time period terms and partial/truncated terms
-        time_terms = ['annual', 'annual...', 'days', 'days...', 'monthly', 'weekly', 'yearly']
-        if entity_text.lower() in time_terms:
-            return True
-        
-        # Allow time patterns (HH:MM:SS format)
-        if re.match(r'^\d{2}:\d{2}:\d{2}$', entity_text):
-            return True
-        
-        # Allow short numeric codes (often misclassified as dates)
-        if re.match(r'^\d{2,4}$', entity_text) and int(entity_text) < 9999:
-            return True
-        
-        # Allow specific truncated contextual terms but NOT personal names or locations
-        if entity_text.endswith('...'):
-            base_text = entity_text[:-3].lower()
-            # Only allow clearly non-personal contextual terms
-            safe_contextual_bases = ['annual', 'days', 'monthly', 'ndc', 'drug', 'benefit']
-            if base_text in safe_contextual_bases:
-                return True
-            
-            # TRIAL 5: Allow ZIP codes and system numeric codes that get truncated
-            # ZIP codes (5 digits) are often generic location data in claims
-            if re.match(r'^\d{5}$', base_text):  # 5-digit ZIP codes like 35115
-                return True
-    
-    elif entity_type == "PERSON":
-        # Allow common generic drug/medical terms that get misclassified as PERSON
-        medical_terms = [
-            'cabergoline', 'lipitor', 'metformin', 'aspirin', 'ibuprofen',
-            'patient', 'member', 'subscriber', 'beneficiary', 'claim'
-        ]
-        if entity_text.lower() in medical_terms:
-            return True
-        
-        # TRIAL 3: Allow system status words that get misclassified as PERSON
-        status_words = ['failure', 'success', 'error', 'warning', 'info', 'debug',
-                       'complete', 'pending', 'processing', 'approved', 'denied']
-        if entity_text.lower() in status_words:
-            return True
-        
-        # TRIAL 4: Allow pharmaceutical and medical terms
-        pharma_terms = ['ndc', 'ndc...', 'drug', 'medication', 'pharmacy', 'rx', 'prescription',
-                       'prescr', 'capension', 'cagm', 'govclp', 'claimstatus']
-        if entity_text.lower() in pharma_terms or entity_text.lower().startswith('ndc'):
-            return True
-        
-        # Allow system/API terms that get misclassified as PERSON
-        system_terms = ['api', 'v1', 'v2', 'failure', 'success', 'error', 'debug',
-                       'date_time_', 'claim_id_', 'person_', 'phone_number_']
-        if entity_text.lower() in system_terms or any(entity_text.lower().startswith(term) for term in system_terms):
-            return True
-        
-        # Allow single words that are likely drug names (all caps, medical-looking)
-        if len(entity_text) > 5 and entity_text.isupper():
-            return True
-    
-    elif entity_type == "LOCATION":
-        # Allow generic location references and common healthcare locations
-        generic_locations = [
-            'pharmacy', 'hospital', 'clinic', 'medical center', 'health system',
-            'local', 'nearby', 'your area', 'retail', 'mail order', 'online',
-            'al', 'usa', 'united states', 'america'  # Common abbreviations/countries
-        ]
-        if entity_text.lower() in generic_locations:
-            return True
-        
-        # Allow state abbreviations (2 letters)
-        if len(entity_text) == 2 and entity_text.isupper():
-            return True
-    
-    elif entity_type == "US_DRIVER_LICENSE":
-        # This is often a false positive for numbers in claims
-        # Allow if it looks like a claim reference number or amount
-        if re.match(r'^\d+$', entity_text) and len(entity_text) < 10:
-            return True
-        
-        # TRIAL 3: Allow common API/system identifiers that get misclassified
-        api_patterns = ['v1', 'v2', 'api', 'e4001', 'e4002', 'e5001', 'b1', 'z340100']
-        if entity_text.lower() in api_patterns:
-            return True
-        
-        # Allow error codes (E followed by numbers)
-        if re.match(r'^[eE]\d+$', entity_text):
-            return True
-        
-        # Allow provider/system IDs (numbers that are clearly system identifiers)
-        if re.match(r'^\d{6,15}$', entity_text):  # 6-15 digit numbers (provider IDs, system IDs)
-            return True
-    
-    # Default: flag as potential leakage
-    return False
+    After safety precheck, decide next step
 
-
-def _unmask_with_fallback(response: str, token_mapping: Dict[str, Dict], pii_service) -> str:
+    ROUTING:
+        Blocked → END (return error)
+        Passed → continue (to cache check)
     """
-    Enhanced unmasking that handles LLM-generated tokens that might not exactly match our mapping.
+    if not state.get("safety_precheck_passed", False):
+        logger.info("⛔ Flow blocked - threat detected")
+        return END
     
-    Handles multiple scenarios:
-    1. Exact token match: [CLAIM_ID_ABC123] in mapping
-    2. LLM-generated new tokens: [CLAIM_ID_XYZ789] not in mapping (match by type)
-    3. LLM removed brackets: CLAIM_ID_ABC123 or `CLAIM_ID_ABC123` (markdown)
-    """
-    import re
-    
-    # First try normal unmasking (exact matches with brackets)
-    unmasked_response = pii_service.unmask_pii_phi(response, token_mapping)
-    
-    # Build reverse mapping by entity type: entity_type -> [original_values]
-    type_to_values = {}
-    for token_data in token_mapping.values():
-        entity_type = token_data["entity_type"]
-        original_value = token_data["original"]
-        if entity_type not in type_to_values:
-            type_to_values[entity_type] = []
-        if original_value not in type_to_values[entity_type]:
-            type_to_values[entity_type].append(original_value)
-    
-    # Pattern 1: Standard tokens with brackets [ENTITY_TYPE_HASH]
-    for full_token_match in re.finditer(r'\[([A-Z_]+)_[A-F0-9]+\]', unmasked_response):
-        full_token = full_token_match.group(0)
-        entity_type = full_token_match.group(1)
-        
-        if entity_type in type_to_values and type_to_values[entity_type]:
-            replacement_value = type_to_values[entity_type][0]
-            unmasked_response = unmasked_response.replace(full_token, replacement_value)
-            logger.info(f"🔄 Fallback unmasking (bracketed): {full_token} → {replacement_value}")
-    
-    # Pattern 2: Tokens without brackets (LLM removed them) - ENTITY_TYPE_HASH or `ENTITY_TYPE_HASH`
-    # Be careful to match only complete tokens, not partial matches
-    for full_token_match in re.finditer(r'`?([A-Z_]+_[A-F0-9]+)`?', unmasked_response):
-        token_without_brackets = full_token_match.group(1)
-        full_match = full_token_match.group(0)
-        
-        # Extract entity type (e.g., "CLAIM_ID" from "CLAIM_ID_ABC123")
-        type_match = re.match(r'([A-Z_]+)_[A-F0-9]+', token_without_brackets)
-        if type_match:
-            entity_type = type_match.group(1)
-            
-            if entity_type in type_to_values and type_to_values[entity_type]:
-                replacement_value = type_to_values[entity_type][0]
-                unmasked_response = unmasked_response.replace(full_match, replacement_value)
-                logger.info(f"🔄 Fallback unmasking (no brackets): {full_match} → {replacement_value}")
-    
-    return unmasked_response
+    logger.info("✅ Flow continues")
+    return "check_cache"

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     openai_api_key: str = "mock"
     use_mock_llm: bool = False  # Set to False to use real Google Gemini LLM
     llm_model: str = "gemini-2.5-flash"
-    llm_temperature: float = 0.7
+    llm_temperature: float = 0.1
     top_p: float = 0.95
     max_output_tokens: int = 2048
     project_id: str = "pbm-poc-coderev-genai-poc"
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     azure_client_secret: str = ""
     
     # Embeddings Provider Selection (uses same project_id/location as Gemini LLM)
-    use_google_embeddings: bool = True  # Set to True to use Google Cloud text-embedding-005 instead of Azure
+    use_google_embeddings: bool = False  # Set to True to use Google Cloud text-embedding-005 instead of Azure
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
 
     # Checkpoint
     checkpoint_db_path: str = "checkpoints.db"
-    enable_checkpointing: bool = False  # disable to avoid async saver issues during local debugging
+    enable_checkpointing: bool = True  # Enable to persist state across turns for follow-up questions
 
     # App
     environment: str = "development"

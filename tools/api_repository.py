@@ -36,8 +36,8 @@ def get_api_repository()->List[API_REPOSITORY]:
             endpoint="/myclaims/claims/v1/list",
             method="POST",
             required_entities=["claimId"],
-            intent_keywords= ["claim_search", "find_claim", "lookup_claim", "status", "check", "track"],
-            description="Search claim by claimId (fetches summary or status).",
+            intent_keywords= ["claim_search", "find_claim", "lookup_claim", "status", "check", "track", "rejection", "rejected", "deny", "denied"],
+            description="Search claim by claimId (fetches summary, status, and rejection details).",
             body_template=lambda e: {
                 "claimsRequest": {
                     "claimId": e["claimId"]

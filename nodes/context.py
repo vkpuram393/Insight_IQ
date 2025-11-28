@@ -15,6 +15,8 @@ from core.errors.models import create_internal_error
 from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from memory import MemoryStoreFactory
+# ADDED: Import conversation context service for entity extraction from history
+from services.conversation_context import extract_entities_from_history as service_extract_entities
 
 logger = get_logger(__name__)
 
@@ -42,52 +44,18 @@ def _extract_slots_from_history(history: List[Dict[str, str]], current_slots: Di
     """
     Extract slots/entities from conversation history that might not be in current message.
     
-    Uses simple regex patterns to find entities in previous messages.
-    This supplements what the intent classifier found in the current message.
+    UPDATED: Delegates to ConversationContextService for pattern matching.
+    This keeps pattern logic centralized in services/conversation_context.py
     
-    NOTE: This is a generic extraction that looks for common patterns.
-    For domain-specific extraction, this should be enhanced or moved to domain-specific modules.
+    Args:
+        history: Conversation history messages
+        current_slots: Entities from current message
+        
+    Returns:
+        Merged entities (current takes precedence over history)
     """
-    extracted = {}
-    
-    # Combine all history messages into text
-    history_text = " ".join([msg.get("content", "") for msg in history if isinstance(msg, dict)])
-    
-    # Generic patterns for common entity types (domain-agnostic)
-    # These patterns can be extended or moved to domain-specific config
-    
-    # Pattern 1: Numeric IDs (4-10 digits) preceded by common keywords
-    # This catches: claim number, prescription number, order number, etc.
-    numeric_id_pattern = r"(?:(?:claim|prescription|order|ref|id|number|#)\s*(?:number|id|#)?\s*:?\s*)?(\d{4,10})\b"
-    numeric_matches = re.findall(numeric_id_pattern, history_text, re.IGNORECASE)
-    if numeric_matches:
-        # Use the most recent numeric ID found
-        # Note: This is generic - domain-specific logic should determine which slot name to use
-        # For now, we'll try to infer from context
-        if "claim" in history_text.lower():
-            extracted["claim_number"] = numeric_matches[-1]
-        elif "prescription" in history_text.lower() or "rx" in history_text.lower():
-            extracted["prescription_number"] = numeric_matches[-1]
-        else:
-            # Generic numeric ID
-            extracted["numeric_id"] = numeric_matches[-1]
-    
-    # Pattern 2: Alphanumeric IDs (6-20 chars) - member IDs, patient IDs, etc.
-    alphanumeric_id_pattern = r"(?:(?:member|patient|user|account)\s*(?:id|number|#)?\s*:?\s*)?([A-Z0-9\-]{6,20})\b"
-    alphanumeric_matches = re.findall(alphanumeric_id_pattern, history_text, re.IGNORECASE)
-    if alphanumeric_matches:
-        extracted["member_id"] = alphanumeric_matches[-1]
-    
-    # Pattern 3: Dates (various formats)
-    date_pattern = r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b"
-    date_matches = re.findall(date_pattern, history_text)
-    if date_matches:
-        extracted["date"] = date_matches[-1]
-    
-    # Merge with current slots (current slots take precedence)
-    merged_slots = {**extracted, **current_slots}
-    
-    return merged_slots
+    # ADDED: Delegate to conversation context service (pattern logic centralized)
+    return service_extract_entities(history, current_slots)
 
 async def build_context_node(state: AgentState) -> Dict[str, Any]:
     """
