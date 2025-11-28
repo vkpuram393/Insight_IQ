@@ -70,12 +70,11 @@ def route_after_response_postcheck(state: AgentState) -> str:
         If response exists (coming from response_agent): route to update_memory (normal response flow)
     """
     intent_reclassified = state.get("intent_reclassified", False)
-    response = state.get("response")
+    response = state.get("response", "")
+    # Check for non-empty response (empty string should be treated as no response)
+    has_response = response is not None and len(str(response).strip()) > 0
     
-    # Check if we have a real response (not None and not empty string)
-    has_response = response is not None and response != ""
-    
-    # If we have a response, always go to update_memory (normal flow)
+    # If we have a non-empty response, always go to update_memory (normal flow)
     if has_response:
         logger.info("✅ Response generated - routing to update_memory")
         return "update_memory"
@@ -85,7 +84,7 @@ def route_after_response_postcheck(state: AgentState) -> str:
         logger.info("🔄 Coming from LLM judge (no response yet) - routing to confidence_checker for re-evaluation")
         return "confidence_checker"
     else:
-        logger.info("✅ Normal response flow - routing to update_memory")
+        logger.info("⚠️ No response and not from LLM judge - routing to update_memory (fallback)")
         return "update_memory"
 
 def route_after_update_memory(state: AgentState) -> str:
@@ -124,19 +123,25 @@ def _build_workflow() -> StateGraph:
             ↓
         confidence_checker
             ↓
-        [router] → clarification (END) OR build_context OR response_agent (complex)
+        [router] → clarification OR build_context OR llm_judge
             ↓
-        build_context → call_claims_tool (simple queries with entities)
+        Option 1: clarification (low confidence/missing entities)
             ↓
-        OR
+        [response_safety_pii_precheck] ← Mask PII/PHI before LLM
             ↓
-        response_agent (complex queries skip API)
+        response_agent (generates follow-up question)
             ↓
-        [response_safety_pii_precheck] ← Mask PII/PHI again before LLM
+        [response_safety_pii_postcheck] ← Unmask & check leakage
             ↓
-        response_agent (LLM - SAFE)
+        update_memory → END (skip cache for clarifications)
             ↓
-        [response_safety_pii_postcheck] ← Unmask for user
+        Option 2: build_context → call_claims_tool (normal queries)
+            ↓
+        [response_safety_pii_precheck] ← Mask PII/PHI before LLM
+            ↓
+        response_agent (generates claim response)
+            ↓
+        [response_safety_pii_postcheck] ← Unmask & check leakage
             ↓
         update_memory → cache_response → END
     """
@@ -201,8 +206,8 @@ def _build_workflow() -> StateGraph:
     # LLM Judge → Response Safety PII Postcheck → Confidence Checker (unmask PII before re-evaluation)
     workflow.add_edge("llm_judge", "response_safety_pii_postcheck")
     
-    # Clarification → Update Memory → END (template-based, no LLM call, skip cache)
-    workflow.add_edge("clarification", "update_memory")
+    # Clarification → Response Safety PII Precheck → Response Agent (LLM generates follow-up question)
+    workflow.add_edge("clarification", "response_safety_pii_precheck")
     
     # Build Context → Call Claims Tool
     workflow.add_edge("build_context", "call_claims_tool")

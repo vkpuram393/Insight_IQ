@@ -570,19 +570,34 @@ async def test_confidence_checker(request: ConfidenceCheckRequest):
         # Call confidence checker node
         result = await confidence_checker_node(state)
         
-        # Check if clarification needed
+        # Check for low confidence (updated logic - confidence_checker no longer sets needs_clarification)
+        metadata = result.get("metadata", {})
+        confidence_low_detected = metadata.get("confidence_low_detected", False)
+        
+        if confidence_low_detected:
+            # Low confidence detected - would route to llm_judge or clarification
+            return {
+                "decision": "low_confidence",
+                "confidence_low_detected": True,
+                "confidence": metadata.get("confidence"),
+                "threshold": metadata.get("threshold"),
+                "metadata": metadata,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Check if clarification explicitly set (for backward compatibility)
         if result.get("needs_clarification"):
             return {
                 "decision": "clarification",
                 "needs_clarification": True,
                 "clarifying_question": result.get("clarifying_question"),
                 "response": result.get("response"),
-                "metadata": result.get("metadata", {}),
+                "metadata": metadata,
                 "timestamp": datetime.now().isoformat()
             }
         
         # High confidence - call context builder
-        if result.get("metadata", {}).get("confidence_check_passed"):
+        if metadata.get("confidence_check_passed"):
             context_builder_input = result.get("metadata", {}).get("context_builder_input")
             
             # Update state with context builder input

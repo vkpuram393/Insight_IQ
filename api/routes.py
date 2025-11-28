@@ -32,7 +32,7 @@ class ChatResponse(BaseModel):
     confidence: Optional[float] = None
     entities: Optional[Dict[str, Any]] = None  # ✅ Extracted entities
     needs_clarification: bool = False
-    clarifying_question: Optional[str] = None
+    clarifying_question: Optional[str] = None  # DEPRECATED: Use 'response' field instead. Kept for backward compatibility and internal tracing only.
     metadata: Optional[Dict[str, Any]] = None
     timestamp: str
 
@@ -88,13 +88,13 @@ async def chat(request: ChatRequest):
         )
 
         return ChatResponse(
-            response=response_text,
+            response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
             intent=intent,
             confidence=confidence,
             entities=final_state.get("entities"),  # ✅ Include extracted entities
-            needs_clarification=final_state.get("needs_clarification", False),
-            clarifying_question=final_state.get("clarifying_question"),
+            needs_clarification=final_state.get("needs_clarification", False),  # ✅ If True, 'response' contains a question
+            clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
             metadata=metadata,
             timestamp=datetime.now(timezone.utc).isoformat()
         )

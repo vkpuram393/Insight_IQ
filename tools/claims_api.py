@@ -78,8 +78,21 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
         if isinstance(state, dict):
             # Called from LangGraph with AgentState
             intent = state.get("intent")
-            entities = state.get("entities", {})
-            logger.debug(f"Input type: AgentState (dict)")
+            
+            # CRITICAL: Merge extracted_slots (from conversation history) with current entities
+            # This enables follow-up questions without re-asking for claim_id
+            extracted_slots = state.get("extracted_slots", {})
+            current_entities = state.get("entities", {})
+            # Current entities take precedence over extracted ones
+            entities = {**extracted_slots, **current_entities}
+            
+            if extracted_slots:
+                logger.info(f"🔗 Context-aware: merged {len(extracted_slots)} slots from history + {len(current_entities)} current entities")
+                logger.debug(f"   From history: {extracted_slots}")
+                logger.debug(f"   From current: {current_entities}")
+                logger.debug(f"   Final merged: {entities}")
+            else:
+                logger.debug(f"Input type: AgentState (dict), entities: {entities}")
         else:
             # Called directly with IntentResult model (for testing)
             intent = state.intent
@@ -562,7 +575,7 @@ def call_external_api(api, body: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     try:
-        resp = requests.request(method, url, headers=headers, json=body, timeout=10)
+        resp = requests.request(method, url, headers=headers, json=body, timeout=30)
         resp.raise_for_status()
     except requests.exceptions.Timeout as e:
         # timeout -> retriable

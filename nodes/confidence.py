@@ -19,10 +19,13 @@ from core.errors.models import (
 )
 from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
+# ADDED: Import conversation context service for entity checking in history
+from services.conversation_context import has_entities_in_history as service_has_entities
 
 logger = get_logger(__name__)
 
-# Load config once (will be reloaded each time as requested)
+# Confidence threshold is now in settings (config.py)
+
 _config_cache = None
 
 def _load_config() -> Dict[str, Any]:
@@ -44,6 +47,23 @@ def _load_config() -> Dict[str, Any]:
             }
         }
 
+def _quick_check_history_for_entities(conversation_history: list, intent: str) -> bool:
+    """
+    Quick check if conversation history contains entities needed for this intent.
+    
+    UPDATED: Delegates to ConversationContextService for pattern matching.
+    This keeps pattern logic centralized in services/conversation_context.py
+    
+    Args:
+        conversation_history: List of messages
+        intent: The classified intent
+        
+    Returns:
+        True if history likely contains required entities
+    """
+    # ADDED: Delegate to conversation context service (pattern logic centralized)
+    return service_has_entities(conversation_history, intent)
+
 def confidence_check_router(state: AgentState) -> Literal["clarification", "build_context", "llm_judge", "response_safety_pii_precheck"]:
     """Route based on confidence, entity completeness, query complexity, and intent_reclassified flag.
 
@@ -63,6 +83,10 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         1. If confidence >= threshold AND entities present → build_context (expert is confident)
         2. If missing entities OR confidence < threshold → clarification (template-based, no LLM call)
     """
+    logger.info("\n" + "="*70)
+    logger.info("🔀 CONFIDENCE_CHECK_ROUTER CALLED")
+    logger.info("="*70)
+    
     # PRIORITY CHECK: Handle embedding classifier failure
     embedding_failed = state.get("embedding_failed", False)
     if embedding_failed:
@@ -83,12 +107,25 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     is_complex = state.get("is_complex", False)
     intent_reclassified = state.get("intent_reclassified", False)
     entities = state.get("entities") or {}
+    conversation_history = state.get("conversation_history", [])
 
     # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
     INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
 
     # Check if we have required entities (direct entity existence check)
     has_entities = bool(entities and any(v is not None for v in entities.values()))
+    
+    # CRITICAL: Check conversation history for entities before routing to clarification
+    # This enables follow-up questions without re-asking for information user already provided
+    has_entities_in_history = False
+    if not has_entities and conversation_history:
+        has_entities_in_history = _quick_check_history_for_entities(conversation_history, intent)
+        if has_entities_in_history:
+            logger.info(f"🔗 Context-aware routing: Found entities in conversation history for intent '{intent}'")
+            logger.info(f"   → Will route to build_context for full extraction")
+    
+    # Combined check: has entities in current message OR in history
+    has_entities_anywhere = has_entities or has_entities_in_history
 
     # PRIORITY RULE 0: Handle greeting/help/out_of_scope FIRST (before other rules)
     if intent in INTENTS_WITHOUT_ENTITIES:
@@ -150,17 +187,19 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
                 logger.info("   Flag: intent_reclassified=False (initial classification)")
                 return "llm_judge"
 
-        # RULE 3: No entities → Clarification (except for whitelisted intents)
-        if not has_entities and intent not in INTENTS_WITHOUT_ENTITIES:
+        # RULE 3: No entities (current OR history) → Clarification (except for whitelisted intents)
+        if not has_entities_anywhere and intent not in INTENTS_WITHOUT_ENTITIES:
             logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
-            logger.info(f"   Reason: Intent requires entities but none were found")
+            logger.info(f"   Reason: Intent requires entities but none in current message or history")
             logger.info("   Flag: intent_reclassified=False (initial classification)")
             return "clarification"
 
-        # RULE 4: High confidence + Has entities (or doesn't need them) → Build Context (direct path)
-        if confidence >= threshold and (has_entities or intent in INTENTS_WITHOUT_ENTITIES):
+        # RULE 4: High confidence + Has entities anywhere (or doesn't need them) → Build Context (direct path)
+        if confidence >= threshold and (has_entities_anywhere or intent in INTENTS_WITHOUT_ENTITIES):
             if has_entities:
-                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present in current message -> Build Context")
+            elif has_entities_in_history:
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities found in history -> Build Context")
             else:
                 logger.info(f"✅ Intent '{intent}' doesn't require entities -> Build Context")
             logger.info("   Reason: Initial classifier is confident enough")
@@ -177,23 +216,27 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
             logger.info("   Action: Skip build_context and call_claims_tool entirely")
             return "response_safety_pii_precheck"
         
-        # RULE 1: High confidence + Has entities → Build Context (needs API)
-        if confidence >= threshold and has_entities:
-            logger.info(f"✅ High confidence ({confidence:.2f}) + entities present -> Build Context")
+        # RULE 1: High confidence + Has entities anywhere → Build Context (needs API)
+        if confidence >= threshold and has_entities_anywhere:
+            if has_entities:
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities present in current message -> Build Context")
+            elif has_entities_in_history:
+                logger.info(f"✅ High confidence ({confidence:.2f}) + entities found in history -> Build Context")
             logger.info("   Reason: LLM Judge is confident enough")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran)")
             return "build_context"
 
-        # RULE 2: Missing entities (for intents that need them) OR low confidence → Clarification (template-based)
-        if (not has_entities and intent not in INTENTS_WITHOUT_ENTITIES) or confidence < threshold:
+        # RULE 2: Missing entities (current AND history) OR low confidence → Clarification (template-based)
+        if (not has_entities_anywhere and intent not in INTENTS_WITHOUT_ENTITIES) or confidence < threshold:
             logger.info(f"⚠️ Missing entities or low confidence -> Clarification (template)")
-            logger.info(f"   Confidence: {confidence:.2f}, Has entities: {has_entities}")
+            logger.info(f"   Confidence: {confidence:.2f}, Has entities anywhere: {has_entities_anywhere}")
             logger.info("   Reason: LLM Judge still uncertain - use template clarification")
             logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
             return "clarification"
 
     # Fallback: Default to build_context if all else fails
     logger.info(f"✅ Default routing -> Build Context")
+    logger.info("="*70 + "\n")
     return "build_context"
 
 async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
@@ -215,6 +258,17 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
     log_ctx = extract_logging_context(state)
     
     try:
+        # CRITICAL: Load conversation history BEFORE routing decisions
+        # This enables the router to check history for entities
+        from memory import MemoryStoreFactory
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        conversation_history = await memory_store.get_session_history(log_ctx["session_id"])
+        
+        # Add history to state so router can access it
+        state["conversation_history"] = conversation_history
+        
+        logger.info(f"📚 Loaded {len(conversation_history)} messages from conversation history")
+        
         # Load config
         config = _load_config()
         threshold = config.get("confidence_threshold", 0.7)
@@ -230,15 +284,18 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         confidence_low = confidence < threshold
         
         if confidence_low:
-            # Low confidence -> route to clarification node
-            logger.info(f"⚠️ Low confidence -> Routing to Clarification")
+            # Low confidence detected
+            # NOTE: DON'T set needs_clarification here! The router will decide where to go:
+            # - If llm_judge path: will boost confidence, then re-evaluate
+            # - If clarification path: clarification_node will set the flag
+            logger.info(f"⚠️ Low confidence detected ({confidence:.2f} < {threshold})")
+            logger.info(f"   Router will decide: llm_judge (if enabled) or clarification")
             
-            # Just set flags - clarification node will generate the question
             result = {
-                "needs_clarification": True,
+                "conversation_history": conversation_history,  # Pass history to next node
                 "metadata": {
                     **state.get("metadata", {}),
-                    "clarification_reason": "low_confidence",
+                    "confidence_low_detected": True,
                     "confidence": confidence,
                     "threshold": threshold
                 }
@@ -253,13 +310,9 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             # High confidence -> proceed to context builder
             logger.info(f"✅ High confidence -> Context Builder")
             
-            # Get conversation history from memory store
-            from memory import MemoryStoreFactory
-            memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
-            chat_history = await memory_store.get_session_history(log_ctx["session_id"])
-            
             # Return state to proceed (context builder will be called next)
             proceed_result = {
+                "conversation_history": conversation_history,  # Pass history to next node
                 "metadata": {
                     **state.get("metadata", {}),
                     "confidence_check_passed": True

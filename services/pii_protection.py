@@ -41,14 +41,25 @@ def create_pharmacy_recognizers() -> List[PatternRecognizer]:
         context=["member", "patient", "subscriber", "ID"]
     ))
     
-    # Claim ID: CLM-XXXXXX or CLAIM-XXXXXX or 15-digit numeric (HIGH PRIORITY)
+    # Claim ID: Context-aware detection
+    # If "claim" keyword is present, ANY following digits are treated as claim ID (no length restriction)
+    # This handles variable-length claim IDs: 8, 10, 12, 15, 18 digits, etc.
     recognizers.append(PatternRecognizer(
         supported_entity="CLAIM_ID",
-        patterns=[Pattern(
-            name="claim_id",
-            regex=r"\b((?:CLM|CLAIM)[-_]?\d{4,10}|\d{15})\b",  # Kept 15-digit support
-            score=0.95  # High score to override US_DRIVER_LICENSE
-        )],
+        patterns=[
+            # Pattern 1: CLM/CLAIM prefix with digits (any length)
+            Pattern(
+                name="claim_id_with_prefix",
+                regex=r"\b(?:CLM|CLAIM)[-_]?\d+\b",
+                score=0.99  # Very high score
+            ),
+            # Pattern 2: "claim" keyword followed by digits (context-aware, any length)
+            Pattern(
+                name="claim_id_with_keyword",
+                regex=r"(?i)\bclaim\s+(?:number|id|#)?\s*:?\s*(\d+)\b",
+                score=0.98  # High score when keyword present
+            )
+        ],
         context=["claim", "rejected", "approved", "status"]
     ))
     
@@ -171,10 +182,10 @@ class PIIProtectionService:
             text=text,
             language=language,
             entities=[
-                # Standard PII
+                # Standard PII (DATE_TIME removed - dates are not considered PII)
                 "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "US_SSN",
                 "US_PASSPORT", "US_DRIVER_LICENSE", "CREDIT_CARD",
-                "DATE_TIME", "LOCATION", "MEDICAL_LICENSE",
+                "LOCATION", "MEDICAL_LICENSE",
                 # Pharmacy-specific PHI (HIGH PRIORITY)
                 "MEMBER_ID", "CLAIM_ID", "RX_NUMBER", "NDC"
             ]
@@ -404,13 +415,35 @@ class PIIProtectionService:
         """
         import json
         
-        # Convert dict to string for PII detection
+        # Step 1: Extract names from known field structures (firstName, lastName, etc.)
+        # This is more reliable than Presidio's name detection in JSON
+        extracted_names = self._extract_names_from_fields(api_response)
+        
+        # Step 2: Convert dict to string for general PII detection
         response_str = json.dumps(api_response, indent=2)
         
-        # Detect all PII in the response
+        # Step 3: Detect all PII in the response using Presidio
         detected = self.detect_pii_phi(response_str)
         
+        # Step 4: Add extracted names to detected entities (if not already detected)
+        detected_texts = {entity["text"] for entity in detected}
+        for name_value in extracted_names:
+            if name_value not in detected_texts:
+                detected.append({
+                    "text": name_value,
+                    "entity_type": "PERSON",
+                    "start": 0,
+                    "end": len(name_value),
+                    "score": 1.0
+                })
+                logger.debug(f"   + Added extracted name: {name_value}")
+        
+        logger.info(f"🔍 Detected {len(detected)} PII entities in API response")
+        for entity in detected:
+            logger.debug(f"   - {entity['entity_type']}: {entity['text'][:50]}...")
+        
         if not detected:
+            logger.info("ℹ️  No PII detected in API response")
             return api_response, existing_token_mapping or {}
         
         # Initialize mapping with existing tokens
@@ -455,6 +488,81 @@ class PIIProtectionService:
         logger.info(f"🎭 Masked API response: {len(detected)} PII entities, {len(combined_mapping)} total tokens")
         
         return masked_response, combined_mapping
+    
+    def _extract_names_from_fields(self, data: Any) -> List[str]:
+        """
+        Extract person names from known field structures in API responses.
+        
+        This is more reliable than Presidio's name detection in JSON strings,
+        especially when names are split across firstName/lastName fields.
+        
+        Args:
+            data: API response dict/list
+            
+        Returns:
+            List of name strings found in known name fields
+        """
+        names = []
+        
+        def extract_from_dict(obj: dict):
+            """Recursively extract names from dict"""
+            # Common name field patterns
+            first_name = None
+            last_name = None
+            
+            for key, value in obj.items():
+                if not isinstance(value, str):
+                    continue
+                    
+                # Check for first name fields
+                if key.lower() in ('firstname', 'first_name', 'givenname', 'given_name'):
+                    first_name = value.strip()
+                    if first_name and len(first_name) > 1:
+                        names.append(first_name)
+                
+                # Check for last name fields
+                elif key.lower() in ('lastname', 'last_name', 'surname', 'familyname', 'family_name'):
+                    last_name = value.strip()
+                    if last_name and len(last_name) > 1:
+                        names.append(last_name)
+                
+                # Check for full name fields
+                elif key.lower() in ('name', 'fullname', 'full_name', 'membername', 'member_name',
+                                     'prescribername', 'prescriber_name', 'providername', 'provider_name'):
+                    full_name = value.strip()
+                    if full_name and len(full_name) > 1 and ' ' in full_name:
+                        names.append(full_name)
+            
+            # If we found both first and last name, also add the combined full name
+            if first_name and last_name:
+                # Add both orders (normal and reversed) since we don't know which format the LLM will use
+                names.append(f"{first_name} {last_name}")
+                names.append(f"{last_name} {first_name}")
+        
+        def traverse(obj: Any):
+            """Recursively traverse data structure"""
+            if isinstance(obj, dict):
+                extract_from_dict(obj)
+                for value in obj.values():
+                    traverse(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    traverse(item)
+        
+        traverse(data)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_names = []
+        for name in names:
+            if name not in seen:
+                seen.add(name)
+                unique_names.append(name)
+        
+        if unique_names:
+            logger.debug(f"📝 Extracted {len(unique_names)} names from API fields: {unique_names}")
+        
+        return unique_names
     
     def _replace_pii_in_dict(
         self, 
@@ -599,6 +707,8 @@ class PIIProtectionService:
             
             # Field names and descriptions
             'claimNumber', 'claimStatus', 'fillDate', 'addDate', 'changeDate', 'memberId',
+            'groupNumber', 'cardNumber', 'personCode', 'planCode', 'accountId', 'carrierId',
+            'productName', 'productId', 'gpiNumber', 'ndc', 'quantity', 'daysSupply',
             'Electronic transaction', 'Paid', 'Primary', 'Point of Sale', 'Card Holder',
             'Female', 'Male', 'Generic', 'Retail', 'Pharmacy', 'National Provider',
             
@@ -640,6 +750,19 @@ class PIIProtectionService:
             # Skip very short codes that are likely system codes
             if len(text_value) <= 3 and text_value.isupper():
                 continue
+            
+            # CRITICAL: Skip field names detected as PERSON (camelCase, snake_case)
+            # E.g., "groupNumber", "member_id", "claim_status"
+            if entity_type == "PERSON":
+                # camelCase pattern: starts lowercase, contains uppercase
+                if re.match(r'^[a-z]+[A-Z]', text_value):
+                    continue
+                # snake_case pattern: contains underscores
+                if '_' in text_value and text_value.islower():
+                    continue
+                # CONSTANT_CASE: all caps with underscores
+                if '_' in text_value and text_value.isupper():
+                    continue
                 
             # Keep legitimate PII
             filtered_entities.append(entity)

@@ -117,6 +117,11 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
                 clarifying_question = f"I need more information to help you. Could you provide: {', '.join(missing)}?"
     
     # ========== BUILD RESULT WITH METADATA ==========
+    # Extract missing_slots from slot_validation if available
+    missing_slots_list = []
+    if 'slot_validation' in entity_result:
+        missing_slots_list = entity_result['slot_validation'].get('missing_slots', [])
+    
     result = {
         "intent": intent,
         "confidence": confidence,
@@ -124,6 +129,7 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         "is_complex": is_complex,  # NEW: Complexity detection for LLM routing
         "needs_clarification": needs_clarification,
         "clarifying_question": clarifying_question,
+        "missing_slots": missing_slots_list,  # Required for clarification_node
         # NEW: API routing info from config
         "api_endpoint": api_endpoint,
         "required_entities_list": required_entities_list,

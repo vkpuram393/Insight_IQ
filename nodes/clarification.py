@@ -1,6 +1,3 @@
-"""
-Clarification Node - Ask questions when unsure
-"""
 
 import json
 import traceback
@@ -33,50 +30,89 @@ def _load_config() -> Dict[str, Any]:
 
 async def clarification_node(state: AgentState) -> Dict[str, Any]:
     """
-    Generate clarifying question
-
+    Set clarification context for LLM-based follow-up question generation
+    
     🎓 CONCEPT:
-    When confidence is low, we need more info from user.
-    This generates an appropriate question to ask.
-
+    When confidence is low or entities missing, prepare context for response agent
+    to generate an intelligent follow-up question using LLM.
+    
+    This node:
+    - Determines WHY clarification is needed
+    - Prepares clarification_context with relevant information
+    - Sets needs_clarification flag for response agent
+    
+    INPUT (from state):
+        - text: User's query
+        - intent: Classified intent
+        - confidence: Classification confidence
+        - missing_slots: Required entities that are missing
+        - metadata: Additional context
+    
+    OUTPUT (to state):
+        - needs_clarification: True (tells response agent to generate question)
+        - clarification_context: Dict with reason, missing info, etc.
+        - metadata: Updated with clarification trigger info
+    
     FLOW:
-        After this node → End graph, return question to user
-        User answers → New request with more context
+        After this → response_safety_pii_precheck → response_agent (generates question)
+        → response_safety_pii_postcheck → update_memory → END
     """
     node_name = "clarification"
     log_ctx = extract_logging_context(state)
     
     try:
-        logger.info("❓ Node: Clarification")
-
+        logger.info("❓ Node: Clarification (preparing for LLM-based question generation)")
+        
+        # Extract state values
+        text = state.get("text", "")
+        intent = state.get("intent", "unknown")
+        confidence = state.get("confidence", 0.0)
+        missing_slots = state.get("missing_slots", [])
+        entities = state.get("entities", {})
+        metadata = state.get("metadata", {})
+        
         # Load config for clarification templates
         config = _load_config()
-        clarification_messages = config.get("clarification_messages", {})
+        confidence_threshold = config.get("confidence_threshold", 0.7)
         
-        # Get state values
-        missing_slots = state.get("missing_slots", [])
-        metadata = state.get("metadata", {})
-        clarification_reason = metadata.get("clarification_reason", "low_confidence")
-        
-        # Generate clarification question based on reason
-        if clarification_reason == "missing_entity" and missing_slots:
-            # Use template for missing entity
-            template = clarification_messages.get("missing_entity_template", "Could you provide your {missing_entity}?")
-            missing_slot_name = missing_slots[0].replace("_", " ")
-            clarifying_question = template.format(missing_entity=missing_slot_name)
-            logger.info(f"❓ Generated (missing entity): {clarifying_question}")
+        # Determine clarification reason
+        if missing_slots:
+            reason = "missing_entity"
+            reason_detail = f"Missing: {', '.join(missing_slots)}"
+        elif confidence < confidence_threshold:
+            reason = "low_confidence"
+            reason_detail = f"Low confidence: {confidence:.2f} (threshold: {confidence_threshold})"
         else:
-            # Use low confidence template
-            clarifying_question = clarification_messages.get("low_confidence", "I'm not quite sure what you're asking. Could you rephrase your question?")
-            logger.info(f"❓ Generated (low confidence): {clarifying_question}")
+            reason = "ambiguous_intent"
+            reason_detail = "Multiple possible interpretations"
+        
+        logger.info(f"   Reason: {reason}")
+        logger.info(f"   Detail: {reason_detail}")
+        logger.info(f"   Intent: {intent} (confidence: {confidence:.2f}, threshold: {confidence_threshold})")
+        if missing_slots:
+            logger.info(f"   Missing entities: {missing_slots}")
+        
+        # Build clarification context for response agent
+        clarification_context = {
+            "reason": reason,
+            "confidence": confidence,
+            "intent": intent,
+            "user_query": text,
+            "missing_entities": missing_slots,
+            "provided_entities": list(entities.keys()) if entities else [],
+            "intent_candidates": []  # Could extract from metadata if needed
+        }
+        
+        logger.info("   → Will generate intelligent follow-up question using response agent")
 
         result = {
-            "needs_clarification": True,
-            "clarifying_question": clarifying_question,
-            "response": clarifying_question,
+            "needs_clarification": True,  # Flag for response agent to generate question
+            "clarification_context": clarification_context,  # Context for question generation
             "metadata": {
-                **state.get("metadata", {}),
-                "clarification": True
+                **metadata,
+                "clarification_triggered": True,
+                "clarification_reason": reason,
+                "will_generate_followup": True
             }
         }
         await log_state_snapshot(state, node_name, result)
@@ -111,8 +147,7 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
         result = {
             "error": error.user_message,
             "needs_clarification": True,
-            "clarifying_question": error.user_message,
-            "response": error.user_message,
+            "response": error.user_message,  # Always use response field
             "metadata": {
                 **state.get("metadata", {}),
                 "error_occurred": True,
