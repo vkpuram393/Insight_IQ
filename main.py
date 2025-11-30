@@ -30,6 +30,22 @@ except Exception as e:
     # Re-raise to fail fast (better than silent)
     raise
 
+# Configuration Validation ---------------------------------------------------
+try:
+    from config.validation import validate_all
+    print("[BOOT] Running configuration validation...")
+    if not validate_all():
+        print("[BOOT] ❌ Configuration validation FAILED. Application cannot start.")
+        print("[BOOT] Please review the error messages above and fix configuration issues.")
+        sys.exit(1)
+    print("[BOOT] ✅ Configuration validation passed")
+except Exception as e:
+    import traceback
+    print("[BOOT] ⚠️  Configuration validation error (non-fatal):", e)
+    traceback.print_exc()
+    # Continue startup - validation errors are logged but don't block startup
+    # (This allows the app to start even if validation has issues)
+
 app = FastAPI(
     title="PBM LangGraph Framework",
     description="2 Agents + 9 Nodes",
@@ -105,8 +121,8 @@ if __name__ == "__main__":
     print(f"🎯 Mode: {'Mock' if settings.use_mock_llm else 'Real'} LLM")
     print("[BOOT] about to call uvicorn.run")
 
-    # Run WITHOUT reload for reliable breakpoints
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, log_level="debug")
+    # Run WITH reload for development (disable reload=False when debugging with breakpoints)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="debug")
 
     # This line executes only when server stops
     print("[BOOT] uvicorn.run returned (server stopped)")
