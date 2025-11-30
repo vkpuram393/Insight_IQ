@@ -269,6 +269,130 @@ async def chat_stream(request: ChatRequest):
     )
 
 
+class BatchTestRequest(BaseModel):
+    """Request model for batch testing - same as ChatRequest"""
+    text: str
+    session_id: Optional[str] = None
+    user_info: Optional[Dict[str, Any]] = None
+
+class BatchTestResponse(BaseModel):
+    """Response model for batch testing"""
+    user_prompt: str
+    session_id: str  # Return session ID so caller can reuse it for conversational testing
+    agent_response: Optional[str] = None
+    embedding_classifier_confidence: Optional[float] = None
+    llm_judge_confidence: Optional[float] = None
+    intent: Optional[str] = None
+    clarification_called: bool = False
+    exception: Optional[Dict[str, Any]] = None
+
+@router.post("/test/batch", response_model=BatchTestResponse)
+async def batch_test(request: BatchTestRequest):
+    """
+    Batch testing endpoint for processing prompts without logging.
+    
+    This endpoint:
+    - Processes requests through the same flow as /chat
+    - Returns structured response with all required fields
+    - Does NOT log to telemetry (no logs, no exceptions table)
+    - Returns immediately with full response
+    
+    Session Management:
+    - If session_id is provided in request, it will be reused (conversational testing)
+    - If session_id is not provided, a new session is created for each request
+    - Session ID is returned in response for reuse in subsequent requests
+    
+    Use Cases:
+    1. Independent testing: Don't provide session_id (each request gets new session)
+    2. Conversational testing: Provide same session_id in all requests to maintain context
+    
+    Use this endpoint with Postman Collection Runner to test multiple prompts.
+    """
+    # Use provided session_id for conversational testing, or generate new one
+    session_id = request.session_id or str(uuid.uuid4())
+    user_id = request.user_info.get("user_id") if request.user_info else None
+    
+    # Store original telemetry setting
+    original_telemetry_setting = settings.enable_telemetry
+    
+    try:
+        # Disable telemetry for this request (no logging requirement)
+        settings.enable_telemetry = False
+        
+        # Track embedding classifier confidence (before LLM judge potentially overwrites it)
+        embedding_classifier_confidence = None
+        llm_judge_confidence = None
+        intent_reclassified = False
+        
+        # Run graph through same flow as chat endpoint
+        try:
+            final_state = await run_graph(
+                text=request.text,
+                session_id=session_id,
+                user_info=request.user_info or {}
+            )
+            
+            if not isinstance(final_state, dict):
+                raise HTTPException(status_code=500, detail="Invalid final state type")
+            
+            # Extract response details
+            response_text = final_state.get("response", "")
+            intent = final_state.get("intent")
+            confidence = final_state.get("confidence")
+            needs_clarification = final_state.get("needs_clarification", False)
+            metadata = final_state.get("metadata", {})
+            
+            # Determine which confidence scores we have
+            # If intent_reclassified is True, LLM judge ran and overwrote confidence
+            intent_reclassified = final_state.get("intent_reclassified", False)
+            
+            if intent_reclassified:
+                # LLM judge ran - get both confidence scores from metadata
+                embedding_classifier_confidence = metadata.get("embedding_classifier_confidence")
+                llm_judge_confidence = metadata.get("llm_judge_confidence") or confidence
+            else:
+                # LLM judge did not run - current confidence is embedding classifier confidence
+                embedding_classifier_confidence = confidence
+                llm_judge_confidence = None
+            
+            return BatchTestResponse(
+                user_prompt=request.text,
+                session_id=session_id,  # Return session ID for reuse
+                agent_response=response_text,
+                embedding_classifier_confidence=embedding_classifier_confidence,
+                llm_judge_confidence=llm_judge_confidence,
+                intent=intent,
+                clarification_called=needs_clarification,
+                exception=None
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Exception occurred - return error in response (don't log)
+            tb = traceback.format_exc()
+            logger.error(f"Batch test error: {e}\n{tb}")
+            
+            return BatchTestResponse(
+                user_prompt=request.text,
+                session_id=session_id,  # Return session ID even on error
+                agent_response=None,
+                embedding_classifier_confidence=None,
+                llm_judge_confidence=None,
+                intent=None,
+                clarification_called=False,
+                exception={
+                    "error_type": type(e).__name__,
+                    "message": str(e),
+                    "stacktrace": tb
+                }
+            )
+    
+    finally:
+        # Restore original telemetry setting
+        settings.enable_telemetry = original_telemetry_setting
+
+
 @router.get("/analytics")
 async def get_analytics_data():
     """
