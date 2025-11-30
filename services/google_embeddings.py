@@ -167,7 +167,21 @@ class GoogleEmbeddings:
             
         Returns:
             List of similarity scores
+            
+        Raises:
+            ValueError: If dimension mismatch detected (indicates cache needs regeneration)
         """
+        # Validate dimensions before processing
+        query_dim = len(query_vector) if query_vector else 0
+        if candidate_vectors and len(candidate_vectors) > 0:
+            candidate_dim = len(candidate_vectors[0]) if candidate_vectors[0] else 0
+            if query_dim != candidate_dim and query_dim > 0 and candidate_dim > 0:
+                raise ValueError(
+                    f"Embedding dimension mismatch: query={query_dim}, cached={candidate_dim}. "
+                    f"This usually means the cache was created with a different embedding provider. "
+                    f"Delete 'classifiers/intent_embeddings_cache.pkl' and restart the server to regenerate."
+                )
+        
         return [
             self.cosine_similarity(query_vector, candidate)
             for candidate in candidate_vectors

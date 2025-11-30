@@ -111,12 +111,18 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
         logger.info(f"   Setting: intent_reclassified = True (prevents infinite loop)")
         
         # Construct result
+        # Preserve original embedding classifier confidence in metadata for batch testing
         result = {
             "intent": new_intent,
-            "confidence": new_confidence,
+            "confidence": new_confidence,  # LLM judge confidence
             "entities": new_entities,
             "intent_reclassified": True,  # KEY: Set flag to True to prevent infinite loops
-            "needs_clarification": needs_clarification  # Clear if high confidence
+            "needs_clarification": needs_clarification,  # Clear if high confidence
+            "metadata": {
+                **state.get("metadata", {}),
+                "embedding_classifier_confidence": original_confidence,  # Preserve original for batch testing
+                "llm_judge_confidence": new_confidence  # Store LLM judge confidence
+            }
         }
         
         # Log state snapshot

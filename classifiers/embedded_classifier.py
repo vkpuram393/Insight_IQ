@@ -61,19 +61,19 @@ class CVSIntentEmbedded:
         """Initialize with embedded intent examples"""
         logger.info("Initializing CVS Intent Classifier (Embedding-Based)...")
         
-        # Build intent examples (embedded in this file)
-        self.intent_examples = self._build_intent_examples()
-        
-        # Pre-compute embeddings for all examples
-        self.intent_embeddings = self._embed_all_examples()
-        
-        # Cache the embeddings service (singleton)
+        # Cache the embeddings service (singleton) - needed before _embed_all_examples
         if EMBEDDINGS_AVAILABLE:
             self.embeddings_service = get_embeddings_service()
             logger.info(f"✅ Using {EMBEDDINGS_PROVIDER} for intent embeddings")
         else:
             self.embeddings_service = None
             logger.warning("⚠️ Using mock embeddings (no provider configured)")
+        
+        # Build intent examples (embedded in this file)
+        self.intent_examples = self._build_intent_examples()
+        
+        # Pre-compute embeddings for all examples (validates cache dimensions)
+        self.intent_embeddings = self._embed_all_examples()
         
         # Thresholds
         self.confidence_threshold = 0.50  # Match keyword classifier
@@ -94,11 +94,76 @@ class CVSIntentEmbedded:
         """
         return CVS_INTENT_EXAMPLES
     
+    def _get_expected_embedding_dimension(self) -> int:
+        """
+        Get the expected embedding dimension for the current embedding provider
+        
+        Returns:
+            Expected dimension (768 for Google, 1536 for Azure)
+        """
+        # Try to get dimension from a test embedding (most reliable)
+        if EMBEDDINGS_AVAILABLE and self.embeddings_service is not None:
+            try:
+                test_embedding = get_embedding("test")
+                if isinstance(test_embedding, (list, np.ndarray)):
+                    dim = len(test_embedding)
+                    logger.debug(f"📏 Detected embedding dimension: {dim} (from test embedding)")
+                    return dim
+            except Exception as e:
+                logger.debug(f"Could not get test embedding for dimension check: {e}")
+        
+        # Fallback: return dimension based on provider
+        if EMBEDDINGS_PROVIDER == "Google Cloud Vertex AI":
+            return 768  # text-embedding-005
+        elif EMBEDDINGS_PROVIDER == "Azure OpenAI":
+            return 1536  # text-embedding-ada-002
+        else:
+            return 1536  # Default to Azure dimension
+    
+    def _validate_cache_dimensions(self, intent_embeddings: Dict[str, np.ndarray]) -> bool:
+        """
+        Validate that cached embeddings match current embedding provider dimensions
+        
+        Args:
+            intent_embeddings: Cached embeddings dict
+            
+        Returns:
+            True if dimensions match, False otherwise
+        """
+        if not intent_embeddings:
+            return False
+        
+        # Get expected dimension
+        expected_dim = self._get_expected_embedding_dimension()
+        
+        # Check first embedding to get actual dimension
+        first_intent = next(iter(intent_embeddings.values()))
+        if isinstance(first_intent, np.ndarray) and len(first_intent.shape) >= 1:
+            actual_dim = first_intent.shape[-1]  # Last dimension is the embedding size
+        elif isinstance(first_intent, list) and len(first_intent) > 0:
+            first_embedding = first_intent[0]
+            if isinstance(first_embedding, (list, np.ndarray)):
+                actual_dim = len(first_embedding)
+            else:
+                return False
+        else:
+            return False
+        
+        if actual_dim != expected_dim:
+            logger.warning(
+                f"⚠️  Cache dimension mismatch: cached={actual_dim}, expected={expected_dim} "
+                f"(provider={EMBEDDINGS_PROVIDER})"
+            )
+            return False
+        
+        return True
+    
     def _embed_all_examples(self) -> Dict[str, np.ndarray]:
         """
         Convert all intent examples to embeddings
         
-        Tries to load from cache first (instant), falls back to API calls if needed
+        Tries to load from cache first (instant), falls back to API calls if needed.
+        Automatically regenerates cache if dimension mismatch detected.
         
         Returns:
             Dict mapping intent name to array of embeddings
@@ -114,8 +179,22 @@ class CVSIntentEmbedded:
                 logger.info(f"⚡ Loading embeddings from cache ({cache_file})...")
                 with open(cache_file, 'rb') as f:
                     intent_embeddings = pickle.load(f)
-                logger.info(f"✅ Embeddings loaded from cache (INSTANT - no API calls!)")
-                return intent_embeddings
+                
+                # Validate dimensions match current provider
+                if self._validate_cache_dimensions(intent_embeddings):
+                    logger.info(f"✅ Embeddings loaded from cache (INSTANT - no API calls!)")
+                    return intent_embeddings
+                else:
+                    logger.warning(
+                        f"⚠️  Cache dimension mismatch detected. "
+                        f"Regenerating embeddings for {EMBEDDINGS_PROVIDER}..."
+                    )
+                    # Delete invalid cache
+                    try:
+                        os.remove(cache_file)
+                        logger.info(f"🗑️  Deleted invalid cache file")
+                    except Exception as e:
+                        logger.warning(f"⚠️  Could not delete cache file: {e}")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to load cache: {e}")
                 logger.info("Falling back to generating embeddings...")
@@ -209,7 +288,21 @@ class CVSIntentEmbedded:
                 query_list = query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding
                 
                 # Calculate cosine similarity with all examples of this intent
-                similarities = self.embeddings_service.batch_similarity(query_list, example_list)
+                try:
+                    similarities = self.embeddings_service.batch_similarity(query_list, example_list)
+                except ValueError as e:
+                    if "dimension mismatch" in str(e).lower() or "not aligned" in str(e).lower():
+                        # Dimension mismatch - cache needs regeneration
+                        logger.error(f"❌ {e}")
+                        logger.error("❌ CRITICAL: Embedding dimension mismatch detected!")
+                        logger.error("   This means the cache was created with a different embedding provider.")
+                        logger.error("   Solution: Delete 'classifiers/intent_embeddings_cache.pkl' and restart server.")
+                        raise RuntimeError(
+                            "Embedding dimension mismatch - cache needs regeneration. "
+                            "Delete 'classifiers/intent_embeddings_cache.pkl' and restart."
+                        ) from e
+                    else:
+                        raise
                 
                 # Use the highest similarity as the score for this intent
                 intent_scores[intent] = float(max(similarities))
