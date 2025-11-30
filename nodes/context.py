@@ -306,7 +306,6 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         except Exception as save_error:
             logger.error(f"   ❌ Failed to save conversation: {save_error}")
             print(f"   ❌ SAVE FAILED: {save_error}")
-            import traceback
             traceback.print_exc()
             # Continue execution even if save fails - don't break the workflow
 

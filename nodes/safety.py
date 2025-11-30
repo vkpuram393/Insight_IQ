@@ -297,14 +297,22 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
                 user_id=log_ctx.get("user_id", "unknown")
             )
             
+            # Preserve intent/confidence from metadata if they exist (for visibility even when blocked)
+            metadata = state.get("metadata", {})
+            intent_classification_metadata = metadata.get("intent_classification_metadata", {})
+            top_intent = intent_classification_metadata.get("top_intent")
+            top_confidence = intent_classification_metadata.get("top_confidence")
+            
             result_dict = {
                 "safety_precheck_passed": False,
                 "threat_detected": True,  # Backward compatibility
                 "threat_reason": reason,  # Backward compatibility
                 "safety_block_reason": reason,
                 "response": safety_obj.user_message,
+                "intent": top_intent if top_intent else state.get("intent"),  # Preserve intent if available
+                "confidence": top_confidence if top_confidence else state.get("confidence"),  # Preserve confidence if available
                 "metadata": {
-                    **state.get("metadata", {}),
+                    **metadata,
                     "safety_precheck_metadata": to_dict(safety_obj),
                     "violation_categories": violation_categories
                 }
@@ -418,14 +426,22 @@ async def safety_precheck_node(state: AgentState) -> Dict[str, Any]:
         )
         
         # Fail closed - block on error
+        # Preserve intent/confidence from metadata if they exist (for visibility even when blocked)
+        metadata = state.get("metadata", {})
+        intent_classification_metadata = metadata.get("intent_classification_metadata", {})
+        top_intent = intent_classification_metadata.get("top_intent")
+        top_confidence = intent_classification_metadata.get("top_confidence")
+        
         result = {
             "safety_precheck_passed": False,
             "threat_detected": True,  # Backward compatibility
             "threat_reason": f"Safety check error: {str(e)}",  # Backward compatibility
             "safety_block_reason": f"Safety check error: {str(e)}",
             "response": safety_obj.user_message,
+            "intent": top_intent if top_intent else state.get("intent"),  # Preserve intent if available
+            "confidence": top_confidence if top_confidence else state.get("confidence"),  # Preserve confidence if available
             "metadata": {
-                **state.get("metadata", {}),
+                **metadata,
                 "safety_precheck_metadata": to_dict(safety_obj),
                 "error_occurred": True,
                 "error_code": error.error_code.value
