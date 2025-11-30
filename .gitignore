@@ -89,3 +89,6 @@ test_cvs_classifier_endpoints.sh
 CVS_INTENT_CLASSIFIER_FLOW.md
 CVS_INTENT_CLASSIFIER_INTEGRATION.md
 *.pid
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc
