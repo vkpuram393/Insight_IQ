@@ -6,15 +6,18 @@ Comprehensive testing of:
 1. All API endpoints (from TEMP_ENDPOINTS.md)
 2. Exception handling in all nodes
 3. Logging (audit logs) in all nodes
-4. Verification that logs are written to SQLite
-5. Verification that exceptions are logged to SQLite
+4. Verification that logs are written to persistence store (SQLite or MongoDB)
+5. Verification that exceptions are logged to persistence store
 6. Verification of graceful error responses
 
 This test suite ensures:
 - All endpoints are working correctly
-- All nodes properly log their operations to the `logs` table
-- All nodes properly log exceptions to the `exceptions` table
+- All nodes properly log their operations to the `logs` table/collection
+- All nodes properly log exceptions to the `exceptions` table/collection
 - Graceful error responses are returned when exceptions occur
+
+The test automatically uses the persistence store configured in config.py
+(SQLite or MongoDB) - no hardcoding required.
 """
 import requests
 import json
@@ -23,12 +26,20 @@ import sys
 import sqlite3
 import subprocess
 import re
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from config.config import settings
+from persistence import PersistenceStoreFactory
+
 BASE_URL = "http://localhost:8000"
-DB_PATH = "data/telemetry.db"
 
 # Expected logging events by node
 EXPECTED_LOG_EVENTS = {
@@ -41,87 +52,166 @@ EXPECTED_LOG_EVENTS = {
     # Other nodes may not have explicit audit logs, but exceptions should be logged
 }
 
-def get_db_connection():
-    """Get SQLite database connection"""
-    return sqlite3.connect(DB_PATH)
+def get_persistence_store():
+    """Get persistence store instance from config"""
+    return PersistenceStoreFactory.get_instance(settings.persistence_store_type)
 
-def check_logs_in_db(
+def get_sqlite_connection():
+    """Get SQLite database connection (synchronous)"""
+    return sqlite3.connect(settings.telemetry_db_path)
+
+async def get_mongodb_connection():
+    """Get MongoDB database connection (async)"""
+    store = get_persistence_store()
+    return await store._get_connection()
+
+async def check_logs_in_db(
     node_name: Optional[str] = None,
     event_type: Optional[str] = None,
     request_id: Optional[str] = None,
     session_id: Optional[str] = None,
     limit: int = 10
 ) -> List[Tuple]:
-    """Check if logs were written to database"""
+    """Check if logs were written to database (SQLite or MongoDB)"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        store_type = settings.persistence_store_type
         
-        query = "SELECT log_id, node_name, event_type, request_id, session_id, timestamp, data FROM logs WHERE 1=1"
-        params = []
-        
-        if node_name:
-            query += " AND node_name = ?"
-            params.append(node_name)
-        if event_type:
-            query += " AND event_type = ?"
-            params.append(event_type)
-        if request_id:
-            query += " AND request_id = ?"
-            params.append(request_id)
-        if session_id:
-            query += " AND session_id = ?"
-            params.append(session_id)
-        
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return rows
+        if store_type == "sqlite":
+            # SQLite query
+            conn = sqlite3.connect(settings.telemetry_db_path)
+            cursor = conn.cursor()
+            
+            query = "SELECT log_id, node_name, event_type, request_id, session_id, timestamp, data FROM logs WHERE 1=1"
+            params = []
+            
+            if node_name:
+                query += " AND node_name = ?"
+                params.append(node_name)
+            if event_type:
+                query += " AND event_type = ?"
+                params.append(event_type)
+            if request_id:
+                query += " AND request_id = ?"
+                params.append(request_id)
+            if session_id:
+                query += " AND session_id = ?"
+                params.append(session_id)
+            
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            conn.close()
+            return rows
+            
+        elif store_type == "mongodb":
+            # MongoDB query
+            db = await get_mongodb_connection()
+            query_filter = {}
+            
+            if node_name:
+                query_filter["node_name"] = node_name
+            if event_type:
+                query_filter["event_type"] = event_type
+            if request_id:
+                query_filter["request_id"] = request_id
+            if session_id:
+                query_filter["session_id"] = session_id
+            
+            cursor = db.logs.find(query_filter).sort("timestamp", -1).limit(limit)
+            rows = []
+            async for doc in cursor:
+                # Convert MongoDB document to tuple format matching SQLite
+                rows.append((
+                    doc.get("_id"),
+                    doc.get("node_name"),
+                    doc.get("event_type"),
+                    doc.get("request_id"),
+                    doc.get("session_id"),
+                    doc.get("timestamp"),
+                    json.dumps(doc.get("data", {}))
+                ))
+            return rows
+        else:
+            raise ValueError(f"Unsupported persistence store type: {store_type}")
+            
     except Exception as e:
         print(f"   ⚠️  Error checking logs in database: {e}")
         return []
 
-def check_exceptions_in_db(
+async def check_exceptions_in_db(
     node_name: Optional[str] = None,
     request_id: Optional[str] = None,
     session_id: Optional[str] = None,
     limit: int = 10
 ) -> List[Tuple]:
-    """Check if exceptions were logged to database"""
+    """Check if exceptions were logged to database (SQLite or MongoDB)"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        store_type = settings.persistence_store_type
         
-        query = "SELECT exception_id, node_name, error_code, category, severity, message, request_id, session_id, timestamp FROM exceptions WHERE 1=1"
-        params = []
-        
-        if node_name:
-            query += " AND node_name = ?"
-            params.append(node_name)
-        if request_id:
-            query += " AND request_id = ?"
-            params.append(request_id)
-        if session_id:
-            query += " AND session_id = ?"
-            params.append(session_id)
-        
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-        
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return rows
+        if store_type == "sqlite":
+            # SQLite query
+            conn = sqlite3.connect(settings.telemetry_db_path)
+            cursor = conn.cursor()
+            
+            query = "SELECT exception_id, node_name, error_code, category, severity, message, request_id, session_id, timestamp FROM exceptions WHERE 1=1"
+            params = []
+            
+            if node_name:
+                query += " AND node_name = ?"
+                params.append(node_name)
+            if request_id:
+                query += " AND request_id = ?"
+                params.append(request_id)
+            if session_id:
+                query += " AND session_id = ?"
+                params.append(session_id)
+            
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            conn.close()
+            return rows
+            
+        elif store_type == "mongodb":
+            # MongoDB query
+            db = await get_mongodb_connection()
+            query_filter = {}
+            
+            if node_name:
+                query_filter["node_name"] = node_name
+            if request_id:
+                query_filter["request_id"] = request_id
+            if session_id:
+                query_filter["session_id"] = session_id
+            
+            cursor = db.exceptions.find(query_filter).sort("timestamp", -1).limit(limit)
+            rows = []
+            async for doc in cursor:
+                # Convert MongoDB document to tuple format matching SQLite
+                rows.append((
+                    doc.get("_id"),
+                    doc.get("node_name"),
+                    doc.get("error_code"),
+                    doc.get("category"),
+                    doc.get("severity"),
+                    doc.get("message"),
+                    doc.get("request_id"),
+                    doc.get("session_id"),
+                    doc.get("timestamp")
+                ))
+            return rows
+        else:
+            raise ValueError(f"Unsupported persistence store type: {store_type}")
+            
     except Exception as e:
         print(f"   ⚠️  Error checking exceptions in database: {e}")
         return []
 
-def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict, expected_events: List[str], description: str) -> Tuple[bool, Dict]:
+async def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict, expected_events: List[str], description: str) -> Tuple[bool, Dict]:
     """Test logging for a specific node"""
     print(f"\n📊 Testing Logging: {node_name}")
     print(f"   {description}")
@@ -130,7 +220,7 @@ def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict
     request_id = test_payload.get("uuid", f"req-logging-{node_name}-{int(time.time())}")
     
     # Get log count before
-    logs_before = len(check_logs_in_db(node_name=node_name, request_id=request_id))
+    logs_before = len(await check_logs_in_db(node_name=node_name, request_id=request_id))
     
     try:
         # Make the request
@@ -144,7 +234,7 @@ def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict
         time.sleep(1)
         
         # Get log count after
-        logs_after = check_logs_in_db(node_name=node_name, request_id=request_id)
+        logs_after = await check_logs_in_db(node_name=node_name, request_id=request_id)
         
         result = {
             "node_name": node_name,
@@ -160,7 +250,7 @@ def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict
         
         # Check for expected log events
         for event_type in expected_events:
-            event_logs = check_logs_in_db(
+            event_logs = await check_logs_in_db(
                 node_name=node_name,
                 event_type=event_type,
                 request_id=request_id
@@ -172,7 +262,7 @@ def run_node_logging_test(node_name: str, test_endpoint: str, test_payload: Dict
                 print(f"   ⚠️  Expected log event not found: {event_type}")
         
         # Show all logs for this node/request
-        all_logs = check_logs_in_db(node_name=node_name, request_id=request_id)
+        all_logs = await check_logs_in_db(node_name=node_name, request_id=request_id)
         if all_logs:
             print(f"   📝 Found {len(all_logs)} log(s) for this request:")
             for log in all_logs[:3]:  # Show first 3
@@ -226,7 +316,7 @@ def run_endpoint_test(name: str, method: str, url: str, payload: Optional[Dict] 
         print(f"   ❌ {name}: Error - {str(e)}")
         return False
 
-def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[bool, Dict]:
+async def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[bool, Dict]:
     """Test exception handling for a specific node"""
     print(f"\n🚨 Testing Exception Handling: {node_name}")
     print(f"   {description}")
@@ -235,7 +325,7 @@ def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[
     request_id = f"req-exc-{node_name}-{int(time.time())}"
     
     # Get exception count before
-    exceptions_before = len(check_exceptions_in_db(node_name=node_name, request_id=request_id))
+    exceptions_before = len(await check_exceptions_in_db(node_name=node_name, request_id=request_id))
     
     try:
         response = requests.post(
@@ -252,7 +342,7 @@ def run_node_exception_handling_test(node_name: str, description: str) -> Tuple[
         time.sleep(1)
         
         # Get exception count after
-        exceptions_after = check_exceptions_in_db(node_name=node_name, request_id=request_id)
+        exceptions_after = await check_exceptions_in_db(node_name=node_name, request_id=request_id)
         
         result = {
             "node_name": node_name,
@@ -375,9 +465,15 @@ def main():
     print("1. ✅ All API endpoints (from TEMP_ENDPOINTS.md)")
     print("2. ✅ Exception handling in all nodes")
     print("3. ✅ Logging (audit logs) in all nodes")
-    print("4. ✅ Logs are written to SQLite `logs` table")
-    print("5. ✅ Exceptions are logged to SQLite `exceptions` table")
+    print(f"4. ✅ Logs are written to {settings.persistence_store_type} `logs` table/collection")
+    print(f"5. ✅ Exceptions are logged to {settings.persistence_store_type} `exceptions` table/collection")
     print("6. ✅ Graceful error responses are returned")
+    print("="*80)
+    print(f"\n📊 Using persistence store: {settings.persistence_store_type}")
+    if settings.persistence_store_type == "sqlite":
+        print(f"   Database path: {settings.telemetry_db_path}")
+    elif settings.persistence_store_type == "mongodb":
+        print(f"   Database: {settings.mongodb_database_name}")
     print("="*80)
     
     results = {
@@ -492,6 +588,16 @@ def main():
     print("📊 TESTING LOGGING IN ALL NODES")
     print("="*80)
     
+    # Create a single event loop for all async operations (logging, exceptions, database verification)
+    # This prevents "Event loop is closed" errors when using MongoDB
+    loop = None
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    except RuntimeError:
+        # If a loop already exists, use it
+        loop = asyncio.get_event_loop()
+    
     logging_tests = [
         {
             "node_name": "confidence_checker",
@@ -534,15 +640,15 @@ def main():
     ]
     
     for test in logging_tests:
-        success, result = run_node_logging_test(
-            test["node_name"],
-            test["endpoint"],
-            test["payload"],
-            test["expected_events"],
-            test["description"]
-        )
-        results["logging_tests"].append((test["node_name"], success, result))
-        time.sleep(0.5)
+            success, result = loop.run_until_complete(run_node_logging_test(
+                test["node_name"],
+                test["endpoint"],
+                test["payload"],
+                test["expected_events"],
+                test["description"]
+            ))
+            results["logging_tests"].append((test["node_name"], success, result))
+            time.sleep(0.5)
     
     # ========================================================================
     # TEST 2: EXCEPTION HANDLING TESTS
@@ -566,7 +672,7 @@ def main():
     ]
     
     for node_name, description in exception_tests:
-        success, result = run_node_exception_handling_test(node_name, description)
+        success, result = loop.run_until_complete(run_node_exception_handling_test(node_name, description))
         results["exception_tests"].append((node_name, success, result))
         time.sleep(0.5)
     
@@ -627,57 +733,132 @@ def main():
     # ========================================================================
     print("\n" + "="*80)
     print("📊 DATABASE VERIFICATION")
+    print(f"   Using persistence store: {settings.persistence_store_type}")
     print("="*80)
     
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    async def verify_database():
+        try:
+            store_type = settings.persistence_store_type
+            
+            if store_type == "sqlite":
+                conn = sqlite3.connect(settings.telemetry_db_path)
+                cursor = conn.cursor()
+                
+                # Count logs by node
+                cursor.execute("""
+                    SELECT node_name, COUNT(*) as count 
+                    FROM logs 
+                    GROUP BY node_name 
+                    ORDER BY count DESC
+                """)
+                log_counts = cursor.fetchall()
+                
+                # Count exceptions by node
+                cursor.execute("""
+                    SELECT node_name, COUNT(*) as count 
+                    FROM exceptions 
+                    GROUP BY node_name 
+                    ORDER BY count DESC
+                """)
+                exception_counts = cursor.fetchall()
+                
+                # Total counts
+                cursor.execute("SELECT COUNT(*) FROM logs")
+                total_logs = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM exceptions")
+                total_exceptions = cursor.fetchone()[0]
+                
+                conn.close()
+                
+                print(f"\n📝 Logs in database:")
+                print(f"   Total logs: {total_logs}")
+                if log_counts:
+                    for node_name, count in log_counts[:10]:
+                        print(f"   - {node_name}: {count} log(s)")
+                else:
+                    print("   (No logs found)")
+                
+                print(f"\n🚨 Exceptions in database:")
+                print(f"   Total exceptions: {total_exceptions}")
+                if exception_counts:
+                    for node_name, count in exception_counts[:10]:
+                        print(f"   - {node_name}: {count} exception(s)")
+                else:
+                    print("   (No exceptions found)")
+                    
+            elif store_type == "mongodb":
+                db = await get_mongodb_connection()
+                
+                # Count logs by node
+                pipeline_logs = [
+                    {"$group": {"_id": "$node_name", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                    {"$limit": 10}
+                ]
+                log_counts = []
+                async for doc in db.logs.aggregate(pipeline_logs):
+                    log_counts.append((doc["_id"], doc["count"]))
+                
+                # Count exceptions by node
+                pipeline_exceptions = [
+                    {"$group": {"_id": "$node_name", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                    {"$limit": 10}
+                ]
+                exception_counts = []
+                async for doc in db.exceptions.aggregate(pipeline_exceptions):
+                    exception_counts.append((doc["_id"], doc["count"]))
+                
+                # Total counts
+                total_logs = await db.logs.count_documents({})
+                total_exceptions = await db.exceptions.count_documents({})
+                
+                print(f"\n📝 Logs in database:")
+                print(f"   Total logs: {total_logs}")
+                if log_counts:
+                    for node_name, count in log_counts:
+                        print(f"   - {node_name}: {count} log(s)")
+                else:
+                    print("   (No logs found)")
+                
+                print(f"\n🚨 Exceptions in database:")
+                print(f"   Total exceptions: {total_exceptions}")
+                if exception_counts:
+                    for node_name, count in exception_counts:
+                        print(f"   - {node_name}: {count} exception(s)")
+                else:
+                    print("   (No exceptions found)")
+            else:
+                print(f"\n   ⚠️  Unsupported persistence store type: {store_type}")
         
-        # Count logs by node
-        cursor.execute("""
-            SELECT node_name, COUNT(*) as count 
-            FROM logs 
-            GROUP BY node_name 
-            ORDER BY count DESC
-        """)
-        log_counts = cursor.fetchall()
-        
-        # Count exceptions by node
-        cursor.execute("""
-            SELECT node_name, COUNT(*) as count 
-            FROM exceptions 
-            GROUP BY node_name 
-            ORDER BY count DESC
-        """)
-        exception_counts = cursor.fetchall()
-        
-        # Total counts
-        cursor.execute("SELECT COUNT(*) FROM logs")
-        total_logs = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM exceptions")
-        total_exceptions = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        print(f"\n📝 Logs in database:")
-        print(f"   Total logs: {total_logs}")
-        if log_counts:
-            for node_name, count in log_counts[:10]:
-                print(f"   - {node_name}: {count} log(s)")
-        else:
-            print("   (No logs found)")
-        
-        print(f"\n🚨 Exceptions in database:")
-        print(f"   Total exceptions: {total_exceptions}")
-        if exception_counts:
-            for node_name, count in exception_counts[:10]:
-                print(f"   - {node_name}: {count} exception(s)")
-        else:
-            print("   (No exceptions found)")
-        
-    except Exception as e:
-        print(f"\n   ⚠️  Could not check database: {e}")
+        except Exception as e:
+            print(f"\n   ⚠️  Could not check database: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # Use the same event loop for database verification
+    if loop and not loop.is_closed():
+        try:
+            loop.run_until_complete(verify_database())
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                # If loop is closed, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(verify_database())
+            else:
+                raise
+    else:
+        # Fallback: create a new loop if somehow we don't have one
+        asyncio.run(verify_database())
+    
+    # Close the event loop at the very end
+    if loop and not loop.is_closed():
+        loop.close()
+    
+    # Close the event loop at the very end
+    loop.close()
     
     print("\n" + "="*80)
     if total_passed == total_tests:

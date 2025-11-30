@@ -53,18 +53,10 @@ def setup_test_database():
     yield
     
     # Cleanup: Close any open connections first
-    try:
-        # Close persistence store instance if it exists
-        if PersistenceStoreFactory._instance is not None:
-            # Run async close in a new event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(PersistenceStoreFactory.close_instance())
-            finally:
-                loop.close()
-    except Exception:
-        pass  # Ignore cleanup errors
+    # Note: We skip async cleanup here to avoid event loop conflicts with pytest-asyncio.
+    # The persistence store connections will be cleaned up when the process exits.
+    # If you need explicit cleanup, consider making it synchronous or using a different approach.
+    pass
     
     # Reset instance
     PersistenceStoreFactory._instance = None
