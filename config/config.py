@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     top_p: float = 0.95
     max_output_tokens: int = 2048
-    project_id: str = "pbm-nonprod-myclaims"  # ⚠️ Overridden by PROJECT_ID env var
+    project_id: str = "pbm-poc-coderev-genai-poc"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
     location: str = "us-central1"  # ⚠️ Overridden by LOCATION env var
 
     # LangSmith (optional)
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     azure_client_secret: str = ""  # ⚠️ Overridden by AZURE_CLIENT_SECRET env var
     
     # Embeddings Provider Selection (uses same project_id/location as Gemini LLM)
-    use_google_embeddings: bool = False  # Set to True to use Google Cloud text-embedding-005 instead of Azure
+    use_google_embeddings: bool = True  # Set to True to use Google Cloud text-embedding-005 instead of Azure
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     # Or for direct IP: mongodb://<username>:<password>@<ip1>:<port>,<ip2>:<port>/<database>?replicaSet=<replica_set>
     mongodb_connection_string: str = "mongodb://localhost:27017"  # Default local MongoDB
     mongodb_database_name: str = "myclaims-DEV"  # Database name (myclaims-DEV, myclaims-QA, myClaims-UAT, myClaims-PT)
+    use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
     
     enable_telemetry: bool = True
 
