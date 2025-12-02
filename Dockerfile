@@ -12,6 +12,10 @@ RUN update-ca-certificates
 ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
 ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
 
+# Set default DATABASE_URI for LangGraph API base image (required by base image config)
+# This can be overridden via environment variables in Kubernetes deployment
+ENV DATABASE_URI=sqlite:///./checkpoints.db
+
 WORKDIR /api
 
 # Build args to remove warning
@@ -38,4 +42,5 @@ COPY . .
 EXPOSE 8000
 
 # Start (adjust entrypoint/command to your app)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Note: main.py is at the root, not in an app directory
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
