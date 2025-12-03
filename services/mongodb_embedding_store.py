@@ -44,15 +44,16 @@ class MongoDBEmbeddingStore:
         """Get or create MongoDB connection"""
         if self.client is None:
             try:
-                # Get SSL certificate path from certifi
-                import certifi
+                # Uncomment below if SSL certificate issues on macOS:
+                # import certifi
+                # tls_ca_file = certifi.where()
                 
                 self.client = AsyncIOMotorClient(
                     self.connection_string,
                     serverSelectionTimeoutMS=5000,
                     connectTimeoutMS=10000,
-                    retryWrites=True,
-                    tlsCAFile=certifi.where()  # Use certifi's CA bundle for SSL verification
+                    retryWrites=True
+                    # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
                 )
                 # Test connection
                 await self.client.admin.command('ping')
