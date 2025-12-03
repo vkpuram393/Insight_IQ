@@ -1,8 +1,8 @@
 """
 Intent Classifier Wrapper
 Provides unified interface to switch between:
-- Original EDGAR-style classifier (existing)
-- CVS Production-Ready Classifier (new, 28+ intents)
+- Embedding-based Classifier (semantic understanding) - use_embedding_classifier=True
+- Keyword-based Classifier (fast, rule-based) - use_embedding_classifier=False
 
 Usage:
     from classifiers.intent_classifier_wrapper import classify_intent_unified
@@ -23,9 +23,8 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
     Classify intent using configured classifier
     
     Switches between:
-    - CVS Embedding Classifier (if settings.use_cvs_intent_classifier=True and use_embedding_classifier=True)
-    - CVS Keyword Classifier (if settings.use_cvs_intent_classifier=True and use_embedding_classifier=False)
-    - Original EDGAR Classifier (if settings.use_cvs_intent_classifier=False)
+    - Embedding Classifier (if settings.use_embedding_classifier=True) - semantic understanding
+    - Keyword Classifier (if settings.use_embedding_classifier=False) - fast, rule-based
     
     Args:
         query: User's natural language query
@@ -39,51 +38,38 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
             - is_simple: bool (optional)
             - is_complex: bool (optional)
     """
-    if settings.use_cvs_intent_classifier:
-        # Use CVS Production Classifier (30 intents, production-ready)
+    if settings.use_embedding_classifier:
+        # Use Embedding-based Classifier (semantic understanding)
+        logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
+        from classifiers.embedded_classifier import CVSIntentEmbedded
         
-        if settings.use_embedding_classifier:
-            # Use Embedding-based Classifier (semantic understanding)
-            logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
-            from classifiers.embedded_classifier import CVSIntentEmbedded
-            
-            try:
-                classifier = CVSIntentEmbedded()
-                result = classifier.classify(query)
-            except RuntimeError as e:
-                # Embeddings unavailable - return special flag to route to LLM
-                logger.error(f"❌ Embedding classifier failed: {e}")
-                logger.info("🔄 Routing query directly to Response LLM Agent")
-                return {
-                    'intent': 'embedding_failed',
-                    'confidence': 0.0,
-                    'needs_clarification': False,
-                    'embedding_failed': True,  # Special flag for router
-                    'fallback_reason': str(e)
-                }
-        else:
-            # Use Keyword-based Classifier (fast, rule-based)
-            logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
-            from classifiers.keyword_classifier import get_cvs_intent_classifier
-            
-            classifier = get_cvs_intent_classifier()
+        try:
+            classifier = CVSIntentEmbedded()
             result = classifier.classify(query)
-        
-        # Ensure 'needs_clarification' key exists (for compatibility)
-        if 'needs_clarification' not in result:
-            result['needs_clarification'] = result['confidence'] < 0.4
-        
-        return result
-    
+        except RuntimeError as e:
+            # Embeddings unavailable - return special flag to route to LLM
+            logger.error(f"❌ Embedding classifier failed: {e}")
+            logger.info("🔄 Routing query directly to Response LLM Agent")
+            return {
+                'intent': 'embedding_failed',
+                'confidence': 0.0,
+                'needs_clarification': False,
+                'embedding_failed': True,  # Special flag for router
+                'fallback_reason': str(e)
+            }
     else:
-        # Use Original EDGAR-style Classifier
-        logger.info("🟢 Using Original EDGAR Intent Classifier")
-        from classifiers.intent_classifier import get_intent_classifier
+        # Use Keyword-based Classifier (fast, rule-based)
+        logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
+        from classifiers.keyword_classifier import get_cvs_intent_classifier
         
-        classifier = get_intent_classifier()
+        classifier = get_cvs_intent_classifier()
         result = classifier.classify(query)
-        
-        return result
+    
+    # Ensure 'needs_clarification' key exists (for compatibility)
+    if 'needs_clarification' not in result:
+        result['needs_clarification'] = result['confidence'] < 0.4
+    
+    return result
 
 
 def extract_entities_unified(query: str, intent: str = None) -> Dict[str, Any]:

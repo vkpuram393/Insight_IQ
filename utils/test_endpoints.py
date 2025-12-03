@@ -740,7 +740,7 @@ async def test_exception_handling(request: ExceptionTestRequest):
         from nodes.context import build_context_node, update_memory_node
         from nodes.clarification import clarification_node
         from nodes.confidence import confidence_checker_node
-        from agents.intent_agent import intent_agent_node
+        from agents import intent_agent_node
         from agents.response_agent import response_agent_node
         from tools.claims_api import call_claims_tool_node
         

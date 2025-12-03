@@ -526,8 +526,10 @@ class CVSIntentEmbedded:
         - Multiple conditions: "and", "but", "however"
         """
         complex_patterns = [
-            # Aggregations
-            r'\b(all|every|total|sum|average|mean)\b',
+            # Aggregations - Only match "all" when used in aggregation context
+            r'\b(total|sum|average|mean)\b',  # Core aggregation words
+            r'\b(all)\s+(my|the)\s+(claims|prescriptions|transactions)\b',  # "all my claims" = aggregation
+            r'\b(every)\s+(claim|prescription|transaction)\b',  # "every claim" = aggregation
             r'\b(most|least|highest|lowest|expensive|cheapest)\b',
             
             # Comparisons
@@ -1001,22 +1003,20 @@ CVS_INTENT_EXAMPLES = {
     ],
 
     "out_of_scope": [
-        # Command format (imperative)
-        "Generate a random topic",
-        "Show me the weather",
-        "Display a joke",
-        "Give me sports scores",
-        "Tell me about politics",
-        "Provide cooking recipes",
-        "Retrieve stock market data",
-        "Fetch entertainment news",
-        "Generate celebrity gossip",
-        "Show movie showtimes",
-        "Display restaurant recommendations",
-        "Give me travel advice",
-        "Tell me about history",
-        "Provide science facts",
-        # Question format (interrogative) - added for better coverage
+        # Clearly off-topic questions (no trigger words like Provide/Show/Display)
+        "What's the weather forecast?",
+        "I need a pizza recipe",
+        "Book me a flight to Hawaii",
+        "Sports scores from last night",
+        "Latest political news",
+        "Best restaurants near me",
+        "Stock market performance today",
+        "Movie recommendations for tonight",
+        "Celebrity gossip updates",
+        "Travel tips for Europe",
+        "Historical facts about Rome",
+        "Science experiments for kids",
+        # Question format (interrogative)
         "Why is the sky blue?",
         "What is the weather like today?",
         "How do I cook pasta?",
@@ -1027,13 +1027,13 @@ CVS_INTENT_EXAMPLES = {
         "How does gravity work?",
         "Why do birds fly south?",
         "What's the capital of France?",
-        # General/vague
-        "Retrieve unrelated information",
-        "Fetch random content",
-        "Generate off-topic discussion",
-        "Show something different",
-        "Display non-claim information",
-        "Give me irrelevant data",
+        # General off-topic
+        "Random trivia question",
+        "Joke of the day",
+        "Music playlist suggestions",
+        "Fitness workout routines",
+        "Gaming tips and tricks",
+        "Fashion advice for summer",
     ],
 
     "pharmacy_info": [

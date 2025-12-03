@@ -48,8 +48,7 @@ class Settings(BaseSettings):
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
     conversation_history_limit: int = 5  # Number of past conversations to include in response generation
-    use_cvs_intent_classifier: bool = True  # Set to True to use Ahmed's production-ready CVS classifier (28+ intents)
-    use_embedding_classifier: bool = True  # Set to True to use embedding-based classifier instead of keyword-based (requires use_cvs_intent_classifier=True)
+    use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
 
     # Safety
     enable_safety_precheck: bool = True  # Match remote MVP-1
