@@ -108,12 +108,44 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     intent_reclassified = state.get("intent_reclassified", False)
     entities = state.get("entities") or {}
     conversation_history = state.get("conversation_history", [])
+    missing_slots = state.get("missing_slots", [])  # Required entities that are missing (computed by entity extractor)
+    required_entities_list = state.get("required_entities_list", [])  # Required entities for this intent (from API config)
 
     # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
     INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
 
-    # Check if we have required entities (direct entity existence check)
-    has_entities = bool(entities and any(v is not None for v in entities.values()))
+    # Check if we have required entities (check for required entities specifically, not just any entities)
+    # FIXED: Changed from `v is not None` to `v` to properly handle empty lists ([] is falsy)
+    # FIXED: Check if required entities are present, not just if ANY entities exist
+    # Use missing_slots if available (most reliable), otherwise check required_entities_list
+    if missing_slots:
+        # Entity extractor already computed missing slots - if any are missing, we don't have required entities
+        has_entities = False
+        logger.debug(f"   Missing required slots: {missing_slots}")
+    elif required_entities_list:
+        # Check if all required entities are present (handle both list format and single value format)
+        has_required_entities = True
+        for req_entity in required_entities_list:
+            # Map API format (claim_number) to entity extractor format (claim_ids, claim_id)
+            entity_key = None
+            if req_entity == "claim_number":
+                entity_key = "claim_ids"  # Entity extractor uses claim_ids (list format)
+            elif req_entity == "member_id":
+                entity_key = "member_ids"
+            elif req_entity == "prescription_number":
+                entity_key = "prescription_ids"
+            else:
+                entity_key = req_entity  # Try direct match
+            
+            # Check if entity exists and has values
+            if entity_key not in entities or not entities[entity_key] or (isinstance(entities[entity_key], list) and len(entities[entity_key]) == 0):
+                has_required_entities = False
+                logger.debug(f"   Missing required entity: {req_entity} (checked as {entity_key})")
+                break
+        has_entities = has_required_entities
+    else:
+        # Fallback: Check if any entities exist (for intents without required_entities_list)
+        has_entities = bool(entities and any(v for v in entities.values()))
     
     # CRITICAL: Check conversation history for entities before routing to clarification
     # This enables follow-up questions without re-asking for information user already provided

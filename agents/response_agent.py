@@ -66,33 +66,38 @@ When a user's question lacks clarity or essential details, generate one specific
 
 Generate ONE specific, conversational follow-up question to get missing information.
 
-CRITICAL: Before asking, check CONVERSATION HISTORY - the user may have already mentioned the information in a previous turn. Never ask for something they already provided.
+CRITICAL RULES:
+1. **Focus on MISSING INFORMATION**: Ask ONLY for the missing information listed in "MISSING INFORMATION" field. Do NOT ask about ambiguous terms or abbreviations in the user's query (like "TF", "status", etc.)
+2. **Check CONVERSATION HISTORY FIRST**: The user may have already mentioned the information in a previous turn. Never ask for something they already provided.
+3. **Be Direct**: If missing "claim number", ask "Could you please provide your claim number?" - don't ask what "TF" means or other ambiguous terms.
 
 Key Points:
 • ONE question at a time (never ask for multiple things)
 • Be conversational and acknowledge what they've told you
 • Masked tokens like [CLAIM_ID_XXX] mean data is provided
 • If user mentioned claim X123 earlier, use it - don't ask again
+• Focus on the MISSING INFORMATION, not on clarifying ambiguous terms in the query
 
 You'll receive:
-- USER QUERY: Current question
+- USER QUERY: Current question (may contain ambiguous terms - ignore those)
 - CONVERSATION HISTORY: Previous messages ← CHECK THIS FIRST
-- MISSING ENTITIES: What appears missing
-- PROVIDED ENTITIES: What's in current message
+- MISSING INFORMATION: What you need to ask for (e.g., "claim number or claim ID")
+- PROVIDED INFORMATION: What's in current message
 
 Output: Just the follow-up question, no explanations.
 
 Good examples:
-✅ "I can help with that rejection. Could you provide your claim number?"
-✅ "To look that up for you, which claim are you asking about?"
-✅ "I'd be happy to help! Are you asking about a specific claim or all recent claims?"
+✅ "I can help with that. Could you please provide your claim number?"
+✅ "To look that up for you, could you provide your claim number or claim ID?"
+✅ "I'd be happy to help! Could you please provide your claim number?"
 
 Bad examples:
+❌ "What does 'TF' stand for?" (asking about ambiguous term, not missing entity)
 ❌ "Which claim?" (when they just mentioned CLM123 in previous turn)
 ❌ "Please provide claim number, date, and pharmacy." (too many things)
 ❌ "Error: missing parameter claim_id" (robotic)
 
-Generate one clear, helpful question."""
+Generate one clear, helpful question that asks for the MISSING INFORMATION."""
     
     def _get_system_prompt(self) -> str:
         """
@@ -246,6 +251,42 @@ REJECTION:
 
 Remember to maintain this structured, concise format for all responses, including both initial and follow-up questions."""
     
+    def _map_entity_to_user_friendly(self, entity_name: str) -> str:
+        """
+        Map technical entity names to user-friendly labels for clarification questions.
+        
+        Args:
+            entity_name: Technical entity name (e.g., 'claim_ids', 'claim_number')
+            
+        Returns:
+            str: User-friendly label (e.g., 'claim number' or 'claim ID')
+        """
+        entity_map = {
+            # Claim-related
+            'claim_ids': 'claim number or claim ID',
+            'claim_id': 'claim number or claim ID',
+            'claim_number': 'claim number',
+            'claim_sequence': 'claim sequence number',
+            'claim_numbers': 'claim numbers',
+            
+            # Member-related
+            'member_ids': 'member ID',
+            'member_id': 'member ID',
+            
+            # Prescription-related
+            'prescription_ids': 'prescription number',
+            'prescription_id': 'prescription number',
+            'prescription_number': 'prescription number',
+            
+            # Date-related
+            'date_range': 'date range',
+            'start_date': 'start date',
+            'end_date': 'end date',
+        }
+        
+        # Return mapped name or original if not found
+        return entity_map.get(entity_name.lower(), entity_name)
+    
     def _build_user_prompt(self, state: AgentState) -> str:
         """
         Build user prompt from state data - handles both modes with separate variables
@@ -290,11 +331,15 @@ Remember to maintain this structured, concise format for all responses, includin
             missing_entities = clarification_ctx.get("missing_entities", [])
             provided_entities = clarification_ctx.get("provided_entities", [])
             
+            # Map technical entity names to user-friendly labels
+            missing_entities_friendly = [self._map_entity_to_user_friendly(e) for e in missing_entities]
+            missing_entities_str = ", ".join(missing_entities_friendly) if missing_entities_friendly else "None"
+            
             # Format history (may provide context for question)
             history = state.get("conversation_history", [])
             history_str = self._format_conversation_history(history) if history else "No previous conversation"
             
-            # Build clarification prompt
+            # Build clarification prompt with explicit guidance
             prompt_template = ChatPromptTemplate.from_messages([
                 ("user", """REASON FOR CLARIFICATION: {reason}
 
@@ -302,11 +347,17 @@ USER QUERY: {user_query}
 
 INTENT: {intent} (confidence: {confidence:.2f})
 
-MISSING ENTITIES: {missing_entities}
-PROVIDED ENTITIES: {provided_entities}
+MISSING INFORMATION: {missing_entities}
+PROVIDED INFORMATION: {provided_entities}
 
 === CONVERSATION HISTORY ===
 {conversation_history}
+
+CRITICAL INSTRUCTIONS:
+1. Focus ONLY on asking for the MISSING INFORMATION listed above (e.g., "{missing_entities}")
+2. Do NOT ask about ambiguous terms in the user query (like "TF" or abbreviations)
+3. The user wants to know about their claim - ask for the claim number/ID to look it up
+4. Be direct and specific: "Could you please provide your {missing_entities}?"
 
 Generate ONE specific, helpful follow-up question to get the missing information. Just the question, no explanation.""")
             ])
@@ -316,7 +367,7 @@ Generate ONE specific, helpful follow-up question to get the missing information
                 user_query=user_query,
                 intent=intent,
                 confidence=confidence,
-                missing_entities=", ".join(missing_entities) if missing_entities else "None",
+                missing_entities=missing_entities_str,
                 provided_entities=", ".join(provided_entities) if provided_entities else "None",
                 conversation_history=history_str
             )
