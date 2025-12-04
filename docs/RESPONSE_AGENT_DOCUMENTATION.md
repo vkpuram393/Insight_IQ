@@ -161,22 +161,90 @@ INFO:     Uvicorn running on http://127.0.0.1:8000
 
 ## 🎯 Overview
 
-The **Response Agent** is the second agent in the LangGraph multi-agent workflow. It takes structured claim data and user context, then generates natural, conversational responses using Google Gemini LLM.
+### What is the Response Agent?
+
+Think of the **Response Agent** like a **professional writer** who takes raw data and turns it into a beautiful, easy-to-read story!
+
+When you ask: "What's the status of my claim #12345?"
+
+The Response Agent:
+1. **Receives** the raw claim data from the Tool Call Agent (like getting a spreadsheet)
+2. **Understands** what you asked for (from the Intent Agent)
+3. **Looks at** previous conversation (if you've been chatting)
+4. **Writes** a natural, helpful answer using Google Gemini AI
+5. **Formats** it nicely (with sections, bullet points, tables)
+6. **Returns** the final answer to you
+
+It's like having a professional assistant who:
+- Reads complex data (claim information from APIs)
+- Understands context (what you asked, previous conversation)
+- Writes beautifully (natural language, well-formatted)
+- Follows guidelines (specific format for paid/rejected claims)
 
 ### Purpose
 
-Transform raw pharmacy claim data into user-friendly, formatted responses that follow specific templates for:
-- Paid claims
-- Rejected claims
-- Reversed claims
-- Follow-up questions
+The Response Agent transforms **raw pharmacy claim data** (numbers, codes, technical terms) into **user-friendly, conversational responses** that:
+- **Answer your question directly** (not too much, not too little)
+- **Use natural language** (not technical jargon)
+- **Follow a consistent format** (easy to scan and read)
+- **Include relevant sections** (summary, financial, drug info, etc.)
+
+**Example Transformation:**
+
+**Raw Data (from API):**
+```json
+{
+  "claimInformation": {
+    "claimNumber": "12345",
+    "claimStatus": "P",
+    "claimStatusDescription": "Paid"
+  },
+  "drug": {
+    "productName": "ATORVASTATIN"
+  },
+  "pricing": {
+    "patientPay": "10.00"
+  }
+}
+```
+
+**Response Agent Output:**
+```
+SUMMARY: Atorvastatin 40mg claim processed and paid on 05/15/2023.
+
+FINANCIAL:
+• Patient paid: $10.00 copay
+• Plan paid: $45.75
+• Accumulation: $10.00 applied to annual out-of-pocket
+
+DRUG:
+• Atorvastatin 40mg tablet
+• Quantity: 30
+• Days supply: 30
+```
+
+**See the difference?** Raw data → Beautiful, readable answer!
 
 ### Key Characteristics
 
-- **Dual Mode**: Supports Mock LLM (development) and Real Gemini (production)
-- **Template-Driven**: Uses ChatPromptTemplate for structured prompt management
-- **Pattern-Compliant**: Follows all established codebase patterns
-- **Production-Ready**: Comprehensive error handling, logging, and telemetry
+- **Dual Mode**: 
+  - **Mock LLM** (development): Fast, free, basic responses (for testing)
+  - **Real Gemini** (production): High-quality AI responses (for real users)
+  
+- **Template-Driven**: 
+  - Uses structured prompts (like a fill-in-the-blank form)
+  - Ensures consistent formatting
+  - Easy to update and maintain
+  
+- **Pattern-Compliant**: 
+  - Follows the same code patterns as other agents
+  - Uses the same error handling, logging, telemetry
+  - Consistent with the rest of the codebase
+  
+- **Production-Ready**: 
+  - Handles errors gracefully (doesn't crash)
+  - Logs everything (for debugging)
+  - Returns user-friendly error messages
 
 ---
 
@@ -229,6 +297,50 @@ Transform raw pharmacy claim data into user-friendly, formatted responses that f
 └─────────────────────────────────────────────────────┘
 ```
 
+### How It Works: Step-by-Step (In Simple Terms)
+
+**Step 1: Receive the Data**
+- Response Agent receives a "package" from previous nodes containing:
+  - **User's question**: "What's my claim status?"
+  - **Intent**: What the user wants (e.g., "claim_status")
+  - **Claim data**: Raw data from the API (like a spreadsheet)
+  - **Conversation history**: What you've talked about before
+
+**Step 2: Choose the Right Instructions**
+- Response Agent has **two sets of instructions**:
+  - **Normal mode**: "Write a helpful answer about the claim"
+  - **Clarification mode**: "Ask a follow-up question to get missing info"
+- It picks the right one based on whether clarification is needed
+
+**Step 3: Prepare the "Question" for the AI**
+- Response Agent builds a **prompt** (like a detailed question) for Gemini AI:
+  - Includes the user's question
+  - Includes the claim data (formatted nicely)
+  - Includes conversation history (for context)
+  - Includes instructions on how to format the answer
+
+**Step 4: Ask Gemini AI to Write the Answer**
+- Response Agent sends the prompt to Google Gemini AI
+- Gemini reads everything and writes a natural, helpful answer
+- Gemini follows the formatting instructions (sections, bullet points, etc.)
+
+**Step 5: Check the Answer**
+- Response Agent validates the answer:
+  - Is it empty? → Use a fallback message
+  - Is it too long? → Usually fine, but can be trimmed
+  - Does it follow the format? → Gemini usually does this well
+
+**Step 6: Return the Answer**
+- Response Agent packages the answer and returns it
+- The answer goes back to the user through the API
+
+**Think of it like:**
+1. You give a writer (Response Agent) a topic and some data
+2. The writer reads the instructions (system prompt)
+3. The writer prepares a detailed question (user prompt)
+4. The writer asks an AI assistant (Gemini) to write the answer
+5. The writer checks the answer and gives it to you
+
 ### Class Structure
 
 ```python
@@ -262,23 +374,106 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]
 
 ### 1. Dual LLM Mode
 
-#### Mock LLM (Development)
-- **Purpose**: Fast development without API costs
-- **Activation**: `USE_MOCK_LLM=true` in config or .env
-- **Behavior**: 
-  - ~300ms response time
-  - Basic template-based responses
-  - Uses actual claim data from tool_results
-  - Adds "⚠️ MOCK RESPONSE" warning
+The Response Agent can work in **two different modes** depending on your needs:
 
-#### Real Gemini (Production)
-- **Purpose**: Production-quality AI responses
-- **Activation**: `USE_MOCK_LLM=false` (default in config.py)
-- **Behavior**:
-  - 2-5 second response time
-  - High-quality, contextual responses
-  - Follows system prompt precisely
-  - No mock warnings
+#### Mock LLM (Development Mode)
+
+**What it is:**
+- A **fake AI** that simulates responses without calling Google Gemini
+- Used for **development and testing** (saves money, faster)
+- Generates basic responses based on templates
+
+**When to use:**
+- When developing new features
+- When testing the code flow
+- When you don't want to pay for API calls
+- When you want fast responses (no network delay)
+
+**How it works:**
+- Reads the claim data from `tool_results`
+- Uses simple templates to format responses
+- Adds "⚠️ MOCK RESPONSE" warning so you know it's fake
+- Takes ~300ms (very fast, no API call)
+
+**Example Mock Response:**
+```
+SUMMARY: ATORVASTATIN claim processed and paid on N/A.
+
+FINANCIAL:
+• Patient paid: $10.00
+• Status: Paid
+
+DRUG:
+• ATORVASTATIN
+• Quantity: N/A
+• Days supply: N/A
+
+⚠️ MOCK RESPONSE - Enable real Gemini by setting USE_MOCK_LLM=false in .env
+```
+
+**Activation:**
+```python
+# In config.py or .env
+USE_MOCK_LLM=true
+```
+
+#### Real Gemini (Production Mode)
+
+**What it is:**
+- Uses **Google Gemini AI** (real AI, not fake)
+- Generates **high-quality, natural responses**
+- Used in **production** (for real users)
+
+**When to use:**
+- In production (real users)
+- When you need high-quality responses
+- When you want AI to understand context and nuance
+
+**How it works:**
+- Sends a detailed prompt to Google Gemini AI
+- Gemini reads the claim data, user question, and conversation history
+- Gemini generates a natural, well-formatted response
+- Takes 2-5 seconds (network call to Google's servers)
+
+**Example Real Response:**
+```
+SUMMARY: Atorvastatin 40mg claim processed and paid on 05/15/2023.
+
+FINANCIAL:
+• Patient paid: $10.00 copay
+• Plan paid: $45.75
+• Accumulation: $10.00 applied to annual out-of-pocket
+
+DRUG:
+• Atorvastatin 40mg tablet
+• Quantity: 30
+• Days supply: 30
+• NDC: 12345-6789-10
+
+MEMBER: John Doe (ID: JD123456789)
+PHARMACY: CVS Pharmacy #1234 (NPI: 1234567890)
+```
+
+**Activation:**
+```python
+# In config.py or .env (default)
+USE_MOCK_LLM=false
+```
+
+**Comparison:**
+
+| Feature | Mock LLM | Real Gemini |
+|---------|----------|-------------|
+| **Speed** | ~300ms (fast) | 2-5 seconds (slower) |
+| **Cost** | Free | ~$0.001 per call |
+| **Quality** | Basic templates | High-quality AI |
+| **Context Understanding** | Limited | Excellent |
+| **Use Case** | Development | Production |
+| **Warning** | Shows "MOCK RESPONSE" | No warning |
+
+**Why have both?**
+- **Development**: Fast, free, good enough for testing
+- **Production**: Slower, costs money, but much better quality
 
 ### 2. Structured Prompt Management
 
