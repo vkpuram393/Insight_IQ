@@ -27,8 +27,9 @@ class EntityExtractor:
             'prescription_id': r'\b(RX\d{3,10})\b',### dont need
             'amount': r'\$?\d+(?:\.\d{2})?', ###remove
             'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', ###remove
-            # Person name: pattern for names after keywords
-            'person_name': r'(?:for\s+|name\s+is\s+|patient\s+|member\s+)([A-Za-z\s]{2,30})(?:\s|$|[,.;])'
+            # Person name: requires 2 words (First Last) to avoid matching abbreviations like "PA"
+            # Pattern: Capital letter + lowercase, space, Capital letter + lowercase
+            'person_name': r'(?:for\s+|name\s+is\s+|patient\s+|member\s+)([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$|[,.;])'
         }
         
         # Compile patterns

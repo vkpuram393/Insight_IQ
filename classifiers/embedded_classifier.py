@@ -72,8 +72,26 @@ class CVSIntentEmbedded:
         # Build intent examples (embedded in this file)
         self.intent_examples = self._build_intent_examples()
         
-        # Pre-compute embeddings for all examples (validates cache dimensions)
-        self.intent_embeddings = self._embed_all_examples()
+        # Check if MongoDB vector search is enabled
+        from config.config import settings
+        if settings.use_mongodb_for_embeddings:
+            # MongoDB Vector Search mode: Don't load embeddings into memory
+            logger.info("🚀 MongoDB Vector Search enabled - embeddings will be queried on-demand")
+            self.intent_embeddings = {}  # Empty dict, not used in vector search mode
+        else:
+            # Traditional mode: Pre-load all embeddings into memory
+            # Use ThreadPoolExecutor to run async code in separate thread with new event loop
+            import asyncio
+            import concurrent.futures
+            
+            def run_embed_in_thread():
+                """Run async embedding in new thread with its own event loop"""
+                return asyncio.run(self._embed_all_examples())
+            
+            # Always use ThreadPoolExecutor to avoid event loop conflicts
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_embed_in_thread)
+                self.intent_embeddings = future.result(timeout=180)  # 180s timeout
         
         # Thresholds
         self.confidence_threshold = 0.50  # Match keyword classifier
@@ -158,20 +176,61 @@ class CVSIntentEmbedded:
         
         return True
     
-    def _embed_all_examples(self) -> Dict[str, np.ndarray]:
+    async def _embed_all_examples(self) -> Dict[str, np.ndarray]:
         """
         Convert all intent examples to embeddings
         
-        Tries to load from cache first (instant), falls back to API calls if needed.
-        Automatically regenerates cache if dimension mismatch detected.
+        Priority:
+        1. Try MongoDB first (if enabled)
+        2. Fall back to .pkl file cache
+        3. Generate fresh if neither available
+        
+        Automatically regenerates if dimension/provider mismatch detected.
         
         Returns:
             Dict mapping intent name to array of embeddings
         """
         import pickle
         import os
+        from config.config import settings
         
-        # Try to load from cache first
+        # ========================================================================
+        # PRIORITY 1: Try MongoDB first (if enabled)
+        # ========================================================================
+        if settings.use_mongodb_for_embeddings:
+            try:
+                from services.mongodb_embedding_store import MongoDBEmbeddingStore
+                
+                logger.info("🔍 Checking MongoDB for cached embeddings...")
+                mongo_store = MongoDBEmbeddingStore()
+                
+                # Check if cache is valid
+                is_valid = await mongo_store.check_cache_validity(
+                    current_provider=EMBEDDINGS_PROVIDER,
+                    current_dimension=self._get_expected_embedding_dimension(),
+                    current_examples=self.intent_examples
+                )
+                
+                if is_valid:
+                    # Load from MongoDB
+                    intent_embeddings = await mongo_store.load_embeddings()
+                    
+                    if intent_embeddings:
+                        await mongo_store.close()
+                        logger.info("✅ Loaded embeddings from MongoDB (INSTANT - no API calls!)")
+                        return intent_embeddings
+                
+                # Cache invalid or empty - will regenerate and save to MongoDB later
+                await mongo_store.close()
+                logger.info("⚠️  MongoDB cache invalid or empty, will generate fresh embeddings")
+                
+            except Exception as e:
+                logger.warning(f"⚠️  MongoDB not available: {str(e)}")
+                logger.info("   Falling back to .pkl file cache...")
+        
+        # ========================================================================
+        # PRIORITY 2: Try .pkl file cache
+        # ========================================================================
         cache_file = os.path.join(os.path.dirname(__file__), "intent_embeddings_cache.pkl")
         
         if os.path.exists(cache_file):
@@ -229,14 +288,43 @@ class CVSIntentEmbedded:
         
         logger.info(f"✅ All examples embedded successfully (30 batch calls instead of 600 individual calls)")
         
+        # ========================================================================
         # Save to cache for next time
-        try:
-            logger.info(f"💾 Saving embeddings to cache for future use...")
-            with open(cache_file, 'wb') as f:
-                pickle.dump(intent_embeddings, f)
-            logger.info(f"✅ Cache saved! Next initialization will be instant.")
-        except Exception as e:
-            logger.warning(f"⚠️  Failed to save cache: {e}")
+        # ========================================================================
+        
+        # Save to MongoDB (if enabled)
+        if settings.use_mongodb_for_embeddings:
+            try:
+                from services.mongodb_embedding_store import MongoDBEmbeddingStore
+                
+                logger.info(f"💾 Saving embeddings to MongoDB...")
+                mongo_store = MongoDBEmbeddingStore()
+                
+                await mongo_store.save_embeddings(
+                    intent_embeddings=intent_embeddings,
+                    intent_examples=self.intent_examples,
+                    embedding_provider=EMBEDDINGS_PROVIDER,
+                    embedding_model="text-embedding-005" if EMBEDDINGS_PROVIDER == "Google Cloud" else "text-embedding-ada-002",
+                    embedding_dimension=self._get_expected_embedding_dimension()
+                )
+                
+                await mongo_store.close()
+                logger.info(f"✅ MongoDB cache saved! Next initialization will be instant.")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to save to MongoDB: {e}")
+                logger.info("   Will save to .pkl file as fallback...")
+        
+        # Save to .pkl file ONLY if MongoDB is disabled (local dev mode)
+        if not settings.use_mongodb_for_embeddings:
+            try:
+                logger.info(f"💾 Saving embeddings to .pkl file (local dev mode)...")
+                with open(cache_file, 'wb') as f:
+                    pickle.dump(intent_embeddings, f)
+                logger.info(f"✅ .pkl cache saved!")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to save .pkl cache: {e}")
+        else:
+            logger.info(f"ℹ️  Skipping .pkl cache (MongoDB mode enabled - no local cache needed)")
         
         return intent_embeddings
     
@@ -279,7 +367,44 @@ class CVSIntentEmbedded:
         # Calculate similarity scores for all intents
         intent_scores = {}
         
-        if self.embeddings_service is not None:
+        # Check if MongoDB Vector Search is enabled
+        from config.config import settings
+        if settings.use_mongodb_for_embeddings:
+            try:
+                # Use MongoDB Atlas Vector Search (fast!)
+                import asyncio
+                from services.mongodb_embedding_store import MongoDBEmbeddingStore
+                
+                logger.debug("🔍 Using MongoDB Atlas Vector Search")
+                
+                # Run async vector search
+                async def run_vector_search():
+                    mongo_store = MongoDBEmbeddingStore()
+                    try:
+                        scores = await mongo_store.vector_search(
+                            query_embedding=np.array(query_embedding),
+                            limit=50  # Get top 50 results
+                        )
+                        await mongo_store.close()
+                        return scores
+                    except Exception as e:
+                        await mongo_store.close()
+                        raise e
+                
+                # Execute in thread pool to avoid event loop conflicts
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(lambda: asyncio.run(run_vector_search()))
+                    intent_scores = future.result(timeout=10)
+                
+                logger.debug(f"✅ Vector search returned {len(intent_scores)} intent scores")
+                
+            except Exception as e:
+                logger.error(f"❌ Vector search failed: {str(e)[:100]}")
+                raise RuntimeError(f"Vector search failed: {e}") from e
+        
+        # Python-based similarity (only when vector search is disabled)
+        elif self.embeddings_service is not None:
             # Use cached Azure embeddings utility for similarity calculation
             for intent, example_embeddings in self.intent_embeddings.items():
                 # Convert numpy array to list for utility function
@@ -401,8 +526,10 @@ class CVSIntentEmbedded:
         - Multiple conditions: "and", "but", "however"
         """
         complex_patterns = [
-            # Aggregations
-            r'\b(all|every|total|sum|average|mean)\b',
+            # Aggregations - Only match "all" when used in aggregation context
+            r'\b(total|sum|average|mean)\b',  # Core aggregation words
+            r'\b(all)\s+(my|the)\s+(claims|prescriptions|transactions)\b',  # "all my claims" = aggregation
+            r'\b(every)\s+(claim|prescription|transaction)\b',  # "every claim" = aggregation
             r'\b(most|least|highest|lowest|expensive|cheapest)\b',
             
             # Comparisons
@@ -876,22 +1003,20 @@ CVS_INTENT_EXAMPLES = {
     ],
 
     "out_of_scope": [
-        # Command format (imperative)
-        "Generate a random topic",
-        "Show me the weather",
-        "Display a joke",
-        "Give me sports scores",
-        "Tell me about politics",
-        "Provide cooking recipes",
-        "Retrieve stock market data",
-        "Fetch entertainment news",
-        "Generate celebrity gossip",
-        "Show movie showtimes",
-        "Display restaurant recommendations",
-        "Give me travel advice",
-        "Tell me about history",
-        "Provide science facts",
-        # Question format (interrogative) - added for better coverage
+        # Clearly off-topic questions (no trigger words like Provide/Show/Display)
+        "What's the weather forecast?",
+        "I need a pizza recipe",
+        "Book me a flight to Hawaii",
+        "Sports scores from last night",
+        "Latest political news",
+        "Best restaurants near me",
+        "Stock market performance today",
+        "Movie recommendations for tonight",
+        "Celebrity gossip updates",
+        "Travel tips for Europe",
+        "Historical facts about Rome",
+        "Science experiments for kids",
+        # Question format (interrogative)
         "Why is the sky blue?",
         "What is the weather like today?",
         "How do I cook pasta?",
@@ -902,13 +1027,13 @@ CVS_INTENT_EXAMPLES = {
         "How does gravity work?",
         "Why do birds fly south?",
         "What's the capital of France?",
-        # General/vague
-        "Retrieve unrelated information",
-        "Fetch random content",
-        "Generate off-topic discussion",
-        "Show something different",
-        "Display non-claim information",
-        "Give me irrelevant data",
+        # General off-topic
+        "Random trivia question",
+        "Joke of the day",
+        "Music playlist suggestions",
+        "Fitness workout routines",
+        "Gaming tips and tricks",
+        "Fashion advice for summer",
     ],
 
     "pharmacy_info": [

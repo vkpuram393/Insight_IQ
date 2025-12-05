@@ -36,7 +36,7 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     
     text = state["text"]
     
-    # Classify intent using wrapper (respects settings.use_cvs_intent_classifier)
+    # Classify intent using wrapper (respects settings.use_embedding_classifier)
     intent_result = classify_intent_unified(text)
     
     # ========== CHECK 1: Handle embedding classifier failure ==========

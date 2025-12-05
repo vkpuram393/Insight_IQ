@@ -46,12 +46,17 @@ class MongoDBPersistenceStore(PersistenceStore):
         """Get or create MongoDB connection"""
         if self.client is None:
             try:
+                # Uncomment below if SSL certificate issues on macOS:
+                # import certifi
+                # tls_ca_file = certifi.where()
+                
                 # Create client with connection timeout and server selection timeout
                 self.client = AsyncIOMotorClient(
                     self.connection_string,
                     serverSelectionTimeoutMS=5000,  # 5 second timeout for server selection
                     connectTimeoutMS=10000,  # 10 second timeout for connection
                     retryWrites=True
+                    # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
                 )
                 # Test the connection
                 await self.client.admin.command('ping')
