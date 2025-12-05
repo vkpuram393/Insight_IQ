@@ -97,7 +97,17 @@ class Settings(BaseSettings):
     debug: bool = True  # ⚠️ Overridden by DEBUG env var
 
     # API Configuration
-    swagger_url: str = "https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com"  # ⚠️ Overridden by SWAGGER_URL env var - Base URL for external APIs
+    swagger_url: str = "https://claiminquiry-cap-dev2.myclaims.pss-np.caremark.com"  # ⚠️ Overridden by SWAGGER_URL env var - Base URL for external APIs
+    
+    # API Endpoints (can be overridden via environment variables)
+    api_endpoint_claim_details: str = "/myclaims/claims/v1/claim/byclaimnumberandseq"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_DETAILS env var
+    api_endpoint_claim_list: str = "/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_LIST env var
+    
+    # API Fallback Configuration (for testing when external APIs are down)
+    enable_api_fallback: bool = True  # ⚠️ Overridden by ENABLE_API_FALLBACK env var - Set to False in production to return real errors
+    # When True: Uses mock data if API server is down (5xx errors, timeouts) - allows testing to continue
+    # When False: Returns actual errors to users - production behavior
+    # Note: Fallback is NEVER used for client errors (400 "claim not found") - those always return errors
 
     # Streaming Configuration
     enable_streaming: bool = True  # Master switch for streaming feature

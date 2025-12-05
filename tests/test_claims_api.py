@@ -137,17 +137,19 @@ class TestGetClaimDetails:
         mock_call_api.assert_called_once()
         
     @patch('tools.claims_api.get_api_repository')
+    @patch('tools.claims_api.settings')
     @patch('tools.claims_api.call_external_api')
     @patch('tools.claims_api.get_fallback_details')
-    def test_fallback_on_api_failure(self, mock_fallback, mock_call_api, mock_get_repo, 
+    def test_fallback_on_api_failure(self, mock_fallback, mock_call_api, mock_settings, mock_get_repo, 
                                      mock_api_definition, sample_claim_details):
-        """Test fallback when API fails"""
+        """Test fallback when API fails with retriable error"""
         logger.info("Testing get_claim_details fallback on API failure")
         
         # Setup mocks
         mock_get_repo.return_value = [mock_api_definition]
-        mock_call_api.side_effect = ExternalAPIError("API failed", details={}, retriable=False)
+        mock_call_api.side_effect = ExternalAPIError("API failed", details={}, retriable=True)
         mock_fallback.return_value = sample_claim_details
+        mock_settings.enable_api_fallback = True
         
         # Execute
         result = get_claim_details("123456789", "1")
@@ -157,21 +159,16 @@ class TestGetClaimDetails:
         mock_fallback.assert_called_once_with("123456789", "1")
         
     @patch('tools.claims_api.get_api_repository')
-    @patch('tools.claims_api.get_fallback_details')
-    def test_fallback_on_missing_api_definition(self, mock_fallback, mock_get_repo, sample_claim_details):
-        """Test fallback when API definition not found"""
-        logger.info("Testing get_claim_details fallback on missing API definition")
+    def test_fallback_on_missing_api_definition(self, mock_get_repo):
+        """Test that ValueError is raised when API definition not found"""
+        logger.info("Testing get_claim_details raises error on missing API definition")
         
         # Setup mocks - return empty list (no API found)
         mock_get_repo.return_value = []
-        mock_fallback.return_value = sample_claim_details
         
-        # Execute
-        result = get_claim_details("123456789", "1")
-        
-        # Assertions
-        assert result == sample_claim_details
-        mock_fallback.assert_called_once()
+        # Execute and assert exception
+        with pytest.raises(ValueError, match="get_claim_details API not found in repository"):
+            get_claim_details("123456789", "1")
 
 
 # ============================================================================
@@ -382,19 +379,19 @@ class TestNormalizeEntities:
         assert result["claimSequence"] == "1"
         
     def test_normalize_unknown_keys(self):
-        """Test that unknown keys pass through"""
+        """Test that unknown keys are filtered out (not passed to API)"""
         logger.info("Testing normalize_entities with unknown keys")
         
         entities_dict = {
             "claim_number": "123456789",
-            "customField": "customValue"
+            "customField": "customValue"  # This should be filtered out
         }
         
         result = normalize_entities(entities_dict)
         
         # Assertions
         assert result["claimNumber"] == "123456789"
-        assert result["customField"] == "customValue"  # Unknown key passes through
+        assert "customField" not in result  # Unknown keys are filtered out for safety
         
     def test_entity_map_completeness(self):
         """Test that ENTITY_MAP has all expected mappings"""
@@ -590,7 +587,7 @@ class TestCallClaimsToolNode:
             
     @pytest.mark.asyncio
     async def test_standard_flow_with_matching(self, sample_claim_details):
-        """Test standard flow for non-claim_details intents"""
+        """Test standard flow for intents with only claimId (no sequence)"""
         logger.info("Testing standard flow with API matching")
         
         with patch('tools.claims_api.extract_logging_context') as mock_ctx, \
@@ -599,20 +596,20 @@ class TestCallClaimsToolNode:
              patch('tools.claims_api.call_external_api') as mock_call:
             
             mock_ctx.return_value = {}
-            mock_normalize.return_value = {"claimNumber": "123", "claimSequence": "1"}
+            mock_normalize.return_value = {"claimId": "123"}  # Only claimId, no sequence
             
             # Mock matched API
             mock_api = Mock()
-            mock_api.name = "get_claim_details"
+            mock_api.name = "get_claim_list"
             mock_api.body_template = lambda e: {"request": e}
             mock_api.full_url = "http://test.com/api"
             mock_match.return_value = mock_api
             
-            mock_call.return_value = sample_claim_details
+            mock_call.return_value = {"claimList": []}
             
             state = {
-                "intent": "other_intent",
-                "entities": {"claimNumber": "123", "claimSequence": "1"}
+                "intent": "claim_status",
+                "entities": {"claimId": "123"}  # Only claimId triggers standard flow
             }
             
             result = await call_claims_tool_node(state)
@@ -621,7 +618,7 @@ class TestCallClaimsToolNode:
             assert "tool_results" in result
             tool_results = result["tool_results"]
             assert tool_results["status"] == "success"
-            assert tool_results["tool_name"] == "get_claim_details"
+            assert tool_results["tool_name"] == "get_claim_list"
             
     @pytest.mark.asyncio
     async def test_no_matching_api_found(self):
@@ -697,6 +694,7 @@ class TestCallExternalApi:
         import requests
         mock_response = Mock()
         mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"  # Add text attribute
         error = requests.RequestException("Server error")
         error.response = mock_response
         mock_request.side_effect = error
@@ -758,16 +756,29 @@ class TestIntegration:
             # Mock API responses
             details_response = {
                 "status": "success",
-                "claimDetails": {"primary": {"claimStatus": "R"}}
+                "header": {
+                    "xcorrelationid": "test-123",
+                    "xconsumerAppName": "TEST-APP"
+                },
+                "claimDetails": {
+                    "primary": {
+                        "medD": {
+                            "claimStatus": "R",
+                            "accountId": "A-123"
+                        }
+                    }
+                }
             }
             
             list_response = {
-                "claims": [{
+                "claimList": [{
                     "claimInformation": {
                         "claimNumber": "123456789",
-                        "claimSequenceNumber": "1"
+                        "claimSequenceNumber": "1",
+                        "claimStatus": "P"
                     },
-                    "member": {"firstName": "John"}
+                    "member": {"firstName": "John", "lastName": "Doe"},
+                    "drug": {"productName": "Aspirin"}
                 }]
             }
             
@@ -785,9 +796,12 @@ class TestIntegration:
             result = await call_claims_tool_node(state)
             
             # Assertions
-            assert result["tool_results"]["status"] == "success"
-            assert "list_data" in result["tool_results"]["data"]
-            assert result["tool_results"]["data"]["list_data"]["member"]["firstName"] == "John"
+            assert "tool_results" in result
+            tool_results = result["tool_results"]
+            assert tool_results["status"] == "success"
+            assert tool_results["tool_name"] == "claim_details_enriched"
+            assert "list_data" in tool_results["data"]
+            assert tool_results["data"]["list_data"]["member"]["firstName"] == "John"
 
 
 # ============================================================================
@@ -796,4 +810,5 @@ class TestIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
+
 
