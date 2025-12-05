@@ -373,6 +373,18 @@ class PIIProtectionService:
         """
         Restore original PII/PHI values
         
+        ENHANCED: Handles tokens with or without brackets, and various formatting.
+        LLMs sometimes strip brackets or add backticks/quotes when generating responses,
+        despite instructions to preserve them. This robust implementation catches all cases.
+        
+        Replacement order (from most specific to least):
+        1. Exact token with brackets: [CLAIM_ID_B161BCED]
+        2. Token with only opening bracket: [CLAIM_ID_B161BCED
+        3. Token with only closing bracket: CLAIM_ID_B161BCED]
+        4. Bare token without brackets: CLAIM_ID_B161BCED
+        5. Backtick-wrapped token: `CLAIM_ID_B161BCED`
+        6. Quote-wrapped token: 'CLAIM_ID_B161BCED' or "CLAIM_ID_B161BCED"
+        
         Args:
             masked_text: Text containing tokens
             token_mapping: Mapping from mask operation (token -> original value)
@@ -380,14 +392,58 @@ class PIIProtectionService:
         Returns:
             Text with tokens replaced by original values
         """
-        unmasked_text = masked_text
+        import re
         
-        # Replace each token with its original value
+        unmasked_text = masked_text
+        tokens_replaced = 0
+        
         for token, info in token_mapping.items():
             original_value = info["original"]
+            
+            # Track if we replaced anything for this token
+            text_before = unmasked_text
+            
+            # Strategy 1: Replace exact token with brackets (primary case)
+            # Example: [CLAIM_ID_B161BCED] → claim 999999999999999
             unmasked_text = unmasked_text.replace(token, original_value)
+            
+            # Strategy 2: Handle LLM malforming brackets (fallback cases)
+            # Token format: [ENTITY_TYPE_HEXHASH] -> extract ENTITY_TYPE_HEXHASH
+            if token.startswith('[') and token.endswith(']'):
+                token_without_brackets = token[1:-1]  # Remove [ and ]
+                
+                # 2a: Handle token with only opening bracket: [CLAIM_ID_B161BCED
+                # Pattern: match [token NOT followed by ]
+                pattern_open_only = r'\[' + re.escape(token_without_brackets) + r'(?!\])'
+                unmasked_text = re.sub(pattern_open_only, original_value, unmasked_text)
+                
+                # 2b: Handle token with only closing bracket: CLAIM_ID_B161BCED]
+                # Pattern: match token NOT preceded by [ but followed by ]
+                pattern_close_only = r'(?<!\[)' + re.escape(token_without_brackets) + r'\]'
+                unmasked_text = re.sub(pattern_close_only, original_value, unmasked_text)
+                
+                # 2c: Replace bare token without brackets
+                # Pattern: match token_without_brackets NOT preceded by [ and NOT followed by ]
+                pattern_bare = r'(?<!\[)' + re.escape(token_without_brackets) + r'(?!\])'
+                unmasked_text = re.sub(pattern_bare, original_value, unmasked_text)
+                
+                # 2d: Handle backtick-wrapped tokens: `CLAIM_ID_B161BCED`
+                pattern_backticks = r'`' + re.escape(token_without_brackets) + r'`'
+                unmasked_text = re.sub(pattern_backticks, original_value, unmasked_text)
+                
+                # 2e: Handle single-quote-wrapped tokens: 'CLAIM_ID_B161BCED'
+                pattern_single_quotes = r"'" + re.escape(token_without_brackets) + r"'"
+                unmasked_text = re.sub(pattern_single_quotes, original_value, unmasked_text)
+                
+                # 2f: Handle double-quote-wrapped tokens: "CLAIM_ID_B161BCED"
+                pattern_double_quotes = r'"' + re.escape(token_without_brackets) + r'"'
+                unmasked_text = re.sub(pattern_double_quotes, original_value, unmasked_text)
+            
+            # Count if we made a replacement
+            if unmasked_text != text_before:
+                tokens_replaced += 1
         
-        logger.info(f"🔓 Unmasked {len(token_mapping)} tokens")
+        logger.info(f"🔓 Unmasked {tokens_replaced} of {len(token_mapping)} tokens")
         
         return unmasked_text
     
