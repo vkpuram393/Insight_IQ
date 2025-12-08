@@ -30,6 +30,8 @@ ENDPOINTS = {
 }
 
 # Intent to API Endpoint Mapping
+# UPDATED: All claim-related intents now require BOTH claim_number AND sequence
+# If either is missing, the system routes to clarification engine
 INTENT_API_ROUTING = {
     # ============================================================
     # BASIC SEARCH API (Faster, lighter)
@@ -39,8 +41,8 @@ INTENT_API_ROUTING = {
     "claim_status": {
         "api_endpoint": ENDPOINTS["basic_search"],
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.status",
             "claimList[0].primary.statusDescription",
@@ -90,8 +92,8 @@ INTENT_API_ROUTING = {
     "rejection_reasons": {
         "api_endpoint": ENDPOINTS["basic_search"],  # statusDetails only in basic search!
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.status",
             "claimList[0].primary.statusDescription",
@@ -110,8 +112,8 @@ INTENT_API_ROUTING = {
     "drug_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # drug object clearer in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.drug.productName",
             "claimList[0].primary.drug.productId",
@@ -127,8 +129,8 @@ INTENT_API_ROUTING = {
     "pricing_info": {
         "api_endpoint": ENDPOINTS["detailed_info"],
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimDetails.primary.medD.approvedTotalAmount",
             "claimDetails.primary.medD.approvedIngredientCost",
@@ -144,8 +146,8 @@ INTENT_API_ROUTING = {
     "pharmacy_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # pharmacy object only in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.pharmacy.name",
             "claimList[0].primary.pharmacy.city",
@@ -160,8 +162,8 @@ INTENT_API_ROUTING = {
     "prescriber_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # prescriber object only in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.prescriber.firstName",
             "claimList[0].primary.prescriber.lastName",
@@ -175,8 +177,8 @@ INTENT_API_ROUTING = {
     "beneficiary_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # beneficiary object only in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.beneficiary.firstName",
             "claimList[0].primary.beneficiary.lastName",
@@ -191,8 +193,8 @@ INTENT_API_ROUTING = {
     "prior_auth_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # priorAuthorization only in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.priorAuthorization.number",
             "claimList[0].primary.priorAuthorization.reasonCode",
@@ -206,8 +208,8 @@ INTENT_API_ROUTING = {
     "audit_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # audit object only in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.audit.addDate",
             "claimList[0].primary.audit.changeDate",
@@ -221,8 +223,8 @@ INTENT_API_ROUTING = {
     "fill_date_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # submitted data in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.submitted.dateOfFill",
             "claimList[0].primary.submitted.date",
@@ -235,8 +237,8 @@ INTENT_API_ROUTING = {
     "rx_details": {
         "api_endpoint": ENDPOINTS["basic_search"],  # submitted data in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.submitted.rxNumber",
             "claimList[0].primary.submitted.fillNumber",
@@ -251,8 +253,8 @@ INTENT_API_ROUTING = {
     "approval_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # statusDetails in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.status",
             "claimList[0].primary.statusDescription",
@@ -268,8 +270,8 @@ INTENT_API_ROUTING = {
     "settlement_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # statusDetails in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.statusDetails.settlementCodes[].code",
             "claimList[0].primary.statusDetails.settlementCodes[].description",
@@ -287,8 +289,8 @@ INTENT_API_ROUTING = {
     "compound_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # compound flag in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.compound",
             "claimList[0].primary.submitted.compoundCode",
@@ -302,8 +304,8 @@ INTENT_API_ROUTING = {
     "medicare_part_d": {
         "api_endpoint": ENDPOINTS["detailed_info"],  # medD nested object only in detailed
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimDetails.primary.medD.approvedTotalAmount",
             "claimDetails.primary.medD.approvedIngredientCost",
@@ -319,8 +321,8 @@ INTENT_API_ROUTING = {
     "daw_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # DAW fields in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.dispenseAsWritten",
             "claimList[0].primary.drug.dawproductSelectionCode",
@@ -334,8 +336,8 @@ INTENT_API_ROUTING = {
     "cob_info": {
         "api_endpoint": ENDPOINTS["detailed_info"],  # STCOB data only in detailed
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimDetails.primary.medD.cobClaimIndicator",
             "claimDetails.linkedClaim.stcob.responsePatientPayAmount",
@@ -349,8 +351,8 @@ INTENT_API_ROUTING = {
     "network_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # pharmacyNetwork in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.pharmacyNetwork",
             "claimList[0].primary.pharmacy.name",
@@ -363,8 +365,8 @@ INTENT_API_ROUTING = {
     "reimbursement_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # reimbursementType in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.reimbursementType",
             "claimList[0].primary.pricing.patientPay",
@@ -377,8 +379,8 @@ INTENT_API_ROUTING = {
     "government_claim_type": {
         "api_endpoint": ENDPOINTS["basic_search"],  # governmentClaimType in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.governmentClaimType",
             "claimList[0].primary.status",
@@ -391,8 +393,8 @@ INTENT_API_ROUTING = {
     "mail_order_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # mail flag in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.mail",
             "claimList[0].primary.pharmacy.name",
@@ -405,8 +407,8 @@ INTENT_API_ROUTING = {
     "generic_availability": {
         "api_endpoint": ENDPOINTS["basic_search"],  # multiSourceInd in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.drug.multiSourceInd",
             "claimList[0].primary.drug.genericIndicator",
@@ -420,8 +422,8 @@ INTENT_API_ROUTING = {
     "drug_interaction_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # durExistenceStatus in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.durExistenceStatus",
             "claimList[0].primary.drug.productName",
@@ -434,8 +436,8 @@ INTENT_API_ROUTING = {
     "reversal_info": {
         "api_endpoint": ENDPOINTS["basic_search"],  # rnR flag in basic search
         "method": "POST",
-        "required_entities": ["claim_number"],
-        "optional_entities": ["sequence"],
+        "required_entities": ["claim_number", "sequence"],  # UPDATED: sequence now required
+        "optional_entities": [],
         "response_fields": [
             "claimList[0].primary.rnR",
             "claimList[0].primary.submitted.reversalDate",

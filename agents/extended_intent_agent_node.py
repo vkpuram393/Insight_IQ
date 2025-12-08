@@ -95,44 +95,23 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         logger.info(f"🧠 Complex query detected by classifier (is_complex=True)")
         logger.info("   Query contains aggregations, comparisons, date ranges, or multiple conditions")
     
-    # Check if clarification needed (only for missing slots, not low confidence)
-    needs_clarification = False
-    clarifying_question = None
-    
-    # Check for missing required slots (e.g., "show my claim" but no claim ID)
-    if 'slot_validation' in entity_result:
-        slot_validation = entity_result['slot_validation']
-        if not slot_validation['has_all_slots']:
-            needs_clarification = True
-            missing = slot_validation['missing_slots']
-            
-            # Generate slot request message
-            if 'claim_id' in missing:
-                clarifying_question = "I need your claim ID to look that up. Could you provide it?"
-            elif 'member_id' in missing:
-                clarifying_question = "I need your member ID to retrieve that information. Could you provide it?"
-            elif 'prescription_id' in missing:
-                clarifying_question = "I need your prescription number. Could you provide it?"
-            else:
-                clarifying_question = f"I need more information to help you. Could you provide: {', '.join(missing)}?"
-    
-    # ========== BUILD RESULT WITH METADATA ==========
-    # Extract missing_slots from slot_validation if available
-    missing_slots_list = []
-    if 'slot_validation' in entity_result:
-        missing_slots_list = entity_result['slot_validation'].get('missing_slots', [])
+    # ========== SLOT VALIDATION REMOVED (Old System 1) ==========
+    # Required slots are now checked by confidence_check_router using:
+    # - required_entities_list from api_routing_config.py (set below)
+    # The router compares required_entities_list against extracted entities
+    # and routes to clarification if any are missing.
+    # ============================================================
     
     result = {
         "intent": intent,
         "confidence": confidence,
         "entities": entities,
-        "is_complex": is_complex,  # NEW: Complexity detection for LLM routing
-        "needs_clarification": needs_clarification,
-        "clarifying_question": clarifying_question,
-        "missing_slots": missing_slots_list,  # Required for clarification_node
-        # NEW: API routing info from config
+        "is_complex": is_complex,  # Complexity detection for LLM routing
+        # NOTE: needs_clarification and missing_slots are now determined by
+        # confidence_check_router based on required_entities_list (from api_routing_config.py)
+        # API routing info from config (System 2 - the ONLY system now)
         "api_endpoint": api_endpoint,
-        "required_entities_list": required_entities_list,
+        "required_entities_list": required_entities_list,  # Used by confidence_check_router
         "requires_llm": requires_llm,
         # NEW: Add observability metadata
         "metadata": {

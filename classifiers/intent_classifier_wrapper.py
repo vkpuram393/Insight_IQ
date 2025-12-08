@@ -99,10 +99,10 @@ def extract_entities_unified(query: str, intent: str = None) -> Dict[str, Any]:
     extractor = get_entity_extractor()
     result = extractor.extract(query)
     
-    # If intent provided, check for required slots
-    if intent:
-        slot_validation = extractor.extract_required_slots(intent, result['entities'])
-        result['slot_validation'] = slot_validation
+    # NOTE: Removed extract_required_slots() call - this was the OLD system (System 1)
+    # Required slots are now checked via api_routing_config.py (System 2)
+    # The confidence_check_router uses required_entities_list from api_routing_config
+    # which is set in extended_intent_agent_node.py via get_api_config(intent)
     
     return result
 

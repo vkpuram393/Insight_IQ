@@ -126,16 +126,15 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
         # Check if all required entities are present (handle both list format and single value format)
         has_required_entities = True
         for req_entity in required_entities_list:
-            # Map API format (claim_number) to entity extractor format (claim_ids, claim_id)
+            # ONLY check claim_number and sequence - these are the ONLY two entities
+            # Skip any other required_entities (like date_range, claim_numbers, etc.)
             entity_key = None
             if req_entity == "claim_number":
                 entity_key = "claim_ids"  # Entity extractor uses claim_ids (list format)
-            elif req_entity == "member_id":
-                entity_key = "member_ids"
-            elif req_entity == "prescription_number":
-                entity_key = "prescription_ids"
+            elif req_entity == "sequence":
+                entity_key = "claim_sequences"  # Entity extractor uses claim_sequences (list format)
             else:
-                entity_key = req_entity  # Try direct match
+                continue  # Skip any other entity - we only care about claim_number and sequence
             
             # Check if entity exists and has values
             if entity_key not in entities or not entities[entity_key] or (isinstance(entities[entity_key], list) and len(entities[entity_key]) == 0):
@@ -312,6 +311,33 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         
         logger.info(f"🔍 Confidence Check: intent={intent}, confidence={confidence:.2f}, threshold={threshold:.2f}, intent_reclassified={intent_reclassified}")
         
+        # ========================================================================
+        # CALCULATE MISSING SLOTS (for clarification node)
+        # ONLY checks for claim_number and sequence - these are the ONLY two entities
+        # ========================================================================
+        required_entities_list = state.get("required_entities_list", [])
+        entities = state.get("entities") or {}
+        missing_slots = []
+        
+        # ONLY these two entities matter - claim_number and sequence
+        # All other required_entities are ignored
+        ENTITY_MAP = {
+            "claim_number": "claim_ids",
+            "sequence": "claim_sequences"
+        }
+        
+        for req_entity in required_entities_list:
+            # ONLY check claim_number and sequence - skip anything else
+            if req_entity not in ENTITY_MAP:
+                continue
+            
+            entity_key = ENTITY_MAP[req_entity]
+            if entity_key not in entities or not entities[entity_key] or (isinstance(entities[entity_key], list) and len(entities[entity_key]) == 0):
+                missing_slots.append(req_entity)
+        
+        if missing_slots:
+            logger.info(f"⚠️ Missing required entities: {missing_slots}")
+        
         # Determine if confidence is low
         confidence_low = confidence < threshold
         
@@ -325,6 +351,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             
             result = {
                 "conversation_history": conversation_history,  # Pass history to next node
+                "missing_slots": missing_slots,  # Pass missing slots to clarification node
                 "metadata": {
                     **state.get("metadata", {}),
                     "confidence_low_detected": True,
@@ -345,6 +372,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
             # Return state to proceed (context builder will be called next)
             proceed_result = {
                 "conversation_history": conversation_history,  # Pass history to next node
+                "missing_slots": missing_slots,  # Pass missing slots (may be used if routed to clarification)
                 "metadata": {
                     **state.get("metadata", {}),
                     "confidence_check_passed": True
