@@ -108,8 +108,8 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     intent_reclassified = state.get("intent_reclassified", False)
     entities = state.get("entities") or {}
     conversation_history = state.get("conversation_history", [])
-    missing_slots = state.get("missing_slots", [])  # Required entities that are missing (computed by entity extractor)
-    required_entities_list = state.get("required_entities_list", [])  # Required entities for this intent (from API config)
+    missing_slots = state.get("missing_slots") or []  # Required entities that are missing (computed by entity extractor)
+    required_entities_list = state.get("required_entities_list") or []  # Required entities for this intent (from API config)
 
     # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
     INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
@@ -315,7 +315,7 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # CALCULATE MISSING SLOTS (for clarification node)
         # ONLY checks for claim_number and sequence - these are the ONLY two entities
         # ========================================================================
-        required_entities_list = state.get("required_entities_list", [])
+        required_entities_list = state.get("required_entities_list") or []  # Handle None explicitly
         entities = state.get("entities") or {}
         missing_slots = []
         

@@ -473,6 +473,124 @@ class CVSIntentEmbedded:
             'needs_clarification': top_score < 0.4 and top_intent != 'out_of_scope'
         }
     
+    async def classify_async(self, query: str) -> Dict[str, Any]:
+        """
+        Async version of classify - uses MongoDB directly like team's persistence store.
+        Reuses connection via singleton factory (no asyncio.run overhead).
+        
+        Args:
+            query: User's natural language query
+            
+        Returns:
+            Dict with same structure as classify()
+        """
+        query_lower = query.lower().strip()
+        
+        # Check for empty query
+        if not query_lower:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': 0.0,
+                'all_scores': {},
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        # Get query embedding
+        if EMBEDDINGS_AVAILABLE and self.embeddings_service is not None:
+            try:
+                query_embedding = get_embedding(query)
+            except Exception as e:
+                logger.error(f"❌ Failed to get query embedding: {e}")
+                raise RuntimeError("Query embedding failed - routing to LLM fallback") from e
+        else:
+            logger.error("❌ Embeddings service unavailable")
+            raise RuntimeError("Embeddings service unavailable - routing to LLM fallback")
+        
+        # Calculate similarity scores
+        intent_scores = {}
+        
+        from config.config import settings
+        if settings.use_mongodb_for_embeddings:
+            try:
+                # Use MongoDB Atlas Vector Search with singleton (like team's approach)
+                from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
+                
+                logger.debug("🔍 Using MongoDB Atlas Vector Search (async - team pattern)")
+                
+                # Get singleton instance (connection reused!)
+                mongo_store = MongoDBEmbeddingStoreFactory.get_instance()
+                
+                # Direct await - no asyncio.run() needed
+                intent_scores = await mongo_store.vector_search(
+                    query_embedding=np.array(query_embedding),
+                    limit=50
+                )
+                # Don't close - singleton keeps connection for reuse
+                
+                logger.debug(f"✅ Vector search returned {len(intent_scores)} intent scores")
+                
+            except Exception as e:
+                logger.error(f"❌ Vector search failed: {str(e)[:100]}")
+                raise RuntimeError(f"Vector search failed: {e}") from e
+        
+        # Python-based similarity (fallback when MongoDB disabled)
+        elif self.embeddings_service is not None:
+            for intent, example_embeddings in self.intent_embeddings.items():
+                example_list = [emb.tolist() if isinstance(emb, np.ndarray) else emb 
+                               for emb in example_embeddings]
+                query_list = query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding
+                
+                try:
+                    similarities = self.embeddings_service.batch_similarity(query_list, example_list)
+                except ValueError as e:
+                    if "dimension mismatch" in str(e).lower() or "not aligned" in str(e).lower():
+                        raise RuntimeError(
+                            "Embedding dimension mismatch - cache needs regeneration."
+                        ) from e
+                    else:
+                        raise
+                
+                intent_scores[intent] = float(max(similarities))
+        else:
+            for intent, example_embeddings in self.intent_embeddings.items():
+                similarities = self._cosine_similarity_batch(query_embedding, example_embeddings)
+                intent_scores[intent] = float(np.max(similarities))
+        
+        # Get top intent
+        if not intent_scores:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': 0.0,
+                'all_scores': {},
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        top_intent = max(intent_scores, key=intent_scores.get)
+        top_score = intent_scores[top_intent]
+        
+        if top_score < self.confidence_threshold:
+            return {
+                'intent': 'out_of_scope',
+                'confidence': top_score,
+                'all_scores': intent_scores,
+                'is_complex': False,
+                'needs_clarification': False
+            }
+        
+        is_complex = self._is_complex_query(query_lower, top_intent)
+        
+        logger.info(f"Intent: {top_intent}, Confidence: {top_score:.2f}, Complex: {is_complex}")
+        
+        return {
+            'intent': top_intent,
+            'confidence': top_score,
+            'all_scores': intent_scores,
+            'is_complex': is_complex,
+            'needs_clarification': top_score < 0.4 and top_intent != 'out_of_scope'
+        }
+    
     def _cosine_similarity_batch(self, query_emb: np.ndarray, example_embs: np.ndarray) -> np.ndarray:
         """
         Calculate cosine similarity between query and all examples

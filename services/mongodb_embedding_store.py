@@ -20,6 +20,27 @@ from core.logger import get_logger
 logger = get_logger(__name__)
 
 
+class MongoDBEmbeddingStoreFactory:
+    """Factory to get singleton instance of MongoDBEmbeddingStore (like team's PersistenceStoreFactory)"""
+    
+    _instance: "MongoDBEmbeddingStore" = None
+    
+    @classmethod
+    def get_instance(cls) -> "MongoDBEmbeddingStore":
+        """Get singleton instance of embedding store"""
+        if cls._instance is None:
+            cls._instance = MongoDBEmbeddingStore()
+            logger.info("🔄 Created singleton MongoDBEmbeddingStore instance")
+        return cls._instance
+    
+    @classmethod
+    async def close_instance(cls) -> None:
+        """Close the current instance"""
+        if cls._instance is not None:
+            await cls._instance.close()
+            cls._instance = None
+
+
 class MongoDBEmbeddingStore:
     """MongoDB-based storage for intent embeddings"""
     
@@ -44,7 +65,7 @@ class MongoDBEmbeddingStore:
         """Get or create MongoDB connection"""
         if self.client is None:
             try:
-                # Uncomment below if SSL certificate issues on macOS:
+                # SSL certificate fix for macOS
                 # import certifi
                 # tls_ca_file = certifi.where()
                 
@@ -52,7 +73,7 @@ class MongoDBEmbeddingStore:
                     self.connection_string,
                     serverSelectionTimeoutMS=5000,
                     connectTimeoutMS=10000,
-                    retryWrites=True
+                    retryWrites=True,
                     # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
                 )
                 # Test connection
@@ -415,4 +436,3 @@ class MongoDBEmbeddingStore:
         except Exception as e:
             logger.error(f"❌ Failed to clear embeddings: {str(e)}")
             raise
-

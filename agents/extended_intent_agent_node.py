@@ -37,7 +37,8 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
     text = state["text"]
     
     # Classify intent using wrapper (respects settings.use_embedding_classifier)
-    intent_result = classify_intent_unified(text)
+    # Now async - reuses MongoDB connection like team's pattern
+    intent_result = await classify_intent_unified(text)
     
     # ========== CHECK 1: Handle embedding classifier failure ==========
     if intent_result.get('embedding_failed', False):

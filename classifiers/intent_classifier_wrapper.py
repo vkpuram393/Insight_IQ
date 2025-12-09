@@ -18,9 +18,9 @@ from core.logger import get_logger
 logger = get_logger(__name__)
 
 
-def classify_intent_unified(query: str) -> Dict[str, Any]:
+async def classify_intent_unified(query: str) -> Dict[str, Any]:
     """
-    Classify intent using configured classifier
+    Classify intent using configured classifier (ASYNC version - like team's pattern)
     
     Switches between:
     - Embedding Classifier (if settings.use_embedding_classifier=True) - semantic understanding
@@ -40,12 +40,13 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
     """
     if settings.use_embedding_classifier:
         # Use Embedding-based Classifier (semantic understanding)
-        logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic)")
+        logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic - Async)")
         from classifiers.embedded_classifier import CVSIntentEmbedded
         
         try:
             classifier = CVSIntentEmbedded()
-            result = classifier.classify(query)
+            # Use async version - reuses MongoDB connection like team's pattern
+            result = await classifier.classify_async(query)
         except RuntimeError as e:
             # Embeddings unavailable - return special flag to route to LLM
             logger.error(f"❌ Embedding classifier failed: {e}")
@@ -58,7 +59,7 @@ def classify_intent_unified(query: str) -> Dict[str, Any]:
                 'fallback_reason': str(e)
             }
     else:
-        # Use Keyword-based Classifier (fast, rule-based)
+        # Use Keyword-based Classifier (fast, rule-based) - sync is fine
         logger.info("🔵 Using CVS Keyword Intent Classifier (Fast)")
         from classifiers.keyword_classifier import get_cvs_intent_classifier
         
