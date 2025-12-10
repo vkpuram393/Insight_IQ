@@ -65,7 +65,7 @@ class MongoDBEmbeddingStore:
         """Get or create MongoDB connection"""
         if self.client is None:
             try:
-                # SSL certificate fix for macOS
+                # SSL certificate fix for macOS (uncomment if needed)
                 # import certifi
                 # tls_ca_file = certifi.where()
                 

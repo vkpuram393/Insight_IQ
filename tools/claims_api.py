@@ -144,49 +144,12 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
         logger.info(f"📋 Entities: {entities}")
 
         # ========================================================================
-        # CLAIM NUMBER + SEQUENCE VALIDATION
-        # Sequence number is MANDATORY when claim number is provided.
-        # The list API (byclaimnumber) is NOT called individually anymore.
+        # SPECIAL BRANCH: Enriched claim_details flow (2-step API calls)
+        # Hybrid Routing: Entities + Intent
+        # - If (claimNumber OR claimId) + claimSequence → ALWAYS use enriched details flow
+        # - If only claimId/claimNumber → use intent to decide between list vs details
         # ========================================================================
-        has_claim_number = "claimNumber" in entities or "claimId" in entities
-        has_sequence = "claimSequence" in entities
-        
-        # If claim number is provided but sequence is missing, return error
-        if has_claim_number and not has_sequence:
-            claim_num = entities.get("claimNumber") or entities.get("claimId")
-            logger.warning(f"⚠️ Validation failed: Claim number provided without sequence number")
-            logger.warning(f"   📍 ClaimNumber: {claim_num}")
-            logger.warning(f"   📍 ClaimSequence: MISSING")
-            
-            error_msg = f"Sequence number is required for claim number '{claim_num}'. Please provide the sequence number along with the claim number."
-            
-            ae = create_validation_error(
-                message=error_msg,
-                field="claimSequence",
-                value=None
-            )
-            
-            tool_result = ToolResult(
-                tool_name="claims_api",
-                status=ToolExecutionStatus.FAILURE,
-                data={
-                    "error_type": "sequence_required",
-                    "claim_number": claim_num,
-                    "message": error_msg
-                },
-                error_message=ae.message,
-                error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
-                api_endpoint=None,
-                http_status_code=None,
-                is_retryable=False
-            )
-            return {"tool_results": tool_result.dict()}
-        
-        # ========================================================================
-        # ENRICHED CLAIM DETAILS FLOW (claim number + sequence)
-        # Both claimNumber/claimId AND claimSequence are required
-        # ========================================================================
-        if has_claim_number and has_sequence:
+        if ("claimNumber" in entities or "claimId" in entities) and "claimSequence" in entities:
             # Get the claim number (might be under claimNumber or claimId key)
             claim_num = entities.get("claimNumber") or entities.get("claimId")
             claim_seq = entities.get("claimSequence")
@@ -283,45 +246,29 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                         }
                     )
                 
-                # Extract full API error response details from exception if available
-                # This ensures response agent gets complete error info for all error types
-                api_error_details = {}
-                if hasattr(exc, 'details') and isinstance(exc.details, dict):
-                    exc_details = exc.details
-                    error_type = exc_details.get("error_type", "api_error")
-                    
-                    # Always include common fields
-                    api_error_details = {
-                        "error_type": error_type,
-                        "status_code": exc_details.get("status"),
-                        "claim_number": exc_details.get("claimNumber"),
-                        "claim_sequence": exc_details.get("claimSequence"),
-                        "message": exc_details.get("message") or str(exc),
-                        # Include full API response for debugging/logging
-                        "response_body": exc_details.get("response_body"),
-                        "response_json": exc_details.get("response_json"),
-                        "api_url": exc_details.get("url"),
-                        "api_name": exc_details.get("api")
-                    }
-                    
-                    # Add error-type specific fields
-                    if error_type == "sequence_not_found":
-                        api_error_details["invalid_sequence"] = exc_details.get("invalidSequence")
-                        # Note: availableSequences intentionally not passed to response agent
-                    
-                    logger.info(f"📋 Error details for response agent: error_type={error_type}, status={exc_details.get('status')}")
-                
-                tool_result = ToolResult(
-                    tool_name="claim_details_enriched",
-                    status=ToolExecutionStatus.FAILURE,
-                    data=api_error_details,  # Put API error details in data field
-                    error_message=ae.message,
-                    error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
-                    api_endpoint="/myclaims/claims/v1/details",
-                    http_status_code=ae.metadata.get("status_code") if isinstance(ae.metadata, dict) else None,
-                    is_retryable=ae.is_retryable
-                )
-                return {"tool_results": tool_result.dict()}
+            # Extract full API error response details from exception if available
+            api_error_details = {}
+            if hasattr(exc, 'details') and isinstance(exc.details, dict):
+                api_error_details = {
+                    "error_type": "api_error",
+                    "status_code": exc.details.get("status"),
+                    "response_body": exc.details.get("response_body"),
+                    "response_json": exc.details.get("response_json"),
+                    "api_url": exc.details.get("url"),
+                    "api_name": exc.details.get("api")
+                }
+            
+            tool_result = ToolResult(
+                tool_name="claim_details_enriched",
+                status=ToolExecutionStatus.FAILURE,
+                data=api_error_details,  # Put API error details in data field
+                error_message=ae.message,
+                error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                api_endpoint="/myclaims/claims/v1/details",
+                http_status_code=ae.metadata.get("status_code") if isinstance(ae.metadata, dict) else None,
+                is_retryable=ae.is_retryable
+            )
+            return {"tool_results": tool_result.dict()}
         
         # ========================================================================
         # STANDARD FLOW: All other intents use normal matching logic
@@ -934,11 +881,12 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
     """
     Enriched claim details: combines claim details with filtered claim list.
     
-    OPTIMIZED Flow (list first for early validation):
-        Step 1: Fetch claim list FIRST (to validate sequence exists)
-        Step 2: Validate sequence exists in list (FAIL EARLY if not found)
-        Step 3: Fetch claim details (only if sequence is valid)
+    Flow:
+        Step 1: Fetch claim details
+        Step 2: Fetch claim list using claimId from details
+        Step 3: Filter claim list by matching claimNumber and claimSequence
         Step 4: Merge filtered list record with claim details
+        Step 5: Return enriched result
         
     Args:
         claimNumber: The claim number
@@ -946,13 +894,10 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
         
     Returns:
         Merged enriched claim details object
-        
-    Raises:
-        ExternalAPIError: With full error details for response agent
     """
-    logger.info(f"🔄 Starting enriched claim details flow (list-first validation)")
-    logger.info(f"   📌 Input: claimNumber={claimNumber} (type: {type(claimNumber).__name__})")
-    logger.info(f"   📌 Input: claimSequence={claimSequence} (type: {type(claimSequence).__name__})")
+    logger.info(f"🔄 Starting enriched claim details flow")
+    logger.info(f"   📌 Input: claimNumber={claimNumber} (type: {type(claimNumber).__name__}, repr: {repr(claimNumber)})")
+    logger.info(f"   📌 Input: claimSequence={claimSequence} (type: {type(claimSequence).__name__}, repr: {repr(claimSequence)})")
     
     # CRITICAL: Ensure parameters are strings, not lists (defensive programming)
     if isinstance(claimNumber, list):
@@ -965,92 +910,74 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
         claimSequence = str(claimSequence[0]) if claimSequence else "1"
         logger.info(f"   ✅ Converted to: claimSequence={claimSequence}")
     
-    # Step 1: Get claim list FIRST (to validate claim and sequence exist)
-    logger.info(f"Step 1: Fetching claim list FIRST for claimId={claimNumber}")
+    # Step 1: Get claim details
+    logger.debug("Step 1: Fetching claim details")
+    claim_details = get_claim_details(claimNumber, claimSequence)
+    
+    # Step 2: Get claim list (claimId is the claimNumber)
+    logger.info(f"Step 2: Fetching claim list for claimId={claimNumber}, claimSequence={claimSequence}")
     try:
         claim_list_response = get_claim_list(claimNumber, claimSequence)
         logger.info(f"   ✅ Claim list fetched successfully")
         logger.debug(f"   Response type: {type(claim_list_response).__name__}")
         if isinstance(claim_list_response, dict):
             logger.debug(f"   Response keys: {list(claim_list_response.keys())}")
-    except ExternalAPIError as e:
-        # List API failed - re-raise with enhanced details
-        logger.error(f"   ❌ Claim list API failed: {e}")
-        raise ExternalAPIError(
-            f"Failed to fetch claim list for claim number '{claimNumber}': {str(e)}",
-            details={
-                "claimNumber": claimNumber,
-                "claimSequence": claimSequence,
-                "status": e.details.get("status") if hasattr(e, 'details') and e.details else 500,
-                "error_type": "list_api_error",
-                "response_body": e.details.get("response_body") if hasattr(e, 'details') and e.details else None,
-                "response_json": e.details.get("response_json") if hasattr(e, 'details') and e.details else None,
-                "url": e.details.get("url") if hasattr(e, 'details') and e.details else None,
-                "api": "get_claim_list",
-                "message": f"Unable to retrieve claim information for claim number '{claimNumber}'."
-            },
-            retriable=e.retriable if hasattr(e, 'retriable') else True
-        )
     except Exception as e:
-        logger.error(f"   ❌ Unexpected error fetching claim list: {e}")
-        raise ExternalAPIError(
-            f"Failed to fetch claim list for claim number '{claimNumber}': {str(e)}",
-            details={
-                "claimNumber": claimNumber,
-                "claimSequence": claimSequence,
-                "status": 500,
-                "error_type": "list_api_error",
-                "api": "get_claim_list",
-                "message": f"An unexpected error occurred while retrieving claim information."
-            },
-            retriable=True
-        )
+        logger.error(f"   ❌ Failed to fetch claim list: {e}")
+        logger.error(f"   Returning details only (no enrichment)")
+        return claim_details  # Return just the details without list_data
     
-    # Step 2: Extract list and validate sequence IMMEDIATELY (fail fast)
-    logger.info("Step 2: Extracting claim list and validating sequence...")
+    # Extract the actual list from response
+    # Try multiple possible keys where the claim list might be located
+    logger.info("   Extracting claim list from response...")
+    logger.debug(f"   claim_list_response type: {type(claim_list_response).__name__}")
     
     claim_list = []
     if isinstance(claim_list_response, dict):
         logger.debug(f"   claim_list_response keys: {list(claim_list_response.keys())}")
+        
+        # Common response structures: {"claims": [...]} or {"data": [...]} or {"claimsList": [...]} or {"claimList": [...]}
+        # Use explicit None check to handle empty lists vs missing keys
         for key in ["claims", "data", "claimsList", "claimList"]:
             if key in claim_list_response and claim_list_response[key] is not None:
                 claim_list = claim_list_response[key]
-                logger.info(f"   ✅ Found claim list in key '{key}' with {len(claim_list) if isinstance(claim_list, list) else 'N/A'} items")
+                list_len = len(claim_list) if isinstance(claim_list, list) else "not a list"
+                logger.info(f"   ✅ Found claim list in key '{key}' with {list_len} items")
                 break
+        
+        # If no valid key found, default to empty list
+        if not claim_list:
+            logger.error(f"   ❌ No standard claim list key found in response!")
+            logger.error(f"      Available keys: {list(claim_list_response.keys())}")
+            logger.error(f"      Expected keys: ['claims', 'data', 'claimsList', 'claimList']")
+            claim_list = []
     elif isinstance(claim_list_response, list):
         claim_list = claim_list_response
         logger.info(f"   ✅ Claim list response is a direct list with {len(claim_list)} claims")
+    else:
+        logger.error(f"   ❌ Unexpected claim_list_response type: {type(claim_list_response)}, using empty list")
+        claim_list = []
     
-    # Check if claim list is empty (claim number might not exist)
-    if not claim_list or len(claim_list) == 0:
-        logger.error(f"   ❌ Claim list is empty - claim number may not exist!")
-        raise ExternalAPIError(
-            f"No claims found for claim number '{claimNumber}'. Please verify the claim number and try again.",
-            details={
-                "claimNumber": claimNumber,
-                "claimSequence": claimSequence,
-                "status": 404,
-                "error_type": "claim_not_found",
-                "message": f"No claims found for claim number '{claimNumber}'. Please verify the claim number and try again."
-            },
-            retriable=False
-        )
+    # Step 3: Filter claim list by matching claimNumber and claimSequence
+    logger.info(f"Step 3: Filtering claim list (total: {len(claim_list)} claims)")
+    logger.debug(f"   Looking for: claimNumber={claimNumber}, claimSequence={claimSequence}")
     
-    # DEBUG: Log first claim structure
+    # DEBUG: Log first claim structure to understand field names
     if claim_list and len(claim_list) > 0 and isinstance(claim_list[0], dict):
         logger.info(f"📋 First claim keys: {list(claim_list[0].keys())}")
+        logger.debug(f"📋 First claim sample: {str(claim_list[0])[:500]}...")
     
-    # Find matching claim by sequence
     matched_claim = None
-    available_sequences = []
-    
     for claim in claim_list:
         if isinstance(claim, dict):
+            # Handle nested structure: check top level, claimInformation, and primary objects
             claim_info = claim.get("claimInformation", {})
             claim_primary = claim.get("primary", {})
             
+            # Extract claim number from various possible locations
+            # NOTE: API returns structure like {'primary': {'number': 123, 'sequence': 456}}
             claim_num = get_first_non_none([
-                (claim_primary, "number"),
+                (claim_primary, "number"),      # ACTUAL API FIELD - check first!
                 (claim, "claimNumber"),
                 (claim, "claimId"),
                 (claim, "claim_number"),
@@ -1059,76 +986,92 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
                 (claim_info, "claimId")
             ])
             
+            # Extract claim sequence from various possible locations
+            # NOTE: API returns structure like {'primary': {'number': 123, 'sequence': 456}}
             claim_seq = get_first_non_none([
-                (claim_primary, "sequence"),
+                (claim_primary, "sequence"),    # ACTUAL API FIELD - check first!
                 (claim, "claimSequence"),
                 (claim, "sequenceNumber"),
                 (claim, "claimSequenceNumber"),
                 (claim, "sequence"),
                 (claim_info, "claimSequence"),
-                (claim_info, "claimSequenceNumber"),
+                (claim_info, "claimSequenceNumber"),  # Add this field!
                 (claim_info, "sequenceNumber")
             ])
             
-            # Track available sequences for error message
-            if claim_seq is not None:
-                available_sequences.append(str(claim_seq))
-            
-            logger.debug(f"   Comparing: claim_seq={claim_seq} vs target={claimSequence}")
+            # Debug: Log what we're comparing
+            logger.debug(f"   Comparing: API claim_num={claim_num}, claim_seq={claim_seq} vs Target claimNumber={claimNumber}, claimSequence={claimSequence}")
             
             if str(claim_num) == str(claimNumber) and str(claim_seq) == str(claimSequence):
                 matched_claim = claim
-                logger.info(f"   ✅ Found matching sequence: claimNumber={claim_num}, claimSequence={claim_seq}")
+                logger.info(f"✅ Found matching claim in list: claimNumber={claim_num}, claimSequence={claim_seq}")
                 break
+            else:
+                logger.debug(f"   ❌ No match: {str(claim_num) == str(claimNumber)} (num) and {str(claim_seq) == str(claimSequence)} (seq)")
     
-    # FAIL EARLY if sequence not found (before calling details API)
-    if matched_claim is None:
-        logger.error(f"   ❌ Sequence '{claimSequence}' NOT FOUND in claim list!")
-        logger.debug(f"   📋 Available sequences (for debugging): {available_sequences}")
-        
-        error_msg = f"Sequence number '{claimSequence}' does not exist for claim number '{claimNumber}'. Please verify the sequence number and try again."
-        
-        raise ExternalAPIError(
-            error_msg,
-            details={
-                "claimNumber": claimNumber,
-                "invalidSequence": claimSequence,
-                "status": 404,
-                "error_type": "sequence_not_found",
-                "message": error_msg
-            },
-            retriable=False
-        )
-    
-    logger.info(f"   ✅ Sequence validated - proceeding to fetch details")
-    
-    # Step 3: Get claim details (only after sequence is validated)
-    logger.info("Step 3: Fetching claim details (sequence validated)")
-    try:
-        claim_details = get_claim_details(claimNumber, claimSequence)
-        logger.info(f"   ✅ Claim details fetched successfully")
-    except ExternalAPIError as e:
-        logger.error(f"   ❌ Claim details API failed: {e}")
-        raise ExternalAPIError(
-            f"Failed to fetch claim details for claim number '{claimNumber}', sequence '{claimSequence}': {str(e)}",
-            details={
-                "claimNumber": claimNumber,
-                "claimSequence": claimSequence,
-                "status": e.details.get("status") if hasattr(e, 'details') and e.details else 500,
-                "error_type": "details_api_error",
-                "response_body": e.details.get("response_body") if hasattr(e, 'details') and e.details else None,
-                "response_json": e.details.get("response_json") if hasattr(e, 'details') and e.details else None,
-                "url": e.details.get("url") if hasattr(e, 'details') and e.details else None,
-                "api": "get_claim_details",
-                "message": f"Unable to retrieve claim details for claim number '{claimNumber}', sequence '{claimSequence}'."
-            },
-            retriable=e.retriable if hasattr(e, 'retriable') else True
-        )
-    
-    # Step 4: Merge results
+    # Step 4: Merge filtered list record with claim details
     logger.info("Step 4: Merging claim details with list data")
-    enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
-    enriched_details["list_data"] = matched_claim
-    logger.info("✅ Successfully enriched claim details with list_data")
+    logger.debug(f"   claim_details type: {type(claim_details).__name__}")
+    logger.debug(f"   claim_details keys: {list(claim_details.keys()) if isinstance(claim_details, dict) else 'N/A'}")
     
+    enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
+    
+    if matched_claim:
+        # Add list data as nested field (no common fields, so no duplicates)
+        enriched_details["list_data"] = matched_claim
+        logger.info("✅ Successfully enriched claim details with list_data")
+        logger.info(f"   📦 list_data keys: {list(matched_claim.keys()) if isinstance(matched_claim, dict) else 'N/A'}")
+        logger.info(f"   📤 Final enriched_details keys: {list(enriched_details.keys())}")
+    else:
+        logger.error(f"❌ CRITICAL: No matching claim found in list - enrichment failed!")
+        logger.error(f"   🔍 Search criteria:")
+        logger.error(f"      Target claimNumber: {claimNumber} (type: {type(claimNumber).__name__}, repr: {repr(claimNumber)})")
+        logger.error(f"      Target claimSequence: {claimSequence} (type: {type(claimSequence).__name__}, repr: {repr(claimSequence)})")
+        logger.error(f"   📋 Claim list info:")
+        logger.error(f"      Total claims: {len(claim_list)}")
+        logger.error(f"      Claim list type: {type(claim_list).__name__}")
+        
+        # Log all claims in the list for debugging
+        if claim_list and isinstance(claim_list, list):
+            logger.error(f"   📝 Claims in list:")
+            for idx, claim in enumerate(claim_list):
+                if isinstance(claim, dict):
+                    claim_info = claim.get("claimInformation", {})
+                    claim_primary = claim.get("primary", {})
+                    # Check all possible field locations using helper function
+                    c_num = get_first_non_none([
+                        (claim_primary, "number"),
+                        (claim, "claimNumber"),
+                        (claim, "claimId"),
+                        (claim_info, "claimNumber")
+                    ])
+                    c_seq = get_first_non_none([
+                        (claim_primary, "sequence"),
+                        (claim, "claimSequence"),
+                        (claim, "sequenceNumber"),
+                        (claim_info, "claimSequence")
+                    ])
+                    logger.error(f"      [{idx}] claimNumber={c_num} (type: {type(c_num).__name__}), claimSequence={c_seq} (type: {type(c_seq).__name__})")
+                    # Log first claim's actual keys to help debug
+                    if idx == 0:
+                        logger.error(f"      [0] Available keys: {list(claim.keys())}")
+                        if claim_primary:
+                            logger.error(f"      [0] primary keys: {list(claim_primary.keys())}")
+                        if claim_info:
+                            logger.error(f"      [0] claimInformation keys: {list(claim_info.keys())}")
+        
+        logger.error(f"   ⚠️ Returning details only (NO list_data field)")
+    
+    logger.info(f"Step 5: Returning enriched result")
+    logger.info(f"   📤 Final keys being returned: {list(enriched_details.keys()) if isinstance(enriched_details, dict) else 'N/A'}")
+    logger.info(f"   🔍 Has 'list_data' key: {'list_data' in enriched_details if isinstance(enriched_details, dict) else 'N/A'}")
+    
+    # FINAL VERIFICATION: Ensure list_data is present
+    if isinstance(enriched_details, dict):
+        if "list_data" in enriched_details:
+            logger.info(f"   ✅ SUCCESS: Returning enriched details WITH list_data")
+        else:
+            logger.error(f"   ❌ WARNING: Returning details WITHOUT list_data - enrichment incomplete!")
+    
+    # Step 5: Return merged result
     return enriched_details
