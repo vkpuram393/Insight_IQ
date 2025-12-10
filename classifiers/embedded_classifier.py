@@ -1152,6 +1152,23 @@ CVS_INTENT_EXAMPLES = {
         "Fitness workout routines",
         "Gaming tips and tricks",
         "Fashion advice for summer",
+        # Lorem ipsum / Junk text / Gibberish
+        "Lorem ipsum dolor sit amet consectetur adipiscing elit",
+        "Quisque faucibus ex sapien vitae pellentesque sem placerat",
+        "Tempus leo eu aenean sed diam urna tempor pulvinar",
+        "Vivamus fringilla lacus nec metus bibendum egestas",
+        "Ad litora torquent per conubia nostra inceptos himenaeos",
+        "Sed ut perspiciatis unde omnis iste natus error sit voluptatem",
+        "Nemo enim ipsam voluptatem quia voluptas sit aspernatur",
+        "Neque porro quisquam est qui dolorem ipsum quia dolor",
+        "asdfghjkl qwertyuiop zxcvbnm",
+        "abcdefghijklmnopqrstuvwxyz random letters",
+        "test test test test test test",
+        "blah blah blah blah blah",
+        "foo bar baz qux quux corge",
+        "hello hello hello hello",
+        "aaaaaa bbbbbb cccccc dddddd",
+        "12345 67890 abcde fghij",
     ],
 
     "pharmacy_info": [
