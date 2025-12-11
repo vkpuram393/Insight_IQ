@@ -44,6 +44,8 @@ python-dotenv==1.0.0
 orjson==3.10.12
 certifi==2025.11.12
 zstandard==0.23.0
+urllib3>=2.6.0  # Security fix: addresses CVE-2023-45803, CVE-2024-37891, and open redirect vulnerabilities
+
 
 # Google Gemini (pinned to work with httpx 0.25.2 required by langfuse)
 google-genai==1.0.0
@@ -54,3 +56,9 @@ pytest-asyncio==0.23.5
 pytest-mock==3.12.0
 pytest-cov==4.1.0
 nest-asyncio>=1.5.8
+
+
+# Build & Utilities
+setuptools>=80.9.0  # Security fix: addresses CVE-2025-47273 (path traversal) and ReDoS vulnerabilities
+
+
