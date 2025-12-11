@@ -65,7 +65,7 @@ class MongoDBEmbeddingStore:
         """Get or create MongoDB connection"""
         if self.client is None:
             try:
-                # SSL certificate fix for macOS (uncomment if needed)
+                # SSL certificate fix for macOS (commented out for team compatibility)
                 # import certifi
                 # tls_ca_file = certifi.where()
                 
@@ -74,7 +74,7 @@ class MongoDBEmbeddingStore:
                     serverSelectionTimeoutMS=5000,
                     connectTimeoutMS=10000,
                     retryWrites=True,
-                    # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
+                    # tlsCAFile=tls_ca_file
                 )
                 # Test connection
                 await self.client.admin.command('ping')

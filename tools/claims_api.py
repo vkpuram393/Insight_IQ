@@ -486,10 +486,29 @@ ENTITY_MAP ={
     "date_from":"dateFrom",
     "date_to":"dateTo",
     "claim_sequence":"claimSequence",
+    "sequence_number":"claimSequence",  # LLM judge uses this name
     "claim_id":"claimId",
     "claim_ids":"claimId",  # Map plural to singular for API
     "claim_sequences":"claimSequence",  # Map plural sequences
 }
+
+def _is_masked_token(value: Any) -> bool:
+    """
+    Check if a value is a masked PII token like [CLAIM_ID_ABC123] or [CLAIM_ID_253152631273000].
+    
+    These tokens are created by the PII protection layer and should not be sent to the API.
+    In multi-turn conversations, the LLM may extract masked tokens from conversation history
+    instead of the actual values.
+    """
+    import re
+    if isinstance(value, str):
+        # Match patterns like:
+        # - [CLAIM_ID_ABC123] (hex hash)
+        # - [CLAIM_ID_253152631273000] (actual claim number embedded)
+        # - [PERSON_DEF456]
+        # - Any token starting with [ and containing ENTITY_TYPE_ pattern
+        return bool(re.match(r'^\[[A-Z_]+_[A-Za-z0-9]+\]$', value))
+    return False
 
 # --- Helper Function to handle Pydantic model extraction ---
 def normalize_entities(entities_obj) -> Dict[str, Any]:
@@ -497,6 +516,7 @@ def normalize_entities(entities_obj) -> Dict[str, Any]:
     1. Merges top-level entities with raw_entities from the Pydantic model or dict.
     2. Normalizes all keys from snake_case to target API's camelCase format.
     3. Also accepts already-normalized camelCase keys (passthrough).
+    4. Filters out masked PII tokens (e.g., [CLAIM_ID_ABC123]) that should not be sent to API.
     """
     
     # Handle both Pydantic models and plain dicts
@@ -513,6 +533,16 @@ def normalize_entities(entities_obj) -> Dict[str, Any]:
         
         # Merge the contents of raw_entities dictionary into the main dictionary
         all_entities.update(entities_obj.raw_entities)
+    
+    # CRITICAL: Filter out masked PII tokens that LLM may have extracted from conversation history
+    # These look like [CLAIM_ID_ABC123] and should not be sent to the API
+    filtered_entities = {}
+    for k, v in all_entities.items():
+        if _is_masked_token(v):
+            logger.warning(f"⚠️ Filtering out masked token from entities: {k}={v}")
+            continue
+        filtered_entities[k] = v
+    all_entities = filtered_entities
     
     # Create reverse mapping for camelCase -> camelCase (already normalized)
     # This allows function to accept both snake_case AND camelCase inputs
