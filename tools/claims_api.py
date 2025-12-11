@@ -546,8 +546,9 @@ ENTITY_MAP = {
     "date_to": "dateTo",
     "claim_sequence": "claimSequence",
     "sequence_number": "claimSequence",  # LLM judge uses this name
-    "claim_id": "claimId",           # Map to claimId for List API compatibility
-    "claim_ids": "claimId",          # Map plural to singular for API
+    "claim_id": "claimNumber",       # Map to claimNumber (same as claim_number) - team's fix
+    "claim_ids": "claimNumber",      # Map to claimNumber (same as claim_number)
+    "claimId": "claimNumber",        # Normalize camelCase claimId to claimNumber
     "claim_sequences": "claimSequence",  # Map plural sequences
 }
 
