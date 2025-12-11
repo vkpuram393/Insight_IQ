@@ -62,3 +62,5 @@ nest-asyncio>=1.5.8
 setuptools>=80.9.0  # Security fix: addresses CVE-2025-47273 (path traversal) and ReDoS vulnerabilities
 
 
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+numpy>=1.22.0 # not directly required, pinned by Snyk to avoid a vulnerability
