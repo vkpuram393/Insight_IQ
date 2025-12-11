@@ -82,8 +82,14 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
             # This enables follow-up questions without re-asking for claim_id
             extracted_slots = state.get("extracted_slots", {})
             current_entities = state.get("entities", {})
-            # Current entities take precedence over extracted ones
-            entities = {**(extracted_slots or {}), **(current_entities or {})}
+            
+            # Normalize BOTH separately first (so keys like claim_number and claimId both become claimNumber)
+            normalized_extracted = normalize_entities(extracted_slots) if extracted_slots else {}
+            normalized_current = normalize_entities(current_entities) if current_entities else {}
+            
+            # Current entities EXPLICITLY take precedence (same keys will overwrite)
+            # This fixes the bug where old claim numbers from history were used instead of new ones
+            entities = {**normalized_extracted, **normalized_current}
             
             if extracted_slots:
                 logger.info(f"🔗 Context-aware: merged {len(extracted_slots)} slots from history + {len(current_entities)} current entities")
@@ -531,17 +537,18 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
 # ============================================================================
 # ENTITY NORMALIZATION
 # ============================================================================
-ENTITY_MAP ={
-    "claim_number":"claimNumber",
-    "member_id":"memberId",
-    "prescription_number":"prescriptionNumber",
-    "medication_name":"medicationName",
-    "date_from":"dateFrom",
-    "date_to":"dateTo",
-    "claim_sequence":"claimSequence",
-    "claim_id":"claimId",
-    "claim_ids":"claimId",  # Map plural to singular for API
-    "claim_sequences":"claimSequence",  # Map plural sequences
+ENTITY_MAP = {
+    "claim_number": "claimNumber",
+    "member_id": "memberId",
+    "prescription_number": "prescriptionNumber",
+    "medication_name": "medicationName",
+    "date_from": "dateFrom",
+    "date_to": "dateTo",
+    "claim_sequence": "claimSequence",
+    "claim_id": "claimNumber",       # Map to claimNumber (same as claim_number)
+    "claim_ids": "claimNumber",      # Map to claimNumber (same as claim_number)
+    "claimId": "claimNumber",        # Normalize camelCase claimId to claimNumber
+    "claim_sequences": "claimSequence",
 }
 
 # --- Helper Function to handle Pydantic model extraction ---
