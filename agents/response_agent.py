@@ -418,6 +418,7 @@ Use this structured format when presenting claim data. For conversational exchan
             'claim_id': 'claim number or claim ID',
             'claim_number': 'claim number',
             'claim_sequence': 'claim sequence number',
+            'sequence': 'claim sequence number',  # Added: matches confidence.py missing_slots
             'claim_numbers': 'claim numbers',
             
             # Member-related
@@ -484,7 +485,17 @@ Use this structured format when presenting claim data. For conversational exchan
             
             # Map technical entity names to user-friendly labels
             missing_entities_friendly = [self._map_entity_to_user_friendly(e) for e in missing_entities]
-            missing_entities_str = ", ".join(missing_entities_friendly) if missing_entities_friendly else "None"
+            
+            # Provide appropriate fallback based on clarification reason
+            if missing_entities_friendly:
+                missing_entities_str = ", ".join(missing_entities_friendly)
+            elif reason == "low_confidence":
+                missing_entities_str = "more details about what you need"
+            elif reason == "ambiguous_intent":
+                missing_entities_str = "clarification on what you'd like to know"
+            else:
+                # Default fallback for missing_entity reason with empty list (shouldn't happen)
+                missing_entities_str = "the claim number and sequence number"
             
             # Format history (may provide context for question)
             history = state.get("conversation_history", [])

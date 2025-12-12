@@ -152,6 +152,21 @@ def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
         # Allow all NDC codes (they're pharmaceutical identifiers, not PII)
         return True
     
+    # CLAIM_ID: Allow short numbers (likely sequence numbers, not real claim IDs)
+    # Real claim IDs are typically 15+ digits, sequences are 3 digits
+    elif entity_type == "CLAIM_ID":
+        # Extract just the numeric part if prefixed with "claim"
+        import re
+        numbers = re.findall(r'\d+', entity_text)
+        if numbers:
+            # If the number is short (less than 6 digits), it's likely a sequence number
+            max_digits = max(len(n) for n in numbers)
+            if max_digits < 6:
+                return True
+        # Also allow if it matches sequence patterns (3 digits)
+        if re.search(r'\b\d{1,5}\b', entity_text) and not re.search(r'\d{10,}', entity_text):
+            return True
+    
     # Short codes that are likely system codes
     if len(entity_text) <= 3:
         return True
