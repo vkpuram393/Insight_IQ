@@ -142,6 +142,14 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             new_confidence = float(llm_result.get("confidence", original_confidence))
             new_entities = llm_result.get("entities") or original_entities
             
+            # FIX: Normalize LLM entity keys to match Entity Extractor format
+            # LLM uses singular keys; Confidence Checker expects plural list keys
+            if new_entities:
+                if "claim_number" in new_entities and "claim_ids" not in new_entities:
+                    new_entities["claim_ids"] = [new_entities["claim_number"]]
+                if "sequence_number" in new_entities and "claim_sequences" not in new_entities:
+                    new_entities["claim_sequences"] = [new_entities["sequence_number"]]
+            
             logger.info(f"LLM Response - Intent: {new_intent}, Confidence: {new_confidence:.2f}")
             logger.info(f"   Entities: {new_entities}")
             

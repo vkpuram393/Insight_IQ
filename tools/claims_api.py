@@ -601,6 +601,15 @@ def normalize_entities(entities_obj) -> Dict[str, Any]:
         if _is_masked_token(v):
             logger.warning(f"⚠️ Filtering out masked token from entities: {k}={v}")
             continue
+        # FIX: Also filter masked tokens inside list values (e.g., claim_ids: ["[CLAIM_ID_...]"])
+        if isinstance(v, list):
+            filtered_list = [item for item in v if not _is_masked_token(item)]
+            if not filtered_list:
+                logger.warning(f"⚠️ Filtering out list with all masked tokens: {k}={v}")
+                continue
+            if len(filtered_list) != len(v):
+                logger.info(f"🔧 Removed masked tokens from list: {k}: {v} -> {filtered_list}")
+                v = filtered_list
         filtered_entities[k] = v
     all_entities = filtered_entities
     
@@ -627,6 +636,20 @@ def normalize_entities(entities_obj) -> Dict[str, Any]:
                 v = v[0]  # Take first claim/member ID or sequence
         
         normalized_entities[target_key] = v
+    
+    # FIX: Normalize claimNumber - strip "claim" prefix if present
+    # PII masking preserves full text (e.g., "claim 233211748898001") for entity detection
+    # But API expects only numeric ID, so we normalize here at API call time
+    if "claimNumber" in normalized_entities:
+        import re
+        value = normalized_entities["claimNumber"]
+        # Handle list values (claim_ids maps to claimNumber but may still be a list)
+        if isinstance(value, list) and len(value) > 0:
+            value = value[0]
+        if isinstance(value, str):
+            numeric_match = re.search(r'\d+$', value)
+            if numeric_match:
+                normalized_entities["claimNumber"] = numeric_match.group(0)
         
     return normalized_entities
 
