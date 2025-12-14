@@ -4,7 +4,7 @@ import uvicorn
 import sys
 import os
 import asyncio
-
+from services.llm_connection import generate
 # BOOT diagnostics -----------------------------------------------------------
 print("[BOOT] __name__ =", __name__)        # Breakpoint candidate
 print("[BOOT] __file__ =", __file__)
@@ -85,7 +85,7 @@ async def shutdown_event():
         traceback.print_exc()
 
 # Routes --------------------------------------------------------------------
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router, prefix="/pss/pbmassist/v1")
 
 # Test/Utils endpoints for individual component testing
 try:
@@ -111,6 +111,13 @@ async def health():
     # Breakpoint candidate
     x=1
     return {"status": "healthy"}
+
+@app.get("/llm_test")
+async def llm_test():
+    # Breakpoint candidate
+    response = generate("Hello, how are you?")
+    return {"status": "llm_test", "response": response}
+
 
 # Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
