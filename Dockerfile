@@ -1,21 +1,20 @@
 FROM langchain/langgraph-api:3.11
 
-# Ensure CA certificates available (Debian-based assumption; remove if already present)
+# # Ensure CA certificates available (Debian-based assumption; remove if already present)
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# CVS Health Root CA certificate for Zscaler proxy
-COPY certs/CVSHealthRoot.cer /usr/local/share/ca-certificates/CVSHealthRoot.crt
-RUN update-ca-certificates
+# # CVS Health Root CA certificate for Zscaler proxy
+# COPY certs/CVSHealthRoot.cer /usr/local/share/ca-certificates/CVSHealthRoot.crt
+# RUN update-ca-certificates
 
-# Set environment variables for Python SSL certificate handling
-ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
-ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
+# # Set environment variables for Python SSL certificate handling
+# ENV SSL_CERT_FILE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
+# ENV REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/CVSHealthRoot.crt
 
-# Set default DATABASE_URI for LangGraph API base image (required by base image config)
-# This can be overridden via environment variables in Kubernetes deployment
-ENV DATABASE_URI=sqlite:///./checkpoints.db
-
+# Note: DATABASE_URI is not used by this application - removed
+# The application uses persistence_store_type, mongodb_connection_string, etc. from config.py
+ENV PYTHONPATH=/api
 WORKDIR /api
 
 # Build args to remove warning
@@ -41,6 +40,9 @@ COPY . .
 # Expose port (update if using different)
 EXPOSE 8000
 
-# Start (adjust entrypoint/command to your app)
-# Note: main.py is at the root, not in an app directory
+# Override base image entrypoint to use our application
+# The base image may have its own LangGraph API server, so we explicitly set our entrypoint
+ENTRYPOINT []
+
+# Start our application (main.py is at root, not in app/ subdirectory)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
