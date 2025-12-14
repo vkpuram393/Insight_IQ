@@ -128,8 +128,28 @@ if __name__ == "__main__":
     print(f"🎯 Mode: {'Mock' if settings.use_mock_llm else 'Real'} LLM")
     print("[BOOT] about to call uvicorn.run")
 
-    # Run WITH reload for development (disable reload=False when debugging with breakpoints)
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="debug")
+    # Hot reload configuration
+    # ⚠️ IMPORTANT: reload=True causes server restarts when database files are written
+    # (checkpoints.db, telemetry.db, or their WAL/SHM files)
+    # Default to False for stability - enable via RELOAD=true environment variable if needed
+    enable_reload = os.environ.get("RELOAD", "false").lower() == "true"
+    
+    if enable_reload:
+        print("[BOOT] ⚠️  Hot reload is ENABLED")
+        print("[BOOT]    Database file writes (checkpoints.db, telemetry.db) may trigger restarts")
+        print("[BOOT]    To disable: set RELOAD=false or remove RELOAD environment variable")
+    else:
+        print("[BOOT] ✅ Hot reload is DISABLED (default for stability)")
+        print("[BOOT]    To enable: set RELOAD=true environment variable")
+        print("[BOOT]    Note: Manual server restart required for code changes")
+    
+    uvicorn.run(
+        "main:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=enable_reload,
+        log_level="debug"
+    )
 
     # This line executes only when server stops
     print("[BOOT] uvicorn.run returned (server stopped)")
