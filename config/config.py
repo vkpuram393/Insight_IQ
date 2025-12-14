@@ -83,8 +83,8 @@ class Settings(BaseSettings):
     # Connection string format: mongodb+srv://<username>:<password>@<cluster>/<database>?retryWrites=true&w=majority
     # Or for direct IP: mongodb://<username>:<password>@<ip1>:<port>,<ip2>:<port>/<database>?replicaSet=<replica_set>
     # mongodb_connection_string: str = "mongodb://localhost:27017"  # Default local MongoDB
-    #mongodb_connection_string: str = "mongodb+srv://myClaims_pt:O5VD3C6TEuH2WAUX@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/"
-    mongodb_connection_string: str = "mongodb+srv://myClaims_dev:1sw2tSZ89tjpn1sm@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/"
+    #mongodb_connection_string: str = "mongodb+srv://myClaims_pt:O5VD3C6TEuH2WAUX@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
+    mongodb_connection_string: str = "mongodb+srv://myclaims_dev:1sw2tSZ89tjpn1sm@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
     mongodb_database_name: str = "myclaims-DEV"  # Database name (myclaims-DEV, myclaims-QA, myClaims-UAT, myClaims-PT)
 
     use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
