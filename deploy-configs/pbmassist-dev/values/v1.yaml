@@ -97,7 +97,7 @@ istioHttpRoutes:
     - route: "/api/"
     - route: "/docs/"
     - route: "/health"
-    - route: "/pss/pbmassist/v1
+    - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
 ## Triggers 11
   
