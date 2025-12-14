@@ -44,9 +44,9 @@ class MongoDBPersistenceStore(PersistenceStore):
 
     async def _get_connection(self):
         """Get or create MongoDB connection"""
-        if self.client is None:
+        if self.client is None or self.db is None:
             try:
-                # SSL certificate fix for macOS (commented out for team compatibility)
+                # Uncomment below if SSL certificate issues on macOS:
                 # import certifi
                 # tls_ca_file = certifi.where()
                 
@@ -55,8 +55,8 @@ class MongoDBPersistenceStore(PersistenceStore):
                     self.connection_string,
                     serverSelectionTimeoutMS=5000,  # 5 second timeout for server selection
                     connectTimeoutMS=10000,  # 10 second timeout for connection
-                    retryWrites=True,
-                    # tlsCAFile=tls_ca_file
+                    retryWrites=True
+                    # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
                 )
                 # Test the connection
                 await self.client.admin.command('ping')
@@ -67,7 +67,12 @@ class MongoDBPersistenceStore(PersistenceStore):
                 logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
                 logger.error(f"   Connection string: {self._mask_connection_string()}")
                 logger.error(f"   Database name: {self.database_name}")
+                # Reset connection state on failure
+                self.client = None
+                self.db = None
                 raise
+        if self.db is None:
+            raise RuntimeError("MongoDB database connection is None - connection failed")
         return self.db
 
     def _mask_connection_string(self) -> str:
@@ -126,7 +131,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an event"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for event log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping event log for {event_type.value}")
+            return str(uuid.uuid4())
 
         event_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -141,9 +155,13 @@ class MongoDBPersistenceStore(PersistenceStore):
             "created_at": now
         }
 
-        await db.events.insert_one(document)
-        logger.debug(f"📝 Event logged: {event_type.value} for session {session_id}")
-        return event_id
+        try:
+            await db.events.insert_one(document)
+            logger.debug(f"📝 Event logged: {event_type.value} for session {session_id}")
+            return event_id
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to insert event into MongoDB: {str(e)}")
+            return event_id  # Return ID even if insert failed
 
     async def log_request(
         self,
@@ -362,7 +380,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an audit event"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for audit log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping audit log for {node_name}")
+            return str(uuid.uuid4())
 
         log_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -408,7 +435,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an exception"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for exception log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping exception log for {node_name}")
+            return str(uuid.uuid4())
 
         exception_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -606,4 +642,3 @@ class MongoDBPersistenceStore(PersistenceStore):
             finally:
                 self.client = None
                 self.db = None
-
