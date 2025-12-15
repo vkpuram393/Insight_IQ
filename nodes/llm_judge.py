@@ -144,11 +144,36 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             
             # FIX: Normalize LLM entity keys to match Entity Extractor format
             # LLM uses singular keys; Confidence Checker expects plural list keys
+            # ALSO: Filter out None values to prevent "claim None" in responses
             if new_entities:
-                if "claim_number" in new_entities and "claim_ids" not in new_entities:
-                    new_entities["claim_ids"] = [new_entities["claim_number"]]
-                if "sequence_number" in new_entities and "claim_sequences" not in new_entities:
-                    new_entities["claim_sequences"] = [new_entities["sequence_number"]]
+                # Filter out None values first
+                new_entities = {k: v for k, v in new_entities.items() if v is not None}
+                
+                # Handle claim_number - may be comma-separated for multiple claims
+                if "claim_number" in new_entities and new_entities["claim_number"] and "claim_ids" not in new_entities:
+                    claim_num = new_entities["claim_number"]
+                    if isinstance(claim_num, str) and ("," in claim_num or " and " in claim_num.lower()):
+                        # Split comma or "and" separated claims into list
+                        claims = re.split(r',|\s+and\s+', claim_num, flags=re.IGNORECASE)
+                        new_entities["claim_ids"] = [c.strip() for c in claims if c.strip()]
+                    else:
+                        new_entities["claim_ids"] = [claim_num]
+                
+                # Handle sequence_number - may be comma-separated for multiple sequences
+                if "sequence_number" in new_entities and new_entities["sequence_number"] and "claim_sequences" not in new_entities:
+                    seq_num = new_entities["sequence_number"]
+                    if isinstance(seq_num, str) and ("," in seq_num or " and " in seq_num.lower()):
+                        # Split comma or "and" separated sequences into list
+                        seqs = re.split(r',|\s+and\s+', seq_num, flags=re.IGNORECASE)
+                        new_entities["claim_sequences"] = [s.strip() for s in seqs if s.strip()]
+                    else:
+                        new_entities["claim_sequences"] = [seq_num]
+                
+                # Also filter out lists containing only None
+                if "claim_ids" in new_entities and new_entities["claim_ids"] == [None]:
+                    del new_entities["claim_ids"]
+                if "claim_sequences" in new_entities and new_entities["claim_sequences"] == [None]:
+                    del new_entities["claim_sequences"]
             
             logger.info(f"LLM Response - Intent: {new_intent}, Confidence: {new_confidence:.2f}")
             logger.info(f"   Entities: {new_entities}")
