@@ -109,6 +109,19 @@ class ConversationContextService:
                 extracted["prescription_number"] = rx_matches[-1]
                 logger.debug(f"✓ Extracted prescription_number from history: {extracted['prescription_number']}")
         
+        # ========================================================================
+        # Pattern 5: Sequence Numbers - MUST have "seq"/"sequence" keyword
+        # ========================================================================
+        # Matches: "sequence 997", "seq 997", "sequence number 997", "seq# 997"
+        # Sequence numbers are exactly 3 digits (e.g., 997, 998, 999)
+        sequence_pattern = r'(?:seq(?:uence)?)\s*(?:number|num|#)?\s*:?\s*(\d{3})\b'
+        sequence_matches = re.findall(sequence_pattern, history_text, re.IGNORECASE)
+        
+        if sequence_matches:
+            # Use the most recent sequence number
+            extracted["claim_sequence"] = sequence_matches[-1]
+            logger.info(f"✓ Extracted claim_sequence from history: {extracted['claim_sequence']}")
+        
         # Log summary
         if extracted:
             logger.info(f"📦 Extracted {len(extracted)} entities from history: {list(extracted.keys())}")
