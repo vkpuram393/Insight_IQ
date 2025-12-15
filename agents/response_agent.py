@@ -87,12 +87,16 @@ class ResponseAgent:
                     **Never remove the brackets or enclose tokens in backticks or quotes.**
                     **Copy tokens exactly as they appear.**
 
-                **Examples: Masked ID received from the user query or conversation history: [CLAIM_ID_B161BCED] **
-                    ❌ WRONG: "Could you confirm CLAIM_ID_B161BCED?"
-                    ❌ WRONG: "Could you confirm CLAIM_ID_B161BCED?]"
-                    ❌ WRONG: "Could you confirm [CLAIM_ID_B161BCED?"
-                    ❌ WRONG: "Could you confirm `CLAIM_ID_B161BCED?`"
-                    ✅ CORRECT: "Could you confirm [CLAIM_ID_B161BCED]?"
+                **Examples: If a masked token like [CLAIM_ID_XXXXXXXX] appears in input:**
+                    ❌ WRONG: "Could you confirm CLAIM_ID_XXXXXXXX?"
+                    ❌ WRONG: "Could you confirm CLAIM_ID_XXXXXXXX?]"
+                    ❌ WRONG: "Could you confirm [CLAIM_ID_XXXXXXXX?"
+                    ❌ WRONG: "Could you confirm `CLAIM_ID_XXXXXXXX?`"
+                    ✅ CORRECT: "Could you confirm [CLAIM_ID_XXXXXXXX]?"
+                
+                **IMPORTANT: Only use masked tokens if they appear in the USER QUERY or data.**
+                    If the user provides a plain claim number (like 253083494722000), use it as-is.
+                    Do NOT create fake tokens - only preserve tokens that already exist in the input.
             
             **Input:**
                 USER QUERY: Current question (may contain ambiguous terms - ignore those)
@@ -149,10 +153,13 @@ You are a specialized pharmacy claims assistant with expertise in interpreting a
 **NEVER modify, remove, or reformat masked tokens in your response.**
 
 Masked tokens are privacy placeholders that look like `[ENTITY_TYPE_HEXCODE]`. Examples:
-- `[CLAIM_ID_B161BCED]`
-- `[MEMBER_ID_A1F2C3D4]`
-- `[PERSON_E5F6G7H8]`
-- `[US_SSN_12345678]`
+- `[CLAIM_ID_XXXXXXXX]`
+- `[MEMBER_ID_XXXXXXXX]`
+- `[PERSON_XXXXXXXX]`
+- `[US_SSN_XXXXXXXX]`
+
+**IMPORTANT: Only reference tokens that ACTUALLY APPEAR in the input data.**
+If the user provides a plain claim number (253083494722000), use it directly - do NOT create tokens.
 
 **STRICT RULES:**
 1. **ALWAYS keep the square brackets `[` and `]` exactly as shown**
@@ -162,11 +169,11 @@ Masked tokens are privacy placeholders that look like `[ENTITY_TYPE_HEXCODE]`. E
 
 Examples of CORRECT vs WRONG usage:
 
-❌ WRONG: "I cannot find claim CLAIM_ID_B161BCED"
-❌ WRONG: "I cannot find claim `CLAIM_ID_B161BCED`"
-❌ WRONG: "I cannot find claim 'CLAIM_ID_B161BCED'"
-❌ WRONG: "I cannot find claim ID: CLAIM_ID_B161BCED"
-✅ CORRECT: "I cannot find claim [CLAIM_ID_B161BCED]"
+❌ WRONG: "I cannot find claim CLAIM_ID_XXXXXXXX"
+❌ WRONG: "I cannot find claim `CLAIM_ID_XXXXXXXX`"
+❌ WRONG: "I cannot find claim 'CLAIM_ID_XXXXXXXX'"
+❌ WRONG: "I cannot find claim ID: CLAIM_ID_XXXXXXXX"
+✅ CORRECT: "I cannot find claim [CLAIM_ID_XXXXXXXX]" (only if token exists in input)
 
 ❌ WRONG: "Member PERSON_E5F6G7H8 has the following claims..."
 ✅ CORRECT: "Member [PERSON_E5F6G7H8] has the following claims..."
@@ -299,7 +306,7 @@ Examples:
 **CRITICAL: Always acknowledge the identifier the user provided. Never ask for an ID if they already gave one.**
 
 **When user provides an identifier but no data is found:**
-- For claim ID: "I wasn't able to find claim 12345 in the system. Could you please double-check the claim number?"
+- For claim ID: "I wasn't able to find claim 12345 in the system. Could you please double-check the claim number and make sure it's valid?"
 - For member ID: "I wasn't able to find member M1234567 in the system. Could you please verify the member ID?"
 - Do NOT say: "Could you please provide the claim/member number?" (They already did!)
 
@@ -483,6 +490,10 @@ Use this structured format when presenting claim data. For conversational exchan
             missing_entities = clarification_ctx.get("missing_entities", [])
             provided_entities = clarification_ctx.get("provided_entities", [])
             
+            # Check for invalid claim ID format (user tried to provide ID but wrong format)
+            claim_id_format_invalid = clarification_ctx.get("claim_id_format_invalid", False)
+            potential_claim_ids = clarification_ctx.get("potential_claim_ids", [])
+            
             # Map technical entity names to user-friendly labels
             missing_entities_friendly = [self._map_entity_to_user_friendly(e) for e in missing_entities]
             
@@ -496,6 +507,17 @@ Use this structured format when presenting claim data. For conversational exchan
             else:
                 # Default fallback for missing_entity reason with empty list (shouldn't happen)
                 missing_entities_str = "the claim number and sequence number"
+            
+            # Build special instruction for invalid claim ID format
+            # Make it part of CRITICAL INSTRUCTIONS so LLM prioritizes it
+            format_hint_instruction = ""
+            if claim_id_format_invalid and potential_claim_ids:
+                invalid_id = potential_claim_ids[0] if potential_claim_ids else "unknown"
+                format_hint_instruction = f"""**PRIORITY**: The user provided '{invalid_id}' as a claim ID, but it's NOT VALID. You MUST acknowledge this invalid ID in your response.
+Example: "I see you mentioned claim {invalid_id}, but that doesn't appear to be a valid claim number. Could you please provide a valid claim number?"
+"""
+            else:
+                format_hint_instruction = "Be direct and specific in your question."
             
             # Format history (may provide context for question)
             history = state.get("conversation_history", [])
@@ -516,10 +538,10 @@ PROVIDED INFORMATION: {provided_entities}
 {conversation_history}
 
 CRITICAL INSTRUCTIONS:
+{format_hint_instruction}
 1. Focus ONLY on asking for the MISSING INFORMATION listed above (e.g., "{missing_entities}")
 2. Do NOT ask about ambiguous terms in the user query (like "TF" or abbreviations)
 3. The user wants to know about their claim - ask for the claim number/ID to look it up
-4. Be direct and specific: "Could you please provide your {missing_entities}?"
 
 Generate ONE specific, helpful follow-up question to get the missing information. Just the question, no explanation.""")
             ])
@@ -531,6 +553,7 @@ Generate ONE specific, helpful follow-up question to get the missing information
                 confidence=confidence,
                 missing_entities=missing_entities_str,
                 provided_entities=", ".join(provided_entities) if provided_entities else "None",
+                format_hint_instruction=format_hint_instruction,
                 conversation_history=history_str
             )
             
@@ -543,20 +566,25 @@ Generate ONE specific, helpful follow-up question to get the missing information
             intent = state.get("intent", "unknown")
             tool_results = state.get("tool_results")
             history = state.get("conversation_history", [])
+            entities = state.get("entities", {})  # FIX 8: Get entities for error messages
             
             # Defensive check
             if state.get("clarification_context"):
                 self.logger.warning("⚠️ Unexpected: needs_clarification=False but clarification_context present")
             
-            # Format tool results and history
+            # Format tool results, history, and entities
             claim_data = self._format_tool_results(tool_results) if tool_results else "No claim data available"
             history_str = self._format_conversation_history(history) if history else "No previous conversation"
+            entities_str = self._format_entities(entities) if entities else "No entities extracted"  # FIX 8: Format entities
             
             # Build normal response prompt
             prompt_template = ChatPromptTemplate.from_messages([
                 ("user", """USER QUERY: {user_query}
 
 INTENT: {intent} <- Focus your response on this specific intent
+
+=== EXTRACTED ENTITIES ===
+{entities}
 
 === CLAIM DATA ===
 {claim_data}
@@ -570,6 +598,7 @@ Provide a targeted response that directly answers the user's question based on t
             messages = prompt_template.format_messages(
                 user_query=user_text,
                 intent=intent,
+                entities=entities_str,
                 claim_data=claim_data,
                 conversation_history=history_str
             )
@@ -654,6 +683,50 @@ Provide a targeted response that directly answers the user's question based on t
                 formatted.append(str(msg))
         
         return "\n".join(formatted)
+    
+    def _format_entities(self, entities: Dict[str, Any]) -> str:
+        """
+        Format extracted entities for LLM context.
+        
+        This ensures the LLM knows what identifiers the user provided,
+        especially important for error messages when data is not found.
+        
+        Example: When user provides only "999" (sequence), but claim_number
+        was extracted from history, both should be shown to the LLM so error
+        messages correctly say "claim 123456789012345 and sequence 999".
+        
+        Args:
+            entities: Dictionary of extracted entities from state
+            
+        Returns:
+            str: Formatted entities string for LLM prompt
+        """
+        if not entities:
+            return "(No entities extracted)"
+        
+        formatted = []
+        for key, value in entities.items():
+            if value:  # Only include non-empty values
+                # Format lists as comma-separated (e.g., multiple claim_ids)
+                if isinstance(value, list):
+                    value_str = ", ".join(str(v) for v in value)
+                else:
+                    value_str = str(value)
+                
+                # FIX: Strip "claim" prefix from claim-related entity values
+                # Prevents duplication like "claim claim 233211748898001" in LLM responses
+                # HIPAA Note: Claim IDs are business identifiers, not PHI
+                if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
+                    import re
+                    numeric_match = re.search(r'\d+$', value_str)
+                    if numeric_match:
+                        value_str = numeric_match.group(0)
+                
+                # Map technical names to user-friendly labels
+                friendly_key = key.replace("_", " ").title()
+                formatted.append(f"- {friendly_key}: {value_str}")
+        
+        return "\n".join(formatted) if formatted else "(No entities extracted)"
     
     def generate_response(
         self,
@@ -830,6 +903,14 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         
         # Call generation method (synchronous but safe to call from async context)
         response_text = agent.generate_response(system_prompt, user_prompt)
+        
+        # FIX: Monitor for remaining token-like patterns (helps debugging)
+        # These will be cleaned up by postcheck's cleanup_remaining_tokens()
+        import re
+        remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
+        if remaining_tokens:
+            logger.warning(f"⚠️ Response contains {len(remaining_tokens)} token-like patterns: {remaining_tokens[:3]}...")
+            logger.warning("   These will be cleaned up by postcheck")
         
         # Validate response
         if not response_text or not response_text.strip():

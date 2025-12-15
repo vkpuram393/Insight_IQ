@@ -3,6 +3,7 @@ PII/PHI Protection Service with Masking/Unmasking
 Integrates Microsoft Presidio for enterprise-grade PII detection
 """
 
+import re
 import uuid
 import hashlib
 from typing import Dict, List, Tuple, Optional, Any
@@ -399,12 +400,26 @@ class PIIProtectionService:
         
         for token, info in token_mapping.items():
             original_value = info["original"]
+            entity_type = info.get("entity_type", "")
+            
+            # FIX: Context-aware unmasking for CLAIM_ID to prevent "claim claim" duplication
+            # If "claim" keyword precedes token in text, strip "claim" prefix from original_value
+            # Examples: "claim [TOKEN]" + original="claim 123" → "claim 123" (not "claim claim 123")
+            #           "status of [TOKEN]" + original="claim 123" → "claim 123" (keeps prefix)
+            if entity_type == "CLAIM_ID":
+                # Check if "claim" keyword precedes the token
+                pattern_preceded = r'\b(claim|clm)\s+' + re.escape(token)
+                if re.search(pattern_preceded, unmasked_text, re.IGNORECASE):
+                    # Strip "claim" prefix to avoid duplication
+                    numeric_match = re.search(r'\d+$', original_value)
+                    if numeric_match:
+                        original_value = numeric_match.group(0)
             
             # Track if we replaced anything for this token
             text_before = unmasked_text
             
             # Strategy 1: Replace exact token with brackets (primary case)
-            # Example: [CLAIM_ID_B161BCED] → claim 999999999999999
+            # Example: [CLAIM_ID_B161BCED] → 999999999999999 (or "claim 999..." if no prefix detected)
             unmasked_text = unmasked_text.replace(token, original_value)
             
             # Strategy 2: Handle LLM malforming brackets (fallback cases)
@@ -446,6 +461,141 @@ class PIIProtectionService:
         logger.info(f"🔓 Unmasked {tokens_replaced} of {len(token_mapping)} tokens")
         
         return unmasked_text
+    
+    def cleanup_remaining_tokens(
+        self, 
+        text: str, 
+        token_mapping: Optional[Dict[str, Dict]] = None
+    ) -> str:
+        """
+        Final cleanup to catch any remaining token-like patterns after unmasking.
+        
+        This is a DEFENSE-IN-DEPTH measure that runs AFTER unmask_pii_phi().
+        It handles edge cases where tokens couldn't be unmasked:
+        1. History tokens not in current mapping (multi-turn conversations)
+        2. LLM hallucinated fake tokens (e.g., [CLAIM_ID_253152631273000])
+        3. Malformed tokens that slipped through
+        
+        Detection Logic:
+        - Real tokens have 8-char uppercase hex hash: [CLAIM_ID_FBAA43E0]
+        - Fake tokens have embedded real values: [CLAIM_ID_253152631273000]
+        
+        Args:
+            text: Text that may contain remaining tokens after unmasking
+            token_mapping: Optional mapping for reference (to skip known tokens)
+            
+        Returns:
+            str: Text with all token-like patterns resolved to real values
+        """
+        import re
+        
+        if not text:
+            return text
+        
+        cleaned_text = text
+        cleanup_count = 0
+        
+        # === FIX 1: Remove brackets around bare numeric IDs (LLM formatting) ===
+        # Handles LLM emphasis like [242563401456001] → 242563401456001
+        # This is NOT a masking token (no ENTITY_TYPE_ prefix), just LLM styling
+        # Pattern: [10-20 digits] - Avoids short numbers like [404] or [123]
+        bare_bracket_pattern = r'\[(\d{10,20})\]'
+        bare_matches = re.findall(bare_bracket_pattern, cleaned_text)
+        if bare_matches:
+            cleaned_text = re.sub(bare_bracket_pattern, r'\1', cleaned_text)
+            cleanup_count += len(bare_matches)
+            logger.info(f"🧹 Cleanup: Removed brackets from {len(bare_matches)} bare numeric ID(s)")
+        
+        # Pattern to match token-like strings: [ENTITY_TYPE_HASH]
+        # Captures: entity_type (group 1), hash_part (group 2)
+        token_pattern = r'\[([A-Z_]+)_([A-Za-z0-9]+)\]'
+        
+        # Find all matches
+        matches = list(re.finditer(token_pattern, cleaned_text))
+        
+        if not matches:
+            return cleaned_text
+        
+        logger.debug(f"🧹 Cleanup: Found {len(matches)} token-like patterns to check")
+        
+        # Process matches in reverse order to maintain string indices
+        for match in reversed(matches):
+            full_token = match.group(0)      # e.g., [CLAIM_ID_253152631273000]
+            entity_type = match.group(1)     # e.g., CLAIM_ID
+            hash_part = match.group(2)       # e.g., 253152631273000 or FBAA43E0
+            
+            # Skip if this exact token was already in the mapping (unmasking was attempted)
+            # We only handle tokens that weren't in the mapping at all
+            if token_mapping and full_token in token_mapping:
+                logger.debug(f"   ✓ Skipping {full_token} (was in mapping)")
+                continue
+            
+            # Determine if this is a REAL token (8-char hex) or FAKE token (embedded value)
+            is_real_hex_hash = (
+                len(hash_part) == 8 and 
+                all(c in '0123456789ABCDEFabcdef' for c in hash_part)
+            )
+            
+            replacement = None
+            
+            if not is_real_hex_hash:
+                # FAKE TOKEN: LLM embedded actual value as the "hash"
+                # Example: [CLAIM_ID_253152631273000] → extract 253152631273000
+                
+                if entity_type in ('CLAIM_ID', 'RX_NUMBER', 'MEMBER_ID', 'NDC'):
+                    # These are typically numeric or alphanumeric IDs
+                    if hash_part.isdigit() or (hash_part.isalnum() and len(hash_part) > 8):
+                        replacement = hash_part
+                        logger.info(f"🧹 Cleanup: Extracted embedded value from fake token: {full_token} → {replacement}")
+                
+                elif entity_type in ('PERSON', 'LOCATION'):
+                    # Names/locations might be embedded
+                    if hash_part.isalpha() or ' ' in hash_part:
+                        replacement = hash_part
+                        logger.info(f"🧹 Cleanup: Extracted embedded name from fake token: {full_token} → {replacement}")
+                
+                elif entity_type == 'US_SSN':
+                    # SSN format check - don't expose full SSN
+                    if len(hash_part) == 9 and hash_part.isdigit():
+                        replacement = "XXX-XX-" + hash_part[-4:]
+                        logger.info(f"🧹 Cleanup: Masked embedded SSN in fake token: {full_token}")
+                
+                # Generic fallback for other fake tokens with embedded values
+                if replacement is None and len(hash_part) > 8:
+                    replacement = hash_part
+                    logger.info(f"🧹 Cleanup: Extracted value from unrecognized fake token: {full_token} → {replacement}")
+            
+            else:
+                # REAL TOKEN (8-char hex) but not in mapping
+                # This could be a history token - try to find in token_storage
+                if hasattr(self, 'token_storage') and self.token_storage:
+                    for storage_key, original_value in self.token_storage.items():
+                        # Check if this token matches any stored token
+                        if full_token in storage_key or f":{full_token}" in storage_key:
+                            replacement = original_value
+                            logger.info(f"🧹 Cleanup: Found in token_storage: {full_token} → {replacement}")
+                            break
+            
+            # If still no replacement, make the token human-readable as last resort
+            if replacement is None:
+                # For IDs that look numeric, just use the hash (might be the actual ID)
+                if hash_part.isdigit():
+                    replacement = hash_part
+                    logger.warning(f"🧹 Cleanup: Using hash as fallback value: {full_token} → {replacement}")
+                else:
+                    # Keep visible but remove harsh brackets
+                    replacement = f"({entity_type}: {hash_part})"
+                    logger.warning(f"🧹 Cleanup: Unknown token, using readable fallback: {full_token} → {replacement}")
+            
+            # Apply replacement
+            if replacement:
+                cleaned_text = cleaned_text[:match.start()] + replacement + cleaned_text[match.end():]
+                cleanup_count += 1
+        
+        if cleanup_count > 0:
+            logger.info(f"🧹 Cleanup: Resolved {cleanup_count} remaining token patterns")
+        
+        return cleaned_text
     
     def mask_api_response(
         self, 
@@ -744,7 +894,17 @@ class PIIProtectionService:
     
     def _postfilter_false_positives(self, detected_entities: List[Dict], original_text: str) -> List[Dict]:
         """
-        Post-filter detected entities to remove false positives common in pharmaceutical claims
+        Post-filter detected entities to remove false positives common in pharmaceutical claims.
+        
+        COMPREHENSIVE FALSE POSITIVE PREVENTION during initial PII detection.
+        This runs BEFORE masking, filtering out entities that shouldn't be masked.
+        
+        Filters:
+        - Drug names, dosages, and pharmaceutical terms
+        - System codes and field names
+        - Response format headers and table terms
+        - Numeric patterns (dates, IDs, prices)
+        - Alphanumeric codes
         
         Args:
             detected_entities: List of entities detected by Presidio
@@ -755,72 +915,274 @@ class PIIProtectionService:
         """
         import re
         
-        # Define patterns that should NOT be considered PII even if detected
-        false_positive_patterns = {
+        # ================================================================
+        # ALLOWLISTS - Terms that should NEVER be considered PII
+        # ================================================================
+        
+        # Exact match terms (case-insensitive comparison done below)
+        false_positive_terms = {
             # System codes and plans
             'GOVCLP', 'CAPENSION', 'CAGM', 'PERSPLTBASPPO', 'CALPERPPO1', 'CALP#NAAA', 
-            'AB01FJ', '25CY', 'RCNCP051', 'Z340100',
+            'AB01FJ', '25CY', 'RCNCP051', 'Z340100', 'AP711',
             
-            # Field names and descriptions
-            'claimNumber', 'claimStatus', 'fillDate', 'addDate', 'changeDate', 'memberId',
-            'groupNumber', 'cardNumber', 'personCode', 'planCode', 'accountId', 'carrierId',
-            'productName', 'productId', 'gpiNumber', 'ndc', 'quantity', 'daysSupply',
-            'Electronic transaction', 'Paid', 'Primary', 'Point of Sale', 'Card Holder',
-            'Female', 'Male', 'Generic', 'Retail', 'Pharmacy', 'National Provider',
+            # Response section headers
+            'SUMMARY', 'FINANCIAL', 'DRUG', 'MEMBER', 'PHARMACY', 'REJECTION',
+            'PRICING', 'ACCUMULATION', 'NEXT STEPS', 'DETAILS', 'INFORMATION',
+            'STATUS', 'OVERVIEW', 'HISTORY', 'NOTES', 'NEXT', 'STEPS',
             
-            # Medical terms
+            # Table headers
+            'Category', 'Before', 'After', 'Remaining', 'Individual', 'Family',
+            'Total', 'Amount', 'Value', 'Description', 'Type', 'Date', 'Code',
+            'Message', 'Quantity', 'Days', 'Supply', 'Name', 'Number',
+            
+            # Financial/status terms
+            'COPAY', 'COPAYMENT', 'DEDUCTIBLE', 'COINSURANCE', 'PREMIUM',
+            'Paid', 'Denied', 'Rejected', 'Reversed', 'Pending', 'Approved',
+            'Primary', 'Secondary', 'Tertiary', 'Generic', 'Brand', 'Specialty',
+            'Retail', 'Mail', 'Formulary', 'Covered', 'Not Covered',
+            'Submitted', 'Processed', 'Completed', 'Active', 'Inactive',
+            
+            # Drug forms
+            'TAB', 'TABLET', 'TABLETS', 'CAP', 'CAPS', 'CAPSULE', 'CAPSULES',
+            'SOLUTION', 'SUSPENSION', 'INJECTION', 'CREAM', 'OINTMENT', 'GEL',
+            'PATCH', 'SPRAY', 'DROPS', 'SYRUP', 'POWDER', 'GRANULES', 'LOZENGE',
+            'SUPPOSITORY', 'ORAL', 'TOPICAL', 'INHALER', 'NEBULIZER',
+            
+            # Role terms
+            'Pharmacy', 'Pharmacist', 'Prescriber', 'Patient', 'Member',
+            'Doctor', 'Physician', 'Nurse', 'Provider', 'Caregiver',
+            'Male', 'Female', 'Adult', 'Child', 'Senior', 'Cardholder',
+            'Dependent', 'Subscriber', 'Beneficiary', 'Technician',
+            
+            # Field names
+            'claimNumber', 'claimStatus', 'fillDate', 'addDate', 'changeDate',
+            'memberId', 'groupNumber', 'cardNumber', 'personCode', 'planCode',
+            'accountId', 'carrierId', 'productName', 'productId', 'gpiNumber',
+            'submittedProductId', 'ndc', 'quantity', 'daysSupply', 'rxNumber',
+            'transactionId', 'authorizationId', 'prescriberId', 'pharmacyId',
+            
+            # Descriptions and rejection messages
+            'Electronic transaction', 'Point of Sale', 'Card Holder',
+            'National Provider', 'NCPDP Provider ID', 'RX BILLING',
+            'Refill Too Soon', 'Prior Authorization Required', 'Not Covered',
+            'NON-FORMULARY', 'NONFORMULARY', 'DRUG INTERACTION', 'QUANTITY LIMIT',
+            'STEP THERAPY', 'DAW PENALTY', 'PLAN LIMITATION', 'COVERAGE TERMINATED',
+            
+            # Medical/drug terms
             'CABERGOLINE', 'AVET PHARM', 'SUB NOT ALLOWED BY PRESCR',
             
-            # System transaction codes
-            'B1', 'NCPDP Provider ID', 'RX BILLING',
+            # Transaction codes
+            'B1', 'B2', 'B3', 'P1', 'P2', 'PA', 'QTY', 'DIN', 'DUR', 'MR',
+            
+            # Pharmacy chain names
+            'CVS', 'WALGREENS', 'WALMART', 'RITE AID', 'KROGER', 'PUBLIX',
+            'COSTCO', 'TARGET', 'SAFEWAY', 'ALBERTSONS', 'WEGMANS', 'MEIJER',
+            'EXPRESS SCRIPTS', 'CAREMARK', 'OPTUMRX', 'HUMANA', 'CIGNA',
+            
+            # Insurance company names
+            'AETNA', 'CIGNA', 'HUMANA', 'UNITED', 'ANTHEM', 'KAISER', 'BCBS',
+            'MEDICARE', 'MEDICAID', 'TRICARE', 'WELLCARE', 'CENTENE', 'MOLINA',
+            'BLUE CROSS', 'BLUE SHIELD', 'UNITEDHEALTHCARE',
+            
+            # Drug manufacturer names
+            'PFIZER', 'MERCK', 'TEVA', 'MYLAN', 'SANDOZ', 'NOVARTIS', 'ABBVIE',
+            'LILLY', 'AMGEN', 'BRISTOL', 'JOHNSON', 'GLAXO', 'ASTRAZENECA',
+            'AUROBINDO', 'LUPIN', 'APOTEX', 'ZYDUS', 'HIKMA', 'VIATRIS',
+            
+            # Medical titles
+            'DR', 'MD', 'DO', 'PHARMD', 'RPH', 'NP', 'PA', 'RN', 'LPN',
+            'DDS', 'DPM', 'OD', 'DC', 'APRN', 'FNP', 'CNP',
+            
+            # More rejection/claim message terms
+            'FORMULARY', 'AUTHORIZATION', 'THERAPY', 'LIMIT', 'OVERRIDE',
+            'REVERSAL', 'ADJUDICATION', 'DISPENSED', 'DISPENSING', 'BILLING',
+            'ELIGIBILITY', 'ELIGIBLE', 'INELIGIBLE', 'VERIFICATION', 'VALIDATED',
         }
+        
+        # Create lowercase set for case-insensitive matching
+        false_positive_terms_lower = {t.lower() for t in false_positive_terms}
+        
+        # ================================================================
+        # REGEX PATTERNS - Patterns to skip
+        # ================================================================
         
         # Numeric patterns that are system IDs, not personal info
         system_number_patterns = [
-            r'^\d{1,4}$',       # Short numbers (1-4 digits)
-            r'^\d{5}$',         # ZIP codes (5 digits) - common in pharmacy data
-            r'^\d{6}$',         # BIN numbers
-            r'^\d{7}$',         # NCPDP IDs
-            r'^\d{10,11}$',     # RX numbers, Provider IDs
-            r'^\d{14}$',        # GPI codes
-            r'^\d{2}:\d{2}:\d{2}$',  # Time format
-            r'^[A-Z]\d+$',      # Transaction codes like B1, Z340100
-            r'^\d{5}\.\.\.$',   # Truncated ZIP codes like "35115..."
+            r'^\d{1,4}$',               # Short numbers (1-4 digits)
+            r'^\d{5}$',                 # ZIP codes (5 digits)
+            r'^\d{6}$',                 # BIN numbers (6 digits)
+            r'^\d{7}$',                 # NCPDP IDs (7 digits)
+            r'^(19|20)\d{6}$',          # YYYYMMDD dates (8 digits)
+            r'^\d{8}$',                 # 8-digit codes
+            r'^\d{9}$',                 # 9-digit codes
+            r'^\d{10,11}$',             # NPI, RX numbers (10-11 digits)
+            r'^\d{12,18}$',             # Long claim/transaction IDs
+            r'^\d{14}$',                # GPI codes
+            r'^\d{2}:\d{2}:\d{2}$',     # Time format HH:MM:SS
+            r'^[A-Z]\d+$',              # Letter + digits (B1, Z340100)
+            r'^\d{5}\.{3}$',            # Truncated ZIP (35115...)
+            r'^\d+\.\d+$',              # Decimal numbers (prices)
+            r'^0+$',                    # All zeros (placeholder)
+            r'^\$\d+\.?\d*$',           # Dollar amounts
+            r'^#\d+$',                  # Hashtag numbers (#1234)
         ]
         
+        # Drug dosage pattern
+        drug_dosage_pattern = r'^\d+\.?\d*\s*(MG|MCG|ML|G|IU|UNITS?|MEQ)\s*(TAB|TABLET|TABLETS|CAP|CAPS|CAPSULE|CAPSULES|SOL|SOLUTION|SUSP|SUSPENSION|INJ|INJECTION|CREAM|OINT|OINTMENT|GEL|PATCH|SPRAY|DROPS|SYRUP|POWDER|GRANULES?|LOZENGE|SUPPOSITORY)?'
+        
+        # Alphanumeric code patterns
+        alphanumeric_patterns = [
+            r'^[A-Z]{1,4}\d{2,8}$',     # AP711, CA12345, GML001
+            r'^[A-Z]{2,6}\d{2,6}$',     # APNCP321
+            r'^\d{2,6}[A-Z]{2,6}$',     # Numbers then letters
+            r'^[a-z]+\d+$',             # date8, message5, test4
+            r'^[a-z]+[A-Z][a-zA-Z]*$',  # camelCase (memberId)
+            r'^v\d+$',                  # API version (v1, v2)
+            r'^t\d+$',                  # Test IDs (t101, t102)
+        ]
+        
+        # ================================================================
+        # FILTER ENTITIES
+        # ================================================================
         filtered_entities = []
         
         for entity in detected_entities:
             text_value = entity["text"]
             entity_type = entity["entity_type"]
+            text_upper = text_value.upper()
+            text_lower = text_value.lower()
+            text_stripped = text_value.strip()
             
-            # Skip if it's a known false positive term
-            if text_value in false_positive_patterns:
-                continue
-                
-            # Skip if it matches system number patterns
-            is_system_number = any(re.match(pattern, text_value) for pattern in system_number_patterns)
-            if is_system_number:
-                continue
-                
-            # Skip very short codes that are likely system codes
-            if len(text_value) <= 3 and text_value.isupper():
+            # --- Universal Filters ---
+            
+            # Skip very short (≤3 chars) - preserves original behavior
+            if len(text_stripped) <= 3:
                 continue
             
-            # CRITICAL: Skip field names detected as PERSON (camelCase, snake_case)
-            # E.g., "groupNumber", "member_id", "claim_status"
+            # Skip if exact match in allowlist
+            if text_value in false_positive_terms:
+                continue
+            if text_lower in false_positive_terms_lower:
+                continue
+            
+            # Skip if matches system number pattern
+            if any(re.match(p, text_stripped) for p in system_number_patterns):
+                continue
+            
+            # Skip drug dosage patterns (CRITICAL: fixes "500MG TAB" false positive)
+            if re.match(drug_dosage_pattern, text_upper, re.IGNORECASE):
+                continue
+            
+            # Skip if contains drug dosage
+            if re.search(r'\d+\s*(MG|MCG|ML|G)\b', text_upper):
+                continue
+            
+            # Skip common drug names (by suffix pattern)
+            drug_suffixes = ('statin', 'pril', 'olol', 'sartan', 'dipine', 'prazole',
+                           'cillin', 'mycin', 'azole', 'formin', 'mab', 'nib', 'afil',
+                           'tidine', 'cycline', 'floxacin', 'sone', 'olone', 'gliptin')
+            if any(text_lower.endswith(suffix) for suffix in drug_suffixes):
+                continue
+            
+            # Skip pharmacy chain keywords
+            chain_keywords = ('walgreens', 'cvs', 'walmart', 'rite aid', 'costco', 
+                            'kroger', 'publix', 'safeway', 'target')
+            if any(chain in text_lower for chain in chain_keywords):
+                continue
+            
+            # Skip alphanumeric codes
+            if any(re.match(p, text_stripped, re.IGNORECASE) for p in alphanumeric_patterns):
+                continue
+            
+            # Skip if contains underscore (field names, token refs)
+            if '_' in text_stripped:
+                continue
+            
+            # Skip short uppercase codes
+            if len(text_stripped) <= 4 and text_stripped.isupper():
+                continue
+            
+            # --- Entity Type Specific Filters ---
+            
             if entity_type == "PERSON":
-                # camelCase pattern: starts lowercase, contains uppercase
-                if re.match(r'^[a-z]+[A-Z]', text_value):
-                    continue
-                # snake_case pattern: contains underscores
-                if '_' in text_value and text_value.islower():
-                    continue
-                # CONSTANT_CASE: all caps with underscores
-                if '_' in text_value and text_value.isupper():
+                # All-caps single word (4+ chars) - likely code/term
+                if text_stripped.isupper() and ' ' not in text_stripped and len(text_stripped) >= 4:
                     continue
                 
-            # Keep legitimate PII
+                # Contains digits (names don't have digits)
+                if re.search(r'\d', text_stripped):
+                    continue
+                
+                # All-caps alphanumeric (system codes)
+                if text_stripped.isupper() and re.match(r'^[A-Z0-9]+$', text_stripped):
+                    has_letters = any(c.isalpha() for c in text_stripped)
+                    has_numbers = any(c.isdigit() for c in text_stripped)
+                    if has_letters and has_numbers:
+                        continue
+            
+            elif entity_type == "PHONE_NUMBER":
+                # Decimal numbers (prices)
+                if re.match(r'^\d+\.\d+$', text_stripped):
+                    continue
+                # 10-11 solid digits (NPI, RxNumber)
+                if re.match(r'^\d{10,11}$', text_stripped):
+                    continue
+                # Date formats: DD.MM.YYYY, MM.DD.YYYY, DD/MM/YYYY, etc.
+                if re.match(r'^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$', text_stripped):
+                    continue
+                # Date formats: YYYY-MM-DD, YYYY.MM.DD
+                if re.match(r'^\d{4}[./-]\d{1,2}[./-]\d{1,2}$', text_stripped):
+                    continue
+                # Short numbers (6 digits or less) - not phone numbers
+                if re.match(r'^\d{1,6}$', text_stripped):
+                    continue
+            
+            elif entity_type == "US_DRIVER_LICENSE":
+                # Short codes
+                if len(text_stripped) <= 6:
+                    continue
+                # YYYYMMDD dates
+                if re.match(r'^(19|20)\d{6}$', text_stripped):
+                    continue
+                # Long numeric IDs
+                if re.match(r'^\d{8,18}$', text_stripped):
+                    continue
+            
+            elif entity_type == "US_PASSPORT":
+                # All zeros
+                if re.match(r'^0+$', text_stripped):
+                    continue
+                # Common test values
+                if text_stripped in {'123456789', '987654321', '000000000'}:
+                    continue
+            
+            elif entity_type == "LOCATION":
+                # camelCase (field names)
+                if re.match(r'^[a-z]+[A-Z]', text_stripped):
+                    continue
+                # System codes with numbers
+                if text_stripped.isupper() and re.search(r'\d', text_stripped):
+                    continue
+                # 2-letter state abbreviations
+                if len(text_stripped) == 2 and text_stripped.isupper() and text_stripped.isalpha():
+                    continue
+            
+            # ================================================================
+            # PHARMACY DOMAIN IDENTIFIERS - Defense-in-Depth Strategy
+            # ================================================================
+            # CLAIM_ID and RX_NUMBER: NOW MASKED for privacy (defense-in-depth)
+            # - Privacy: LLM doesn't see real claim IDs → can't correlate claims
+            # - Functional: Claim ID extracted from user query BEFORE masking
+            # - HIPAA: Follows "minimum necessary" principle
+            # - Leakage: Still allowed in leakage detection (see nodes/safety.py)
+            # 
+            # NDC: Already handled above in universal filters (drug codes - not masked)
+            # 
+            # REMOVED: Lines below previously skipped CLAIM_ID/RX_NUMBER masking
+            # elif entity_type in ("CLAIM_ID", "RX_NUMBER"):
+            #     continue
+            
+            # Keep this entity - it passed all filters (likely real PII)
             filtered_entities.append(entity)
         
         return filtered_entities
