@@ -144,11 +144,22 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             
             # FIX: Normalize LLM entity keys to match Entity Extractor format
             # LLM uses singular keys; Confidence Checker expects plural list keys
+            # ALSO: Filter out None values to prevent "claim None" in responses
             if new_entities:
-                if "claim_number" in new_entities and "claim_ids" not in new_entities:
+                # Filter out None values first
+                new_entities = {k: v for k, v in new_entities.items() if v is not None}
+                
+                # Only create list keys if the value exists and is not None
+                if "claim_number" in new_entities and new_entities["claim_number"] and "claim_ids" not in new_entities:
                     new_entities["claim_ids"] = [new_entities["claim_number"]]
-                if "sequence_number" in new_entities and "claim_sequences" not in new_entities:
+                if "sequence_number" in new_entities and new_entities["sequence_number"] and "claim_sequences" not in new_entities:
                     new_entities["claim_sequences"] = [new_entities["sequence_number"]]
+                
+                # Also filter out lists containing only None
+                if "claim_ids" in new_entities and new_entities["claim_ids"] == [None]:
+                    del new_entities["claim_ids"]
+                if "claim_sequences" in new_entities and new_entities["claim_sequences"] == [None]:
+                    del new_entities["claim_sequences"]
             
             logger.info(f"LLM Response - Intent: {new_intent}, Confidence: {new_confidence:.2f}")
             logger.info(f"   Entities: {new_entities}")
