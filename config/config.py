@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.1
     top_p: float = 0.95
-    max_output_tokens: int = 2048
+    max_output_tokens: int = 4096
     project_id: str = "pbm-poc-coderev-genai-poc"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
     location: str = "us-central1"  # ⚠️ Overridden by LOCATION env var
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
-    conversation_history_limit: int = 5  # Number of past conversations to include in response generation
+    conversation_history_limit: int = 50  # Number of past conversations to include in response generation
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
 
     # Safety
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     temporarily_disable_llm_judge_path_for_testing: bool = False  # Set to False when LLM judge implementation is complete
 
     # Cache
-    enable_semantic_cache: bool = True
+    enable_semantic_cache: bool = False
     
     # Orchestrator
     remove_punctuation_in_normalization: bool = True
