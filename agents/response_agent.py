@@ -24,6 +24,7 @@ from core.errors.models import create_internal_error, create_llm_error
 from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
+import uuid
 
 logger = get_logger(__name__)
 
@@ -943,9 +944,16 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 }
             )
         
+        # Generate unique response_id for feedback tracking
+        response_id = str(uuid.uuid4())
+        logger.info(f"🆔 Generated response_id: {response_id}")
+        
         # Build result - always use 'response' field for both modes
         # The 'needs_clarification' flag in state already indicates if this is a question
-        result = {"response": response_text}
+        result = {
+            "response": response_text,
+            "response_id": response_id
+        }
         
         if needs_clarification:
             logger.info("📝 Set 'response' field with clarification question")
@@ -991,11 +999,16 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         )
         
         logger.error(f"🚨 Exception in response agent: {e}\n{tb}")
+
+        # Generate response_id even for errors (for tracking/feedback)
+        error_response_id = str(uuid.uuid4())
+        logger.info(f"🆔 Generated response_id for error: {error_response_id}")
         
         # Return graceful error state (pattern from agents/intent_agent.py)
         result = {
             "error": error.user_message,
             "response": error.user_message,
+            "response_id": error_response_id,
             "metadata": {
                 **state.get("metadata", {}),
                 "error_occurred": True,
@@ -1028,6 +1041,7 @@ async def _mock_response(state: AgentState) -> Dict[str, Any]:
     
     intent = state.get("intent", "unknown")
     tool_results = state.get("tool_results", {})
+    response_id = str(uuid.uuid4())
     
     # Generate mock response based on intent and data
     if intent == "find_claim" and tool_results:
@@ -1070,4 +1084,7 @@ PHARMACY: {prescription.get('pharmacyName', 'N/A')}
 The real implementation will provide detailed, formatted responses based on claim data."""
     
     logger.info("⚙️ Returned mock response")
-    return {"response": response}
+    return {
+        "response": response,
+        "response_id": response_id
+    }

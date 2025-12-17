@@ -13,12 +13,15 @@ Collections:
 """
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from datetime import datetime
 import json
 import uuid
 from persistence import PersistenceStore, EventType
 from core.logger import get_logger
+
+if TYPE_CHECKING:
+    from core.node_models import ResponseFeedbackSchema
 
 logger = get_logger(__name__)
 
@@ -30,10 +33,13 @@ class MongoDBPersistenceStore(PersistenceStore):
         from config.config import settings
 
         # Get connection string from config or parameter
+        # Support both new (mongodb_uri) and legacy (mongodb_connection_string) config names
         if connection_string is None:
-            connection_string = getattr(settings, 'mongodb_connection_string', 'mongodb://localhost:27017')
+            connection_string = getattr(settings, 'mongodb_uri', None) or \
+                              getattr(settings, 'mongodb_connection_string', 'mongodb://localhost:27017')
         if database_name is None:
-            database_name = getattr(settings, 'mongodb_database_name', 'myclaims-DEV')
+            database_name = getattr(settings, 'mongodb_database', None) or \
+                          getattr(settings, 'mongodb_database_name', 'myclaims-DEV')
 
         self.connection_string = connection_string
         self.database_name = database_name
@@ -594,6 +600,105 @@ class MongoDBPersistenceStore(PersistenceStore):
         deleted_count = result.deleted_count
         logger.info(f"🗑️  Deleted {deleted_count} conversations for session {session_id}")
         return deleted_count > 0
+
+    # ============================================================================
+    # RESPONSE FEEDBACK METHODS
+    # ============================================================================
+
+    async def save_response_feedback(self, feedback: "ResponseFeedbackSchema") -> Dict[str, Any]:
+        """
+        Save or update response feedback in MongoDB
+        
+        Args:
+            feedback: ResponseFeedbackSchema object containing feedback data
+            
+        Returns:
+            Dict with operation status and details
+        """
+        try:
+            db = await self._get_connection()
+            collection = db["Response_Feedback"]
+            
+            # Check if feedback already exists for this response_id
+            existing_feedback = await collection.find_one(
+                {"response_id": feedback.response_id}
+            )
+            
+            feedback_dict = feedback.dict()
+            
+            if existing_feedback:
+                # Update existing feedback (user changed their mind)
+                result = await collection.update_one(
+                    {"response_id": feedback.response_id},
+                    {"$set": feedback_dict}
+                )
+                logger.info(f"👍👎 Feedback updated for response_id: {feedback.response_id}")
+                return {
+                    "status": "updated",
+                    "matched_count": result.matched_count,
+                    "modified_count": result.modified_count,
+                    "response_id": feedback.response_id
+                }
+            else:
+                # Insert new feedback
+                result = await collection.insert_one(feedback_dict)
+                logger.info(f"👍👎 Feedback created for response_id: {feedback.response_id}")
+                return {
+                    "status": "created",
+                    "inserted_id": str(result.inserted_id),
+                    "response_id": feedback.response_id
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error saving response feedback: {str(e)}")
+            raise
+    
+    async def get_all_feedback_with_filter(
+        self, 
+        query_filter: Dict[str, Any], 
+        limit: int = 100, 
+        skip: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve all feedback with optional filtering and pagination.
+        
+        Args:
+            query_filter: MongoDB query filter
+            limit: Maximum number of results
+            skip: Number of results to skip
+            
+        Returns:
+            List of feedback records
+        """
+        try:
+            db = await self._get_connection()
+            collection = db["Response_Feedback"]
+            
+            cursor = collection.find(query_filter)\
+                .sort("response_createddatetime", -1)\
+                .skip(skip)\
+                .limit(limit)
+            
+            feedbacks = await cursor.to_list(length=limit)
+            
+            # Convert ObjectId to string and format data
+            for feedback in feedbacks:
+                if "_id" in feedback:
+                    feedback["_id"] = str(feedback["_id"])
+                # Convert datetime to ISO format
+                if "response_createddatetime" in feedback:
+                    if hasattr(feedback["response_createddatetime"], 'isoformat'):
+                        feedback["response_createddatetime"] = feedback["response_createddatetime"].isoformat()
+                # Convert enum to string
+                if "feedback_type" in feedback:
+                    feedback["feedback_type"] = str(feedback["feedback_type"]).replace("FeedbackType.", "")
+            
+            logger.info(f"📊 Retrieved {len(feedbacks)} feedback entries with filters: {query_filter}")
+            return feedbacks
+            
+        except Exception as e:
+            logger.error(f"❌ Error retrieving filtered feedback: {e}")
+            return []
 
     async def close(self) -> None:
         """Close MongoDB connection"""
