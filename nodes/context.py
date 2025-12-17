@@ -251,14 +251,14 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             session_id=session_id,
             role="user",
             content=user_message,
-            max_messages=settings.conversation_history_window
+            max_messages=settings.conversation_history_limit
         )
 
         await _memory_store.append_to_session(
             session_id=session_id,
             role="assistant",
             content=agent_response,
-            max_messages=settings.conversation_history_window
+            max_messages=settings.conversation_history_limit
         )
 
         # Update long-term memory facts (extract important facts)
