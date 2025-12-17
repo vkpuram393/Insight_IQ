@@ -12,6 +12,126 @@ from enum import Enum
 
 
 # ============================================================================
+# FEEDBACK MODELS
+# ============================================================================
+# 
+# Response feedback schemas for collecting user ratings (thumbs up/down).
+# 
+# MOVED FROM: state/schema.py → core/node_models.py
+# REASON: Better organization - node_models.py contains all data models
+# 
+# USAGE:
+# - Used by: api/routes.py (feedback endpoint), persistence stores (MongoDB/SQLite)
+# - Flow: User clicks thumbs up/down → API validates → Store in database
+# - Insert-only: Every feedback action creates a NEW record (no updates)
+# 
+# DATABASE STORAGE:
+# - MongoDB: Response_Feedback collection
+# - SQLite: response_feedback table
+# ============================================================================
+
+class FeedbackType(str, Enum):
+    """
+    Enum for feedback types
+    
+    Values:
+        THUMBSUP: Positive feedback (user liked the response)
+        THUMBSDOWN: Negative feedback (user disliked the response)
+    """
+    THUMBSUP = "THUMBSUP"
+    THUMBSDOWN = "THUMBSDOWN"
+
+
+class ResponseFeedbackSchema(BaseModel):
+    """
+    Schema for storing response feedback in database (MongoDB/SQLite)
+    
+    This schema represents a feedback record stored in the Response_Feedback collection.
+    Each user interaction (thumbs up/down) creates a NEW record (insert-only design).
+    
+    Fields:
+        response_id: UUID linking feedback to a specific agent response
+        response_feedback: Boolean flag (True=thumbsup, False=thumbsdown)
+        feedback_type: Enum value (THUMBSUP or THUMBSDOWN)
+        response_createddatetime: Timestamp when feedback was submitted
+        session_id: Session identifier for conversation context
+        query_text: Original user query (for analytics)
+        response_text: Agent's response (for analytics)
+        user_comment: Optional comment from user (no length limit)
+        user_id: User identifier (optional)
+    
+    Insert-Only Design:
+        - Every feedback submission creates a NEW record
+        - No updates to existing records
+        - Allows tracking feedback history over time
+        - Example: User clicks thumbs up, then thumbs down = 2 separate records
+    
+    Database Storage:
+        - MongoDB: Response_Feedback collection
+        - SQLite: response_feedback table
+    """
+    response_id: str = Field(..., description="UUID of the response")
+    response_feedback: bool = Field(..., description="True for thumbsup, False for thumbsdown")
+    feedback_type: FeedbackType = Field(..., description="THUMBSUP or THUMBSDOWN")
+    response_createddatetime: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when feedback was created")
+    session_id: Optional[str] = Field(None, description="Session ID from conversation history")
+    query_text: Optional[str] = Field(None, description="Original query text")
+    response_text: Optional[str] = Field(None, description="Original response text")
+    user_comment: Optional[str] = Field(None, description="Optional user comment (no length limit)")
+    user_id: Optional[str] = Field(None, description="User identifier")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "response_id": "550e8400-e29b-41d4-a716-446655440000",
+                "response_feedback": True,
+                "feedback_type": "THUMBSUP",
+                "session_id": "session_123",
+                "query_text": "What is my claim status?",
+                "response_text": "Your claim is approved...",
+                "user_comment": "Very helpful! The response was clear and answered all my questions.",
+                "user_id": "user_abc"
+            }
+        }
+
+
+class FeedbackRequestSchema(BaseModel):
+    """
+    Schema for API request when submitting feedback
+    
+    This schema validates incoming feedback requests from the frontend.
+    Used by the POST /api/v1/feedback endpoint.
+    
+    Required Fields:
+        - response_id: UUID of the response being rated
+        - feedback_type: THUMBSUP or THUMBSDOWN
+    
+    Optional Fields:
+        - session_id: Session identifier
+        - query_text: Original user query
+        - response_text: Agent's response
+        - user_comment: User's comment (no length limit - user can write as much as they want)
+        - user_id: User identifier
+    
+    API Usage Example:
+        POST /api/v1/feedback
+        {
+            "response_id": "550e8400-e29b-41d4-a716-446655440000",
+            "feedback_type": "THUMBSUP",
+            "user_comment": "Great response! Very detailed and helpful.",
+            "user_id": "user_abc"
+        }
+    """
+    response_id: str = Field(..., description="UUID of the response to rate")
+    feedback_type: FeedbackType = Field(..., description="THUMBSUP or THUMBSDOWN")
+    session_id: Optional[str] = Field(None, description="Optional session identifier")
+    query_text: Optional[str] = Field(None, description="Optional original query")
+    response_text: Optional[str] = Field(None, description="Optional response text")
+    user_comment: Optional[str] = Field(None, description="Optional user comment (no length limit)")
+    user_id: Optional[str] = Field(None, description="Optional user identifier")
+
+
+# ============================================================================
 # INTENT CLASSIFICATION MODELS
 # ============================================================================
 

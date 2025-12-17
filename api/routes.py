@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    response_id: Optional[str] = None  # ✅ UUID for feedback tracking
     intent: Optional[str] = None
     confidence: Optional[float] = None
     entities: Optional[Dict[str, Any]] = None  # ✅ Extracted entities
@@ -90,6 +91,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
+            response_id=final_state.get("response_id"),  # ✅ Include response_id for feedback
             intent=intent,
             confidence=confidence,
             entities=final_state.get("entities"),  # ✅ Include extracted entities
@@ -452,3 +454,172 @@ async def clear_session(session_id: str):
     except Exception as e:
         logger.error(f"Failed to clear session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# FEEDBACK ENDPOINT (PRODUCTION)
+# ============================================================================
+
+@router.post("/feedback")
+async def submit_feedback(request: dict):
+    """
+    Submit user feedback (thumbs up/down) for a response.
+    
+    This endpoint is called by the UI when a user clicks thumbs up/down
+    and optionally enters a comment.
+    
+    Flow:
+    1. User receives response from chatbot
+    2. User clicks 👍 or 👎 button in UI
+    3. UI prompts user to enter optional comment (max 40 chars)
+    4. Frontend calls this endpoint with feedback data
+    5. Backend stores in response_feedback table
+    
+    Request body:
+    {
+        "response_id": "uuid-of-response",
+        "feedback_type": "THUMBSUP" or "THUMBSDOWN",
+        "session_id": "session-id",
+        "query_text": "original user query",
+        "response_text": "agent response",
+        "user_comment": "optional comment (max 40 chars)",
+        "user_id": "optional user id"
+    }
+    """
+    try:
+        from core.node_models import ResponseFeedbackSchema, FeedbackType
+        from persistence import PersistenceStoreFactory
+        
+        # Validate required fields
+        response_id = request.get("response_id")
+        feedback_type_str = request.get("feedback_type", "").upper()
+        session_id = request.get("session_id")
+        query_text = request.get("query_text", "")
+        response_text = request.get("response_text", "")
+        user_comment = request.get("user_comment", "")
+        user_id = request.get("user_id")
+        
+        if not response_id:
+            raise HTTPException(status_code=400, detail="response_id is required")
+        
+        if feedback_type_str not in ["THUMBSUP", "THUMBSDOWN"]:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid feedback_type. Must be THUMBSUP or THUMBSDOWN"
+            )
+        
+        # Map string to FeedbackType enum
+        feedback_type = FeedbackType[feedback_type_str]
+        
+        # Create feedback schema
+        feedback = ResponseFeedbackSchema(
+            response_id=response_id,
+            response_feedback=(feedback_type == FeedbackType.THUMBSUP),
+            feedback_type=feedback_type,
+            session_id=session_id,
+            query_text=query_text,
+            response_text=response_text,
+            user_comment=user_comment,  # No length limit - user can write as much as they want
+            user_id=user_id,
+            response_createddatetime=datetime.now(timezone.utc)
+        )
+        
+        # Store feedback
+        store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        result = await store.save_response_feedback(feedback)
+        
+        logger.info(f"✅ Feedback submitted: {feedback_type_str} for response {response_id} | comment: '{user_comment[:20] if user_comment else 'none'}...'")
+        
+        return {
+            "status": "success",
+            "message": "Feedback stored successfully",
+            "response_id": response_id,
+            "feedback_type": feedback_type_str,
+            "result": result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error storing feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to store feedback: {str(e)}")
+
+
+@router.get("/feedback")
+async def get_feedback(
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0
+):
+    """
+    Retrieve feedback records from Response_Feedback collection.
+    
+    Query Parameters:
+    - user_id (optional): Filter by user ID
+    - session_id (optional): Filter by session ID
+    - limit (optional): Maximum number of records to return (default: 100)
+    - skip (optional): Number of records to skip for pagination (default: 0)
+    
+    Returns:
+    - List of feedback records matching the filter criteria
+    
+    Examples:
+    - GET /api/v1/feedback?user_id=test_user_123
+    - GET /api/v1/feedback?session_id=Test-1session-098
+    - GET /api/v1/feedback?user_id=test_user_123&session_id=Test-1session-098
+    - GET /api/v1/feedback?limit=10&skip=0
+    """
+    try:
+        from persistence import PersistenceStoreFactory
+        
+        # Validate at least one filter is provided
+        if not user_id and not session_id:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one filter parameter is required (user_id or session_id)"
+            )
+        
+        # Build query filter
+        query_filter = {}
+        if user_id:
+            query_filter["user_id"] = user_id
+        if session_id:
+            query_filter["session_id"] = session_id
+        
+        # Validate pagination parameters
+        if limit < 1 or limit > 1000:
+            raise HTTPException(
+                status_code=400,
+                detail="Limit must be between 1 and 1000"
+            )
+        if skip < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Skip must be non-negative"
+            )
+        
+        # Get feedback from persistence store
+        store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        feedbacks = await store.get_all_feedback_with_filter(
+            query_filter=query_filter,
+            limit=limit,
+            skip=skip
+        )
+        
+        logger.info(f"📊 Retrieved {len(feedbacks)} feedback records | filters: {query_filter}")
+        
+        return {
+            "status": "success",
+            "count": len(feedbacks),
+            "limit": limit,
+            "skip": skip,
+            "filters": query_filter,
+            "data": feedbacks
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error retrieving feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve feedback: {str(e)}")

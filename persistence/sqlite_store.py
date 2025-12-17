@@ -16,11 +16,14 @@ For large-scale production, replace with Firestore or BigQuery.
 import aiosqlite
 import json
 import uuid
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
 from persistence import PersistenceStore, EventType
 from core.logger import get_logger
+
+if TYPE_CHECKING:
+    from core.node_models import ResponseFeedbackSchema
 
 logger = get_logger(__name__)
 
@@ -739,6 +742,183 @@ class SQLitePersistenceStore(PersistenceStore):
         deleted_count = cursor.rowcount
         logger.info(f"🗑️  Deleted {deleted_count} conversations for session {session_id}")
         return deleted_count
+
+    # ============================================================================
+    # RESPONSE FEEDBACK METHODS
+    # ============================================================================
+
+    async def save_response_feedback(self, feedback: "ResponseFeedbackSchema") -> Dict[str, Any]:
+        """
+        Save or update response feedback in SQLite
+        
+        Args:
+            feedback: ResponseFeedbackSchema object containing feedback data
+            
+        Returns:
+            Dict with operation status and details
+        """
+        try:
+            db = await self._get_connection()
+            
+            # Check if feedback table exists, create if not
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS response_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    response_id TEXT UNIQUE NOT NULL,
+                    response_feedback INTEGER NOT NULL,
+                    feedback_type TEXT NOT NULL,
+                    response_createddatetime TEXT NOT NULL,
+                    session_id TEXT,
+                    query_text TEXT,
+                    response_text TEXT,
+                    user_comment TEXT
+                )
+            """)
+            
+            # Check if feedback already exists
+            cursor = await db.execute(
+                "SELECT id FROM response_feedback WHERE response_id = ?",
+                (feedback.response_id,)
+            )
+            existing = await cursor.fetchone()
+            
+            feedback_bool = 1 if feedback.response_feedback else 0
+            
+            if existing:
+                # Update existing feedback
+                user_comment = feedback.user_comment or ""
+                
+                await db.execute("""
+                    UPDATE response_feedback 
+                    SET response_feedback = ?,
+                        feedback_type = ?,
+                        response_createddatetime = ?,
+                        session_id = ?,
+                        query_text = ?,
+                        response_text = ?,
+                        user_comment = ?
+                    WHERE response_id = ?
+                """, (
+                    feedback_bool,
+                    feedback.feedback_type.value,
+                    feedback.response_createddatetime.isoformat(),
+                    feedback.session_id,
+                    feedback.query_text,
+                    feedback.response_text,
+                    user_comment,
+                    feedback.response_id
+                ))
+                await db.commit()
+                logger.info(f"👍👎 Feedback updated for response_id: {feedback.response_id}")
+                return {
+                    "status": "updated",
+                    "matched_count": 1,
+                    "modified_count": 1,
+                    "response_id": feedback.response_id
+                }
+            else:
+                # Insert new feedback
+                user_comment = feedback.user_comment or ""
+                
+                cursor = await db.execute("""
+                    INSERT INTO response_feedback (
+                        response_id, response_feedback, feedback_type,
+                        response_createddatetime, session_id, query_text,
+                        response_text, user_comment
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    feedback.response_id,
+                    feedback_bool,
+                    feedback.feedback_type.value,
+                    feedback.response_createddatetime.isoformat(),
+                    feedback.session_id,
+                    feedback.query_text,
+                    feedback.response_text,
+                    user_comment
+                ))
+                await db.commit()
+                logger.info(f"👍👎 Feedback created for response_id: {feedback.response_id}")
+                return {
+                    "status": "created",
+                    "inserted_id": str(cursor.lastrowid),
+                    "response_id": feedback.response_id
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error saving response feedback: {str(e)}")
+            raise
+    
+    async def get_all_feedback_with_filter(
+        self, 
+        query_filter: Dict[str, Any], 
+        limit: int = 100, 
+        skip: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve all feedback with optional filtering and pagination.
+        
+        Args:
+            query_filter: Dict with filters (session_id, user_id, feedback_type)
+            limit: Maximum number of results
+            skip: Number of results to skip
+            
+        Returns:
+            List of feedback records
+        """
+        try:
+            db = await self._get_connection()
+            
+            # Build WHERE clause from query_filter
+            where_conditions = []
+            params = []
+            
+            if "session_id" in query_filter:
+                where_conditions.append("session_id = ?")
+                params.append(query_filter["session_id"])
+            
+            if "user_id" in query_filter:
+                # SQLite doesn't have user_id column by default
+                logger.warning("⚠️ user_id filter not supported in SQLite (column doesn't exist)")
+            
+            if "feedback_type" in query_filter:
+                where_conditions.append("feedback_type = ?")
+                params.append(query_filter["feedback_type"])
+            
+            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+            
+            # Add pagination
+            params.extend([limit, skip])
+            
+            query = f"""
+                SELECT * FROM response_feedback 
+                WHERE {where_clause}
+                ORDER BY response_createddatetime DESC
+                LIMIT ? OFFSET ?
+            """
+            
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            
+            feedbacks = []
+            for row in rows:
+                feedbacks.append({
+                    "_id": str(row["id"]),
+                    "response_id": row["response_id"],
+                    "response_feedback": bool(row["response_feedback"]),
+                    "feedback_type": row["feedback_type"],
+                    "response_createddatetime": row["response_createddatetime"],
+                    "session_id": row["session_id"],
+                    "query_text": row["query_text"],
+                    "response_text": row["response_text"],
+                    "user_comment": row["user_comment"] if "user_comment" in row.keys() else ""
+                })
+            
+            logger.info(f"📊 Retrieved {len(feedbacks)} feedback entries with filters: {query_filter}")
+            return feedbacks
+            
+        except Exception as e:
+            logger.error(f"❌ Error retrieving filtered feedback: {e}")
+            return []
 
     async def close(self) -> None:
         """Close database connection"""
