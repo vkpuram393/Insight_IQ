@@ -48,14 +48,32 @@ class MongoDBEmbeddingStore:
         """
         Initialize MongoDB connection for embeddings
         
-        Args:
-            connection_string: MongoDB connection string (default from config)
-            database_name: Database name (default from config)
+        Connection string is constructed from environment variables:
+        - MONGODB_USER, MONGODB_PASSWORD (from Vault)
+        - MONGODB_HOST (from deployment config)
         """
+        import os
+        from urllib.parse import quote_plus
         from config.config import settings
         
-        self.connection_string = connection_string or settings.mongodb_connection_string
-        self.database_name = database_name or settings.mongodb_database_name
+        # Build connection string from environment variables (Vault + deployment config)
+        if connection_string is None:
+            mongodb_user = os.getenv('MONGODB_USER', '')
+            mongodb_password = os.getenv('MONGODB_PASSWORD', '')
+            mongodb_host = os.getenv('MONGODB_HOST', '')
+            
+            if mongodb_user and mongodb_password and mongodb_host:
+                encoded_password = quote_plus(mongodb_password)
+                connection_string = f"mongodb+srv://{mongodb_user}:{encoded_password}@{mongodb_host}/?retryWrites=true&w=majority"
+                logger.info("🔐 MongoDB embedding store using Vault credentials")
+            else:
+                connection_string = settings.mongodb_connection_string
+        
+        if database_name is None:
+            database_name = os.getenv('MONGODB_DATABASE_NAME', '') or settings.mongodb_database_name
+        
+        self.connection_string = connection_string
+        self.database_name = database_name
         self.client: Optional[AsyncIOMotorClient] = None
         self.db: Optional[AsyncIOMotorDatabase] = None
         
