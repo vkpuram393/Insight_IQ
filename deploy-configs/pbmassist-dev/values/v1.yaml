@@ -96,6 +96,7 @@ envSecrets: |-
       name: pss-myclaims-secrets-dev
 
 
+
 istioHttpRoutes:
   routes:
     - route: "/pss-myclaims-ai-agent/"
