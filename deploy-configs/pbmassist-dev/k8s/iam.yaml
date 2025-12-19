@@ -1,0 +1,9 @@
+resourceRef:
+  apiVersion: iam.cnrm.cloud.google.com/v1beta1
+  kind: IAMServiceAccount
+  external: projects/pbm-nonprod-myclaims/serviceAccounts/sa-myclaims-ai-dev@pbm-nonprod-myclaims.iam.gserviceaccount.com
+
+bindings:
+  - role: roles/iam.workloadIdentityUser
+    members:
+      - serviceAccount:pbm-nonprod-myclaims.svc.id.goog[pbmassist-dev/sa-myclaims-ai-dev]

@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.1
     top_p: float = 0.95
-    max_output_tokens: int = 4096
-    project_id: str = "pbm-poc-coderev-genai-poc"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
+    max_output_tokens: int = 2048
+    project_id: str = "pbm-nonprod-myclaims"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
     location: str = "us-central1"  # ⚠️ Overridden by LOCATION env var
 
     # LangSmith (optional)
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Langfuse (optional)
     langfuse_secret_key: str | None = None
     langfuse_public_key: str | None = None
-    langfuse_host: str | None = None
+    langfuse_host: str | None = "https://cloud.langfuse.com"
 
     # SSL Certificates (for CVS proxy/Zscaler)
     ssl_cert_file: str | None = None
@@ -76,14 +76,17 @@ class Settings(BaseSettings):
     #   - "mongodb": MongoDB database (requires MongoDB server, set connection details below)
     #   - "firestore": Google Cloud Firestore (future)
     #   - "bigquery": Google BigQuery (future)
-    persistence_store_type: str = "sqlite"  # Default fallback (overridden by .env)
+    persistence_store_type: str = "mongodb"  # Default fallback (overridden by .env)
     telemetry_db_path: str = "data/telemetry.db"  # Only used for SQLite
     
     # MongoDB Configuration (only used when persistence_store_type="mongodb")
     # Connection string format: mongodb+srv://<username>:<password>@<cluster>/<database>?retryWrites=true&w=majority
     # Or for direct IP: mongodb://<username>:<password>@<ip1>:<port>,<ip2>:<port>/<database>?replicaSet=<replica_set>
-    mongodb_connection_string: str = "mongodb://localhost:27017"  # Default local MongoDB
+    # mongodb_connection_string: str = "mongodb://localhost:27017"  # Default local MongoDB
+    #mongodb_connection_string: str = "mongodb+srv://myClaims_pt:O5VD3C6TEuH2WAUX@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
+    mongodb_connection_string: str = "mongodb+srv://myclaims_dev:1sw2tSZ89tjpn1sm@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
     mongodb_database_name: str = "myclaims-DEV"  # Database name (myclaims-DEV, myclaims-QA, myClaims-UAT, myClaims-PT)
+
     use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
     
     enable_telemetry: bool = True

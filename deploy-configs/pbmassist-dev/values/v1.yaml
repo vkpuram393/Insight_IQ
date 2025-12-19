@@ -1,0 +1,110 @@
+#namespace, app version and image details2
+envName: pbmassist-dev
+skipSecurityContext: true
+projectId: pbm-nonprod-myclaims   # top-level projectId
+
+#Workload Identity configuration..
+workloadIdentity:
+  enabled: true
+  # ksaName: sa-myclaims-ai-dev
+  # serviceAccounts: sa-myclaims-ai-dev@pbm-nonprod-myclaims.iam.gserviceaccount.com
+  # projectId: pbm-nonprod-myclaims
+  gcpProject: pbm-nonprod-myclaims
+  serviceAccountName: sa-myclaims-ai-dev
+  serviceAccountEmail: sa-myclaims-ai-dev@pbm-nonprod-myclaims.iam.gserviceaccount.com
+
+# App metadata
+appData:
+  envName: pbmassist-dev
+  nameSpace: pbmassist-dev
+  dockerHub: cvsh.jfrog.io
+  dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
+  dockerImageName: pss-myclaims-ai-agent
+  dockerImageTag: a0f6da79f2b4a10fbde325b6407172f791666284  # This will be overridden by the deployment workflow with git SHA tag
+
+
+#hpa settings - min and max replicas and minAvailable for PDB
+hpaSettings: 
+  minAvailable: 1
+  minReplicas: 1
+  maxReplicas: 3
+  averageUtilization: 80
+
+# Pod resource requests and limits
+resources:
+  requests:
+    cpu: "1"
+    memory: "1Gi"
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+
+# environment variables for app - secret values come from vault
+envVars: |
+  - name: ENABLE_TRACING
+    value: 'true'
+  - name: ENV
+    value: dev
+  - name: ENVIRONMENT
+    value: "dev"
+  - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    value: https://otelc-gmp-collector-grpc.nonprod.aig.aetna.com
+  - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    value: https://otelc-traces-collector-grpc.nonprod.aig.aetna.com
+  - name: OTEL_SERVICE_NAME
+    value: APM0017166
+  - name: GCP_PROJECT_ID
+    value: pbm-nonprod-myclaims
+  - name: PROJECT_ID
+    value: pbm-nonprod-myclaims
+  - name: ENV_NAME
+    value: pbmassist-dev
+  - name: LOCATION
+    value: us-east4
+  - name: APP_NAME
+    value: pss-myclaims-ai-agent
+  - name: APP_VERSION
+    value: "2.0.0"
+  - name: LOG_LEVEL
+    value: INFO
+  - name: USE_MOCK_LLM
+    value: "false"
+  - name: LLM_MODEL
+    value: "gemini-2.5-flash"
+  - name: DATABASE_URI
+    value: "sqlite:///:memory:"
+  - name: REDIS_URI
+    value: "redis://localhost:6379/0"
+  - name: PERSISTENCE_STORE_TYPE
+    value: "mongodb"
+  - name: MONGODB_DATABASE_NAME
+    value: "myclaims-DEV"
+  # ⚠️ MONGODB_CONNECTION_STRING should be set from Kubernetes Secret or Vault
+  # Option 1: From Kubernetes Secret (see k8s/mongodb-secret.yaml)
+  # - name: MONGODB_CONNECTION_STRING
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: mongodb-credentials
+  #       key: connection_string
+  # Option 2: From Vault (if using Vault integration)
+  # Format: mongodb+srv://myClaims_uat:cw5uPntYMO3HMrso@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority
+
+
+# Environment secrets from HashiCorp Vault
+envSecrets: |-
+  - secretRef:
+      name: pss-myclaims-secrets-dev
+
+
+istioHttpRoutes:
+  routes:
+    - route: "/pss-myclaims-ai-agent/"
+      matchHeaders: '^(.*?;)?\s*(canary=on)(;.*)?$'
+    - route: "/"
+    - route: "/api/"
+    - route: "/docs/"
+    - route: "/health"
+    - route: "/pss/pbmassist/v1"
+    - route: "/pss/pbmassist/"
+## Triggers 12
+  

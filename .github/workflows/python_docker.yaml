@@ -1,0 +1,35 @@
+name: Python Docker CI
+
+on:
+  workflow_call:
+    inputs:
+      PYTHON_VERSION:
+        required: true
+        type: string
+      PYTHON_TEST_COMMAND:
+        required: false
+        type: string
+        default: "pytest tests/ -v --tb=short"
+      PYTHON_DEPS_COMMAND:
+        required: false
+        type: string
+        default: "pip install -r requirements.txt"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ inputs.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: ${{ inputs.PYTHON_DEPS_COMMAND }}
+
+      - name: Run tests
+        run: ${{ inputs.PYTHON_TEST_COMMAND }}
+

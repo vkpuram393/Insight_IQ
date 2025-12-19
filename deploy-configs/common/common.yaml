@@ -1,0 +1,34 @@
+#app related data
+app:
+  name: pss-myclaims-ai-agent
+  port: 8000
+  gitRepoName: cvs-health-source-code/pss-myclaims-ai-agent
+  projectId: pbm-nonprod-myclaims
+
+#livenessProbe details
+livenessProbeDetails:
+  probePath: "/health"
+  initialDelaySeconds: 30
+
+#readinessProbe details
+readinessProbeDetails:
+  probePath: "/health"
+  initialDelaySeconds: 30
+
+#startupProbe details
+startupProbeDetails:
+  probePath: "/health"
+  initialDelaySeconds: 300
+  periodSeconds: 100
+  failureThreshold: 40
+  
+istioHttpRoutes:
+  routes:
+    - route: "/pss-myclaims-ai-agent/"
+      matchHeaders: '^(.*?;)?\s*(canary=on)(;.*)?$'
+    - route: "/"
+    - route: "/api/"
+    - route: "/docs/"
+    - route: "/health"
+    - route: "/pss/pbmassist/v1"
+    - route: "/pss/pbmassist/"

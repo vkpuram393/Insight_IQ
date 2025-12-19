@@ -17,6 +17,7 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from datetime import datetime
 import json
 import uuid
+from urllib.parse import quote_plus, urlparse, urlunparse
 from persistence import PersistenceStore, EventType
 from core.logger import get_logger
 
@@ -41,6 +42,25 @@ class MongoDBPersistenceStore(PersistenceStore):
             database_name = getattr(settings, 'mongodb_database', None) or \
                           getattr(settings, 'mongodb_database_name', 'myclaims-DEV')
 
+        # Validate and normalize connection string format
+        if connection_string and not connection_string.startswith(('mongodb://', 'mongodb+srv://')):
+            logger.warning(
+                f"⚠️  Connection string does not start with 'mongodb://' or 'mongodb+srv://'. "
+                f"Current format: {connection_string[:50]}..."
+            )
+            # Try to fix common issues
+            if connection_string.startswith('mongodb+srv:'):
+                # Missing // after mongodb+srv:
+                connection_string = connection_string.replace('mongodb+srv:', 'mongodb+srv://', 1)
+                logger.info(f"🔧 Fixed connection string format (added missing //)")
+            elif connection_string.startswith('mongodb:'):
+                # Missing // after mongodb:
+                connection_string = connection_string.replace('mongodb:', 'mongodb://', 1)
+                logger.info(f"🔧 Fixed connection string format (added missing //)")
+
+        # Normalize connection string: ensure credentials are URL-encoded
+        connection_string = self._normalize_connection_string(connection_string)
+
         self.connection_string = connection_string
         self.database_name = database_name
         self.client: Optional[AsyncIOMotorClient] = None
@@ -50,9 +70,9 @@ class MongoDBPersistenceStore(PersistenceStore):
 
     async def _get_connection(self):
         """Get or create MongoDB connection"""
-        if self.client is None:
+        if self.client is None or self.db is None:
             try:
-                # SSL certificate fix for macOS (commented out for team compatibility)
+                # Uncomment below if SSL certificate issues on macOS:
                 # import certifi
                 # tls_ca_file = certifi.where()
                 
@@ -61,8 +81,8 @@ class MongoDBPersistenceStore(PersistenceStore):
                     self.connection_string,
                     serverSelectionTimeoutMS=5000,  # 5 second timeout for server selection
                     connectTimeoutMS=10000,  # 10 second timeout for connection
-                    retryWrites=True,
-                    # tlsCAFile=tls_ca_file
+                    retryWrites=True
+                    # tlsCAFile=tls_ca_file  # Uncomment if using certifi above
                 )
                 # Test the connection
                 await self.client.admin.command('ping')
@@ -70,21 +90,106 @@ class MongoDBPersistenceStore(PersistenceStore):
                 await self._init_indexes()
                 logger.info(f"✅ MongoDB connection established to database: {self.database_name}")
             except Exception as e:
-                logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
+                error_str = str(e)
+                logger.error(f"❌ Failed to connect to MongoDB: {error_str}")
                 logger.error(f"   Connection string: {self._mask_connection_string()}")
                 logger.error(f"   Database name: {self.database_name}")
+                
+                # Provide specific troubleshooting for authentication errors
+                if "Authentication failed" in error_str or "authentication" in error_str.lower():
+                    logger.error("   🔍 Authentication Troubleshooting:")
+                    logger.error("      1. Verify username and password are correct")
+                    logger.error("      2. Check if username is case-sensitive (e.g., 'myClaims_dev' vs 'myclaims_dev')")
+                    logger.error("      3. Ensure the user exists in MongoDB Atlas")
+                    logger.error("      4. Verify the user has access to the database: " + self.database_name)
+                    logger.error("      5. Check if password contains special characters that need URL encoding")
+                    logger.error("      6. For MongoDB Atlas, verify IP whitelist allows your connection")
+                    logger.error("      7. Try adding authSource parameter: ?authSource=admin")
+                
+                # Log connection string format for debugging (check for missing //)
+                conn_str_preview = self.connection_string[:50] + "..." if len(self.connection_string) > 50 else self.connection_string
+                logger.error(f"   Connection string preview: {conn_str_preview}")
+                
+                # Check if connection string is malformed
+                if not self.connection_string.startswith(('mongodb://', 'mongodb+srv://')):
+                    logger.error(f"   ⚠️  WARNING: Connection string does not start with 'mongodb://' or 'mongodb+srv://'")
+                    logger.error(f"   ⚠️  This may indicate a malformed connection string in environment variable or config")
+                
+                # Reset connection state on failure
+                self.client = None
+                self.db = None
                 raise
+        if self.db is None:
+            raise RuntimeError("MongoDB database connection is None - connection failed")
         return self.db
+
+    def _normalize_connection_string(self, conn_str: str) -> str:
+        """
+        Normalize MongoDB connection string by URL-encoding credentials.
+        This ensures passwords with special characters are properly encoded.
+        """
+        try:
+            # Parse the connection string
+            parsed = urlparse(conn_str)
+            
+            # If there are credentials in the netloc, encode them
+            if '@' in parsed.netloc:
+                # Split netloc into credentials and host
+                auth_part, host_part = parsed.netloc.rsplit('@', 1)
+                
+                # Split credentials into username and password
+                if ':' in auth_part:
+                    username, password = auth_part.split(':', 1)
+                    # URL-encode username and password (in case of special characters)
+                    encoded_username = quote_plus(username)
+                    encoded_password = quote_plus(password)
+                    # Reconstruct netloc with encoded credentials
+                    new_netloc = f"{encoded_username}:{encoded_password}@{host_part}"
+                    
+                    # Reconstruct the full URL
+                    new_parsed = parsed._replace(netloc=new_netloc)
+                    normalized = urlunparse(new_parsed)
+                    return normalized
+            
+            return conn_str
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to normalize connection string: {str(e)}")
+            return conn_str
 
     def _mask_connection_string(self) -> str:
         """Mask password in connection string for logging"""
-        if '@' in self.connection_string:
-            parts = self.connection_string.split('@')
-            if len(parts) == 2:
-                user_pass = parts[0]
-                if ':' in user_pass:
-                    user, _ = user_pass.split(':', 1)
-                    return f"{user}:****@{parts[1]}"
+        try:
+            # Handle mongodb:// and mongodb+srv:// URLs
+            if '@' in self.connection_string:
+                # Split on @ to separate credentials from host
+                parts = self.connection_string.split('@', 1)
+                if len(parts) == 2:
+                    user_pass_part = parts[0]
+                    host_part = parts[1]
+                    
+                    # Find the last : before @ (this is the password separator)
+                    # For mongodb+srv://user:pass@host, we need to find : after //
+                    if '://' in user_pass_part:
+                        # Extract protocol (mongodb+srv:// or mongodb://)
+                        protocol_end = user_pass_part.find('://') + 3
+                        protocol = user_pass_part[:protocol_end]
+                        credentials = user_pass_part[protocol_end:]
+                        
+                        # Split credentials on : to get username and password
+                        if ':' in credentials:
+                            username, _ = credentials.split(':', 1)
+                            return f"{protocol}{username}:****@{host_part}"
+                        else:
+                            # No password, just username
+                            return f"{protocol}{credentials}@{host_part}"
+                    else:
+                        # No protocol, just user:pass@host format
+                        if ':' in user_pass_part:
+                            username, _ = user_pass_part.split(':', 1)
+                            return f"{username}:****@{host_part}"
+        except Exception:
+            # If masking fails, return a safe version
+            pass
         return self.connection_string
 
     async def _init_indexes(self):
@@ -132,7 +237,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an event"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for event log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping event log for {event_type.value}")
+            return str(uuid.uuid4())
 
         event_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -147,9 +261,13 @@ class MongoDBPersistenceStore(PersistenceStore):
             "created_at": now
         }
 
-        await db.events.insert_one(document)
-        logger.debug(f"📝 Event logged: {event_type.value} for session {session_id}")
-        return event_id
+        try:
+            await db.events.insert_one(document)
+            logger.debug(f"📝 Event logged: {event_type.value} for session {session_id}")
+            return event_id
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to insert event into MongoDB: {str(e)}")
+            return event_id  # Return ID even if insert failed
 
     async def log_request(
         self,
@@ -368,7 +486,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an audit event"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for audit log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping audit log for {node_name}")
+            return str(uuid.uuid4())
 
         log_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -414,7 +541,16 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: Optional[str] = None
     ) -> str:
         """Log an exception"""
-        db = await self._get_connection()
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for exception log: {str(e)}")
+            # Return a dummy ID to allow application to continue
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning(f"⚠️ MongoDB database is None, skipping exception log for {node_name}")
+            return str(uuid.uuid4())
 
         exception_id = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -711,4 +847,3 @@ class MongoDBPersistenceStore(PersistenceStore):
             finally:
                 self.client = None
                 self.db = None
-

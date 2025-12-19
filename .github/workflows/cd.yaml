@@ -1,0 +1,91 @@
+name: App Deployment.
+
+on:
+  push:
+    branches:
+      - 'release/*'
+      - 'vamshi-pipelines'
+    paths:
+      - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
+      - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
+      - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
+      - '**/deploy-configs/pbmassist-dev/k8s/ksa.yaml'
+  
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-changes:
+    runs-on: 
+      group: cvs-linux-self-hosted
+    outputs:
+      ENV_NAME: ${{ steps.set-env.outputs.ENV_NAME }}
+      HELM_FILE_VERSION: ${{ steps.set-env.outputs.HELM_FILE_VERSION }}
+      GIT_SHA: ${{ steps.set-env.outputs.GIT_SHA }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 
+        with:
+          fetch-depth: 0
+          
+      - name: Detect changes
+        id: changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        with:
+          base: ${{ github.ref_name }}
+          filters: |
+            pbmassist-prod:
+            - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
+            pbmassist-dev:
+            - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
+
+      - name: Debug - Show filter outputs
+        run: |
+          echo "Debug: Filter outputs:"
+          echo "pbmassist-dev: ${{ steps.changes.outputs.pbmassist-dev }}"
+          echo "pbmassist-prod: ${{ steps.changes.outputs.pbmassist-prod }}"
+          echo "Base ref: ${{ github.ref_name }}"
+          
+      - name: Set Environment Variables
+        id: set-env
+        run: |
+          echo "Debug: Starting environment variable setup"
+          echo "Debug: Checking pbmassist-dev filter result: ${{ steps.changes.outputs.pbmassist-dev }}"
+          echo "Debug: Checking pbmassist-prod filter result: ${{ steps.changes.outputs.pbmassist-prod }}"
+          # Get the git SHA (full 40 character SHA)
+          GIT_SHA=$(git rev-parse HEAD)
+          echo "GIT_SHA=$GIT_SHA" >> $GITHUB_OUTPUT
+          if [ "${{ steps.changes.outputs.pbmassist-dev }}" = "true" ]; then
+            echo "Debug: Setting environment for pbmassist-dev"
+            echo "ENV_NAME=pbmassist-dev" >> $GITHUB_OUTPUT
+            echo "HELM_FILE_VERSION=v1" >> $GITHUB_OUTPUT
+            echo "Debug: Set ENV_NAME=pbmassist-dev or pbmassist-prod and HELM_FILE_VERSION=v1"
+          elif [ "${{ steps.changes.outputs.pbmassist-prod }}" = "true" ]; then
+            echo "Debug: Setting environment for pbmassist-prod"
+            echo "ENV_NAME=pbmassist-prod" >> $GITHUB_OUTPUT
+            echo "HELM_FILE_VERSION=v1" >> $GITHUB_OUTPUT
+            echo "Debug: Set ENV_NAME=pbmassist-prod and HELM_FILE_VERSION=v1"
+          else
+            echo "Debug: No matching filters found, no environment variables set"
+          fi
+          
+          echo "Debug: Environment variable setup completed"
+         
+  deploy:
+    uses: cvs-health-source-code/gitops-cd-workflow/.github/workflows/helm-deploy.yaml@v1
+    needs: [detect-changes]
+    secrets: inherit
+    with:
+      app-name: "pss-myclaims-ai-agent"
+      environment: ${{ needs.detect-changes.outputs.ENV_NAME }}
+      helm-template-repo: ${{ vars.HELM_TEMPLATE_REPO }}
+      helm-file-version: ${{ needs.detect-changes.outputs.HELM_FILE_VERSION }}
+      helm-template-branch: ${{ vars.HELM_TEMPLATE_BRANCH }}
+      canary-weight: "0"
+      lob: 'pss'
+      change-description: "Application Deployment"
+      rfc-short-desc: "app-deployment"
+      change-domain: "Pharmacy Services(PS)"
