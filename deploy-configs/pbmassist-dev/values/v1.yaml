@@ -1,4 +1,4 @@
-#namespace, app version and image details1
+#namespace, app version and image details2
 envName: pbmassist-dev
 skipSecurityContext: true
 projectId: pbm-nonprod-myclaims   # top-level projectId
