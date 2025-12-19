@@ -76,9 +76,25 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
         confidence_threshold = config.get("confidence_threshold", 0.7)
         
         # Determine clarification reason
+        # Check if user provided an invalid format claim ID (potential_claim_id detected)
+        claim_id_format_invalid = entities.get("claim_id_format_invalid", False)
+        potential_claim_ids = entities.get("potential_claim_ids", [])
+        
         if missing_slots:
             reason = "missing_entity"
-            reason_detail = f"Missing: {', '.join(missing_slots)}"
+            # Enhanced message if user provided invalid format claim ID
+            # Check for any claim-related slot name (claim_ids, claim_number, claim_numbers)
+            claim_related_slots = ['claim_ids', 'claim_number', 'claim_numbers','claim_id','claimId']
+            has_missing_claim_slot = any(slot in missing_slots for slot in claim_related_slots)
+            
+            if claim_id_format_invalid and potential_claim_ids and has_missing_claim_slot:
+                # User tried to provide claim ID but format is wrong
+                reason = "invalid_claim_format"
+                reason_detail = f"Invalid claim ID format: {potential_claim_ids}. Please provide a valid claim number."
+                logger.info(f"   Detected invalid claim ID format: {potential_claim_ids}")
+                logger.info(f"   Missing claim-related slots: {[s for s in missing_slots if s in claim_related_slots]}")
+            else:
+                reason_detail = f"Missing: {', '.join(missing_slots)}"
         elif confidence < confidence_threshold:
             reason = "low_confidence"
             reason_detail = f"Low confidence: {confidence:.2f} (threshold: {confidence_threshold})"
@@ -100,7 +116,10 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
             "user_query": text,
             "missing_entities": missing_slots,
             "provided_entities": list(entities.keys()) if entities else [],
-            "intent_candidates": []  # Could extract from metadata if needed
+            "intent_candidates": [],  # Could extract from metadata if needed
+            # Additional context for invalid claim format
+            "claim_id_format_invalid": claim_id_format_invalid,
+            "potential_claim_ids": potential_claim_ids,
         }
         
         logger.info("   → Will generate intelligent follow-up question using response agent")

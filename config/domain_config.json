@@ -1,6 +1,6 @@
 {
   "confidence_threshold": 0.6,
-  "conversation_history_window": 5,
+  "conversation_history_window": 50,
   "clarification_messages": {
     "low_confidence": "I'm not quite sure what you're asking. Could you rephrase your question?",
     "missing_entity_template": "Could you provide your {missing_entity}?"

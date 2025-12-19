@@ -11,6 +11,11 @@ You may receive either: (1) a single user query, or (2) conversation history + c
 - Resolve references like "it", "that claim", "the drug" using history context
 - Use history to understand follow-up questions and maintain conversation continuity
 
+**CRITICAL - Masked Token Handling:**
+When you see tokens like [CLAIM_ID_XXXXXXXX] or [MEMBER_ID_XXXXXXXX] in input, extract them AS-IS as entity values.
+Example: "Status of [CLAIM_ID_A1B2C3D4]" → entities: {"claim_number": "[CLAIM_ID_A1B2C3D4]"}
+NEVER replace masked tokens with example values from this prompt. Only extract actual values from user input.
+
 **Examples:** History: "User: Status of claim 123456789012345 seq 001? | Assistant: Approved" → Current: "How much did I pay?" → Extract claim_number/sequence_number from history, intent: "claim_details" | History: "User: Check DUR for Lipitor" → Current: "What does that mean?" → intent: "dur_info" (context from history)
 
 ## Claims Domain Categories & Sub-intents

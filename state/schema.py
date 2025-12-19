@@ -121,6 +121,7 @@ class AgentState(TypedDict):
 
     # === OUTPUT (to user) ===
     response: str                                # Final answer
+    response_id: Optional[str]                   # UUID for the response (for feedback tracking)
 
     # === METADATA ===
     metadata: Annotated[Dict[str, Any], merge_metadata]  # Tracking info (merged across nodes)
@@ -178,6 +179,7 @@ def create_initial_state(
         text_tokens=None,
         context_tokens=None,
         response="",
+        response_id=None,
         metadata={},
         cache_hit=False,
         error=None,
