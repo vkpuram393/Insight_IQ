@@ -80,12 +80,15 @@ class Settings(BaseSettings):
     telemetry_db_path: str = "data/telemetry.db"  # Only used for SQLite
     
     # MongoDB Configuration (only used when persistence_store_type="mongodb")
-    # Connection string format: mongodb+srv://<username>:<password>@<cluster>/<database>?retryWrites=true&w=majority
-    # Or for direct IP: mongodb://<username>:<password>@<ip1>:<port>,<ip2>:<port>/<database>?replicaSet=<replica_set>
-    # mongodb_connection_string: str = "mongodb://localhost:27017"  # Default local MongoDB
-    #mongodb_connection_string: str = "mongodb+srv://myClaims_pt:O5VD3C6TEuH2WAUX@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
-    mongodb_connection_string: str = "mongodb+srv://myclaims_dev:1sw2tSZ89tjpn1sm@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority"
-    mongodb_database_name: str = "myclaims-DEV"  # Database name (myclaims-DEV, myclaims-QA, myClaims-UAT, myClaims-PT)
+    # Vault injects: MONGODB_USER, MONGODB_PASSWORD
+    # Deployment config injects: MONGODB_HOST, MONGODB_DATABASE_NAME
+    mongodb_user: str = ""  # ⚠️ From Vault (MONGODB_USER)
+    mongodb_password: str = ""  # ⚠️ From Vault (MONGODB_PASSWORD)
+    mongodb_host: str = ""  # ⚠️ From deployment config (MONGODB_HOST)
+    mongodb_database_name: str = ""  # ⚠️ From deployment config (MONGODB_DATABASE_NAME)
+    
+    # Legacy - for local development only (ignored if above env vars are set)
+    mongodb_connection_string: str = "mongodb://localhost:27017"
 
     use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
     

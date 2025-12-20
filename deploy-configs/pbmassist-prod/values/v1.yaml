@@ -74,20 +74,19 @@ envVars: |
     value: "redis://localhost:6379/0"
   - name: PERSISTENCE_STORE_TYPE
     value: "mongodb"
+  - name: MONGODB_HOST
+    value: "mdb-use4-myclaims-prod01-pl-0-us-east4.lzvfx7.mongodb.net"
   - name: MONGODB_DATABASE_NAME
     value: "myclaims-PT"
   - name: SWAGGER_URL
     value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
-  # ⚠️ MONGODB_CONNECTION_STRING should be set from Kubernetes Secret or Vault
-  # Option 1: From Kubernetes Secret (see k8s/mongodb-secret.yaml)
-  # - name: MONGODB_CONNECTION_STRING
-  #   valueFrom:
-  #     secretKeyRef:
-  #       name: mongodb-credentials
-  #       key: connection_string
-  # Option 2: From Vault (if using Vault integration)
-  # Format: mongodb+srv://myClaims_uat:cw5uPntYMO3HMrso@mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net/?retryWrites=true&w=majority
-    
+  # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
+
+# Environment secrets from HashiCorp Vault
+envSecrets: |-
+  - secretRef:
+      name: pss-myclaims-secrets-prod
+
 istioHttpRoutes:
   routes:
     - route: "/pss-myclaims-ai-agent/"

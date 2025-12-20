@@ -31,15 +31,39 @@ class MongoDBPersistenceStore(PersistenceStore):
     """MongoDB implementation for telemetry and analytics"""
 
     def __init__(self, connection_string: str = None, database_name: str = None):
+        """
+        Initialize MongoDB persistence store.
+        
+        Connection string is constructed from environment variables:
+        - MONGODB_USER, MONGODB_PASSWORD (from Vault)
+        - MONGODB_HOST (from deployment config)
+        """
+        import os
         from config.config import settings
 
-        # Get connection string from config or parameter
-        # Support both new (mongodb_uri) and legacy (mongodb_connection_string) config names
+        # Build connection string from environment variables (Vault + deployment config)
         if connection_string is None:
-            connection_string = getattr(settings, 'mongodb_uri', None) or \
-                              getattr(settings, 'mongodb_connection_string', 'mongodb://localhost:27017')
+            mongodb_user = os.getenv('MONGODB_USER', '')
+            mongodb_password = os.getenv('MONGODB_PASSWORD', '')
+            mongodb_host = os.getenv('MONGODB_HOST', '')
+            
+            if mongodb_user and mongodb_password and mongodb_host:
+                # URL-encode password in case of special characters
+                encoded_password = quote_plus(mongodb_password)
+                connection_string = f"mongodb+srv://{mongodb_user}:{encoded_password}@{mongodb_host}/?retryWrites=true&w=majority"
+                logger.info("🔐 MongoDB connection string constructed from Vault credentials")
+            else:
+                # Fallback to legacy config field (for local development)
+                connection_string = getattr(settings, 'mongodb_connection_string', None)
+                if not connection_string:
+                    raise ValueError(
+                        "❌ MongoDB connection not configured. Set either:\n"
+                        "   1. MONGODB_USER + MONGODB_PASSWORD (Vault) + MONGODB_HOST (deployment)\n"
+                        "   2. MONGODB_CONNECTION_STRING (legacy/local dev)"
+                    )
+        
         if database_name is None:
-            database_name = getattr(settings, 'mongodb_database', None) or \
+            database_name = os.getenv('MONGODB_DATABASE_NAME', '') or \
                           getattr(settings, 'mongodb_database_name', 'myclaims-DEV')
 
         # Validate and normalize connection string format
