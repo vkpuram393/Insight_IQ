@@ -192,11 +192,35 @@ def validate_critical_settings() -> Tuple[bool, List[str]]:
     
     # 2. Validate MongoDB connection if using MongoDB
     if settings.persistence_store_type == "mongodb":
-        if not settings.mongodb_connection_string or settings.mongodb_connection_string == "mongodb://localhost:27017":
+        import os
+        
+        # NEW WAY: Check for Vault-injected credentials
+        mongodb_user = os.getenv('MONGODB_USER', '')
+        mongodb_password = os.getenv('MONGODB_PASSWORD', '')
+        mongodb_host = os.getenv('MONGODB_HOST', '')
+        
+        # OLD WAY: Check for direct connection string
+        has_connection_string = (
+            settings.mongodb_connection_string and 
+            settings.mongodb_connection_string != "mongodb://localhost:27017"
+        )
+        
+        # NEW WAY: Check for Vault-based credentials
+        has_vault_credentials = bool(mongodb_user and mongodb_password and mongodb_host)
+        
+        # Must have EITHER old way OR new way
+        if not has_connection_string and not has_vault_credentials:
             errors.append(
-                f"❌ MONGODB_CONNECTION_STRING is not set or is using default localhost. "
-                f"Current value: '{settings.mongodb_connection_string}'"
+                f"❌ MongoDB connection not configured. Set either:\n"
+                f"      1. MONGODB_CONNECTION_STRING (legacy)\n"
+                f"      2. MONGODB_USER + MONGODB_PASSWORD (Vault) + MONGODB_HOST (deployment config)\n"
+                f"      Current: connection_string='{settings.mongodb_connection_string}', "
+                f"user={'set' if mongodb_user else 'NOT SET'}, "
+                f"password={'set' if mongodb_password else 'NOT SET'}, "
+                f"host={'set' if mongodb_host else 'NOT SET'}"
             )
+        elif has_vault_credentials:
+            logger.info(f"   MongoDB: Using Vault credentials (user={mongodb_user}, host={mongodb_host})")
         
         if not settings.mongodb_database_name:
             errors.append(
