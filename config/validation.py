@@ -3,6 +3,9 @@ Configuration Validation - Startup Checks
 
 Validates critical configuration values at startup to catch misconfigurations early.
 This prevents runtime errors from wrong settings (e.g., QA picking up local .env values).
+
+Supports both legacy MONGODB_CONNECTION_STRING and Vault-based credentials
+(MONGODB_USER + MONGODB_PASSWORD + MONGODB_HOST) for flexible deployment.
 """
 
 from typing import List, Tuple, Set
