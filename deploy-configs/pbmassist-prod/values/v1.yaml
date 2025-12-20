@@ -77,7 +77,7 @@ envVars: |
   - name: MONGODB_HOST
     value: "mdb-use4-myclaims-prod01-pl-0-us-east4.lzvfx7.mongodb.net"
   - name: MONGODB_DATABASE_NAME
-    value: "myclaims-PT"
+    value: "myclaims-PROD"
   - name: SWAGGER_URL
     value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
