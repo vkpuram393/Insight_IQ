@@ -84,7 +84,7 @@ envVars: |
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 
-# Environment secrets from HashiCorp Vault
+# Environment secrets from HashiCorp Vault.
 envSecrets: |-
   - secretRef:
       name: pss-myclaims-secrets-dev
