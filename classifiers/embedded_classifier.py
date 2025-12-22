@@ -75,9 +75,19 @@ class CVSIntentEmbedded:
         # Check if MongoDB vector search is enabled
         from config.config import settings
         if settings.use_mongodb_for_embeddings:
-            # MongoDB Vector Search mode: Don't load embeddings into memory
-            logger.info("🚀 MongoDB Vector Search enabled - embeddings will be queried on-demand")
-            self.intent_embeddings = {}  # Empty dict, not used in vector search mode
+            # MongoDB Vector Search mode: Ensure embeddings exist in MongoDB (auto-generate if empty)
+            import asyncio
+            import concurrent.futures
+            
+            def ensure_embeddings():
+                return asyncio.run(self._embed_all_examples())
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ensure_embeddings)
+                future.result(timeout=300)  # Wait for check/generation (5 min timeout)
+            
+            logger.info("🚀 MongoDB Vector Search enabled - embeddings ready, will query on-demand")
+            self.intent_embeddings = {}  # Empty dict, queries go to MongoDB
         else:
             # Traditional mode: Pre-load all embeddings into memory
             # Use ThreadPoolExecutor to run async code in separate thread with new event loop
@@ -308,8 +318,13 @@ class CVSIntentEmbedded:
                     embedding_dimension=self._get_expected_embedding_dimension()
                 )
                 
+                logger.info(f"✅ MongoDB cache saved!")
+                
+                # Auto-create vector index if it doesn't exist
+                await self._ensure_vector_index(mongo_store)
+                
                 await mongo_store.close()
-                logger.info(f"✅ MongoDB cache saved! Next initialization will be instant.")
+                logger.info(f"✅ MongoDB ready! Next initialization will be instant.")
             except Exception as e:
                 logger.warning(f"⚠️  Failed to save to MongoDB: {e}")
                 logger.info("   Will save to .pkl file as fallback...")
@@ -327,6 +342,60 @@ class CVSIntentEmbedded:
             logger.info(f"ℹ️  Skipping .pkl cache (MongoDB mode enabled - no local cache needed)")
         
         return intent_embeddings
+    
+    async def _ensure_vector_index(self, mongo_store) -> None:
+        """
+        Ensure vector search index exists in MongoDB Atlas.
+        Creates it if it doesn't exist (required for $vectorSearch).
+        """
+        try:
+            db = await mongo_store._get_connection()
+            collection = db.intent_embeddings
+            
+            # Check if vector index already exists
+            try:
+                existing_indexes = await collection.list_search_indexes().to_list(length=None)
+                for idx in existing_indexes:
+                    if idx.get('name') == 'vector_index':
+                        logger.info("✅ Vector search index already exists")
+                        return
+            except Exception as e:
+                logger.debug(f"Could not list search indexes: {e}")
+            
+            # Create vector search index
+            logger.info("🔨 Creating vector search index...")
+            
+            index_definition = {
+                "name": "vector_index",
+                "type": "vectorSearch",
+                "definition": {
+                    "fields": [{
+                        "type": "vector",
+                        "path": "embedding",
+                        "numDimensions": self._get_expected_embedding_dimension(),
+                        "similarity": "cosine"
+                    }]
+                }
+            }
+            
+            try:
+                result = await db.command({
+                    "createSearchIndexes": "intent_embeddings",
+                    "indexes": [index_definition]
+                })
+                logger.info(f"✅ Vector search index created! (Building in background)")
+                logger.info("   Note: Index may take 1-2 minutes to become queryable")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "already exists" in error_msg or "duplicate" in error_msg:
+                    logger.info("✅ Vector search index already exists")
+                elif "not supported" in error_msg or "not available" in error_msg:
+                    logger.warning("⚠️ Vector search not supported on this MongoDB tier (requires M10+)")
+                else:
+                    logger.warning(f"⚠️ Could not create vector index: {e}")
+                    
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to ensure vector index: {e}")
     
     def classify(self, query: str) -> Dict[str, Any]:
         """
