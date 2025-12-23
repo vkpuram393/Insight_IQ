@@ -101,5 +101,5 @@ istioHttpRoutes:
     - route: "/health"
     - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
-## Triggers 12
+## Triggers 1
   
