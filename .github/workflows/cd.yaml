@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - 'release/*'
-      - 'vamshi-pipelines'
+      - 'MVP-1'
     paths:
       - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
       - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
