@@ -39,7 +39,7 @@ resources:
     cpu: "2"
     memory: "2Gi"
 
-# environment variables for app - secret values come from vault
+# environment variables for app - secret values come from vault.
 envVars: |
   - name: ENABLE_TRACING
     value: 'true'
