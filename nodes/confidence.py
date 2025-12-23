@@ -89,11 +89,12 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     
     # PRIORITY CHECK: Handle embedding classifier failure
     embedding_failed = state.get("embedding_failed", False)
-    if embedding_failed:
-        logger.warning("❌ Embedding classifier failed - routing to clarification → response_agent (LLM)")
-        logger.info("   Reason: Azure embeddings unavailable, cannot classify intent semantically")
-        logger.info("   Fallback: Will use response_agent (Gemini LLM) to handle query directly")
-        return "clarification"  # This routes to response_agent via clarification engine
+    intent_reclassified = state.get("intent_reclassified", False)
+    if embedding_failed and not intent_reclassified:
+        logger.warning("❌ Embedding classifier failed - routing to llm_judge for classification")
+        logger.info("   Reason: Google/Azure embeddings unavailable, cannot classify intent semantically")
+        logger.info("   Fallback: Will use LLM judge (Gemini) to classify intent from scratch")
+        return "llm_judge"  # Let LLM judge classify the intent when embeddings fail
     
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
@@ -105,7 +106,6 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     intent = state.get("intent", "")  # ✅ Get intent from state
     needs_clarification = state.get("needs_clarification", False)
     is_complex = state.get("is_complex", False)
-    intent_reclassified = state.get("intent_reclassified", False)
     entities = state.get("entities") or {}
     conversation_history = state.get("conversation_history", [])
     missing_slots = state.get("missing_slots") or []  # Required entities that are missing (computed by entity extractor)
