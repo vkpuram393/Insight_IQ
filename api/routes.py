@@ -2,7 +2,7 @@
 API Routes - HTTP endpoints
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, AsyncIterator
@@ -38,7 +38,7 @@ class ChatResponse(BaseModel):
     timestamp: str
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, http_request: Request):
     """
     Main chat endpoint
 
@@ -46,6 +46,10 @@ async def chat(request: ChatRequest):
     """
     session_id = request.session_id or str(uuid.uuid4())
     user_id = request.user_info.get("user_id") if request.user_info else None
+    
+    # Capture auth token and add to user_info for downstream use
+    user_info = request.user_info.copy() if request.user_info else {}
+    user_info["auth_token"] = http_request.headers.get("Authorization", "")
 
     # Log incoming request
     await log_event(
@@ -61,7 +65,7 @@ async def chat(request: ChatRequest):
             final_state = await run_graph(
                 text=request.text,
                 session_id=session_id,
-                user_info=request.user_info or {}
+                user_info=user_info
             )
 
         if not isinstance(final_state, dict):
@@ -118,7 +122,7 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, http_request: Request):
     """
     Streaming chat endpoint using Server-Sent Events (SSE)
     
@@ -165,6 +169,10 @@ async def chat_stream(request: ChatRequest):
     """
     session_id = request.session_id or str(uuid.uuid4())
     user_id = request.user_info.get("user_id") if request.user_info else None
+    
+    # Capture auth token and add to user_info for downstream use
+    user_info = request.user_info.copy() if request.user_info else {}
+    user_info["auth_token"] = http_request.headers.get("Authorization", "")
 
     # Log incoming request (follows existing pattern)
     await log_event(
@@ -189,7 +197,7 @@ async def chat_stream(request: ChatRequest):
             async for event in run_graph_stream(
                 text=request.text,
                 session_id=session_id,
-                user_info=request.user_info or {}
+                user_info=user_info
             ):
                 event_type = event.get("type")
                 event_data = event.get("data")

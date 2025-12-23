@@ -37,6 +37,9 @@ from persistence import PersistenceStoreFactory
 # ============================================================================
 logger = get_logger(__name__)
 
+# Module-level auth token (set by call_claims_tool_node before API calls)
+_current_auth_token = ""
+
 # ============================================================================
 # MAIN CLAIMS API TOOL NODE
 # ============================================================================
@@ -58,6 +61,18 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
     
     # Extract logging context if called from LangGraph
     log_ctx = extract_logging_context(state) if isinstance(state, dict) else {}
+    
+    # Extract auth token from user_info and set module-level variable
+    global _current_auth_token
+    user_info = state.get("user_info", {}) if isinstance(state, dict) else {}
+    _current_auth_token = user_info.get("auth_token", "") if isinstance(user_info, dict) else ""
+    
+    # Debug log to verify token is captured
+    if _current_auth_token:
+        logger.info(f"🔑 Auth token captured: {_current_auth_token[:30]}...")
+    else:
+        logger.warning("⚠️ No auth token provided in request headers")
+    
     persistence_store = None
     
     try:
@@ -741,11 +756,9 @@ def call_external_api(api, body: Dict[str, Any]) -> Dict[str, Any]:
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "X-Trace-Id": f"claim-search-{uuid.uuid4()}",
-        "X-Loading-Mode": "detail",
         "x-correlation-id": correlation_id,
-        "x-consumerAppName": "myclaims",
-        "x-clientRefId": correlation_id
+        "x-clientRefId": correlation_id,
+        "Authorization": _current_auth_token
     }
 
     # Log request details for debugging
@@ -1136,7 +1149,7 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
             
             logger.debug(f"   Comparing: claim_seq={claim_seq} vs target={claimSequence}")
             
-            if str(claim_num) == str(claimNumber) and str(claim_seq) == str(claimSequence):
+            if str(claim_num) == str(claimNumber) and str(claim_seq) == str(1000-int(claimSequence)):
                 matched_claim = claim
                 logger.info(f"   ✅ Found matching sequence: claimNumber={claim_num}, claimSequence={claim_seq}")
                 break
@@ -1185,10 +1198,40 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
             retriable=e.retriable if hasattr(e, 'retriable') else True
         )
     
+    # # Step 4: Merge results
+    # logger.info("Step 4: Merging claim details with list data")
+    # enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
+    # enriched_details["list_data"] = matched_claim
+    # logger.info("✅ Successfully enriched claim details with list_data")
+    
+    # return enriched_details
+
     # Step 4: Merge results
     logger.info("Step 4: Merging claim details with list data")
     enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
-    enriched_details["list_data"] = matched_claim
-    logger.info("✅ Successfully enriched claim details with list_data")
-    
+
+    # CRITICAL: Transform sequence from API format to user format
+    # API uses inverted sequence: API_seq = 1000 - user_seq
+    # Example: User asks for 001 → API stores 999 → we convert back to 001
+    if matched_claim and isinstance(matched_claim, dict):
+        matched_claim_copy = matched_claim.copy()
+        primary = matched_claim_copy.get("primary", {})
+        if isinstance(primary, dict) and "sequence" in primary:
+            api_sequence = primary.get("sequence")
+            if api_sequence is not None:
+                try:
+                    user_sequence = 1000 - int(api_sequence)
+                    # Format as 3-digit string with leading zeros (e.g., 1 -> "001")
+                    primary["sequence"] = str(user_sequence).zfill(3)
+                    logger.info(f"   🔄 Transformed sequence: {api_sequence} → {primary['sequence']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"   ⚠️ Could not transform sequence: {api_sequence}")
+            matched_claim_copy["primary"] = primary
+        enriched_details["list_data"] = matched_claim_copy
+    else:
+        enriched_details["list_data"] = matched_claim
+
+    logger.info(f"✅ Successfully enriched claim details with list_data")
+    logger.info(f"   📌 User requested: claimNumber={claimNumber}, claimSequence={claimSequence}")
+
     return enriched_details
