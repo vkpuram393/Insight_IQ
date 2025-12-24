@@ -1377,10 +1377,18 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             lenient_mode = True
         
         # ===== STEP 1: Check for PII Leakage =====
-        logger.info(f"Step 1: Leakage detection{' (lenient mode)' if lenient_mode else ''}")
+        # Configurable leakage detection mode: "block", "log", or "disabled"
+        # Note: HIPAA compliance is achieved via masking, not leakage detection
+        leakage_mode = settings.leakage_detection_mode.lower()
         
-        # Detect any NEW PII in response (not from original input)
-        detected_pii = pii_service.detect_pii_phi(response)
+        if leakage_mode == "disabled":
+            logger.info("Step 1: Leakage detection DISABLED (skipping)")
+            leaked_entities = []
+            detected_pii = []
+        else:
+            logger.info(f"Step 1: Leakage detection (mode={leakage_mode}){' (lenient)' if lenient_mode else ''}")
+            # Detect any NEW PII in response (not from original input)
+            detected_pii = pii_service.detect_pii_phi(response)
         
         leaked_entities = []
         for entity in detected_pii:
@@ -1457,34 +1465,51 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                     logger.debug(f"   ✓ Contextual data: {entity_type} = {entity_text[:20]}...")
         
         if leaked_entities:
-            logger.error(
-                f"🚨 PII LEAKAGE DETECTED! Found {len(leaked_entities)} "
-                f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
-            )
-            result = {
-                "response": (
-                    "I apologize, but I cannot display that information due to "
-                    "privacy protection. Please try rephrasing your question."
-                ),
-                "safety_postcheck_passed": False,
-                "metadata": {
-                    **metadata,
-                    "leakage_check": {
-                        "has_leakage": True,
-                        "leaked_entities": [
-                            {
-                                "type": e["entity_type"],
-                                "text": e["text"][:20] + "..."
-                            }
-                            for e in leaked_entities
-                        ]
+            leaked_summary = [
+                {"type": e["entity_type"], "text": e["text"][:20] + "..."}
+                for e in leaked_entities
+            ]
+            
+            if leakage_mode == "block":
+                # BLOCK MODE: Reject response (may cause false positives)
+                logger.error(
+                    f"🚨 PII LEAKAGE DETECTED! BLOCKING response. Found {len(leaked_entities)} "
+                    f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
+                )
+                result = {
+                    "response": (
+                        "I apologize, but I cannot display that information due to "
+                        "privacy protection. Please try rephrasing your question."
+                    ),
+                    "safety_postcheck_passed": False,
+                    "metadata": {
+                        **metadata,
+                        "leakage_check": {
+                            "has_leakage": True,
+                            "leaked_entities": leaked_summary,
+                            "action": "blocked"
+                        }
                     }
                 }
-            }
-            await log_state_snapshot(state, node_name, result)
-            return result
+                await log_state_snapshot(state, node_name, result)
+                return result
+            else:
+                # LOG MODE: Log warning but continue with response (recommended for production)
+                logger.warning(
+                    f"⚠️ Potential PII detected (NOT blocking, mode={leakage_mode}): "
+                    f"{len(leaked_entities)} entities: {[e['entity_type'] for e in leaked_entities]}"
+                )
+                # Continue to unmasking - don't block the response
+                # Metadata will include detection info for monitoring
+                metadata["leakage_check"] = {
+                    "has_leakage": True,
+                    "leaked_entities": leaked_summary,
+                    "action": "logged_only"
+                }
+        else:
+            metadata["leakage_check"] = {"has_leakage": False}
         
-        logger.info("✅ No PII leakage detected")
+        logger.info("✅ Leakage check complete - proceeding to unmask")
         
         # ===== STEP 2: Unmask PII/PHI Tokens =====
         logger.info("Step 2: Unmasking tokens")
