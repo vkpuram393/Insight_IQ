@@ -133,9 +133,12 @@ def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
         r'\b(sol|solution|susp|suspension|inj|injection)\b',      # Liquid forms
         r'\b(cream|oint|ointment|gel|patch|spray|drops)\b',       # Topical forms
         r'\b(syrup|powder|granules?|lozenge|suppository)\b',      # Other forms
-        r'\b(extended|delayed|controlled)\s*release\b',           # Release types
-        r'\b(immediate|sustained|modified)\s*release\b',          # Release types
+        r'\b(extended|delayed|controlled)\s*release\b',           # Release types (spelled out)
+        r'\b(immediate|sustained|modified)\s*release\b',          # Release types (spelled out)
+        r'\b(er|sr|cr|xr|xl|la|dr|cd|sa)\b',                      # Release type abbreviations (FIX: handles "SUCCINATE ER")
         r'\b(oral|topical|injectable|inhaled|nasal|ophthalmic)\b',  # Routes
+        r'\b(prn|qd|bid|tid|qid|qhs|hs|ac|pc|qam|qpm|qod|qw|qm)\b', # Dosing frequency abbreviations
+        r'\b(b12|b6|b1|b2|d3|d2|k2)\b',                             # Vitamin identifiers
     ]
     for pattern in drug_dosage_patterns:
         if re.search(pattern, text_lower):
@@ -409,7 +412,25 @@ def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
             return True
         
         # All-caps city names from API (allow them in pharmacy context)
-        if text_stripped.isupper() and text_stripped.isalpha() and len(text_stripped) >= 3:
+        # FIX: Handle multi-word strings with spaces, hyphens, apostrophes, periods
+        # Examples: "OKLAHOMA CITY", "WINSTON-SALEM", "O'FALLON", "ST. LOUIS"
+        # Previous bug: isalpha() returns False for strings containing these characters
+        alpha_only = text_stripped.replace(' ', '').replace('-', '').replace("'", '').replace('.', '')
+        if text_stripped.isupper() and alpha_only.isalpha() and len(alpha_only) >= 3:
+            return True
+        
+        # FIX: Cross-check drug patterns (Presidio sometimes misclassifies drug names as LOCATION)
+        # Drug salt forms commonly appear in pharmacy API data (e.g., "METOPROLOL SUCCINATE")
+        drug_salt_forms = ('succinate', 'tartrate', 'maleate', 'fumarate', 'hydrochloride',
+                          'hcl', 'sodium', 'potassium', 'acetate', 'citrate', 'sulfate',
+                          'phosphate', 'chloride', 'bromide', 'besylate', 'mesylate',
+                          'nitrate', 'carbonate', 'oxide', 'lactate', 'gluconate',
+                          'malate', 'stearate', 'palmitate', 'propionate', 'valerate')
+        if any(salt in text_lower for salt in drug_salt_forms):
+            return True
+        
+        # Release type abbreviations (catches drug names like "SUCCINATE ER" misclassified as LOCATION)
+        if re.search(r'\b(ER|SR|CR|XR|XL|LA|DR|CD|SA)\b', text_stripped):
             return True
     
     # ================================================================
