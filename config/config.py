@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     enable_safety_precheck: bool = True  # Match remote MVP-1
     enable_safety_postcheck: bool = True  # Match remote MVP-1
     
+    # Leakage Detection Mode (for response_safety_pii_postcheck)
+    # Options:
+    #   - "block": Block response if unexpected PII detected (strict, may cause false positives)
+    #   - "log": Log detected entities but don't block (recommended for production)
+    #   - "disabled": Skip leakage detection entirely (fastest, masking still protects PHI)
+    # Note: HIPAA compliance is achieved via masking, not leakage detection
+    leakage_detection_mode: str = "log"  # Default: log-only (no false positive blocks)
+    
     # LLM Judge (TEMPORARY - for testing only, disables LLM judge path when True)
     temporarily_disable_llm_judge_path_for_testing: bool = False  # Set to False when LLM judge implementation is complete
 

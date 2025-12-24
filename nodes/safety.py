@@ -133,9 +133,12 @@ def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
         r'\b(sol|solution|susp|suspension|inj|injection)\b',      # Liquid forms
         r'\b(cream|oint|ointment|gel|patch|spray|drops)\b',       # Topical forms
         r'\b(syrup|powder|granules?|lozenge|suppository)\b',      # Other forms
-        r'\b(extended|delayed|controlled)\s*release\b',           # Release types
-        r'\b(immediate|sustained|modified)\s*release\b',          # Release types
+        r'\b(extended|delayed|controlled)\s*release\b',           # Release types (spelled out)
+        r'\b(immediate|sustained|modified)\s*release\b',          # Release types (spelled out)
+        r'\b(er|sr|cr|xr|xl|la|dr|cd|sa)\b',                      # Release type abbreviations (FIX: handles "SUCCINATE ER")
         r'\b(oral|topical|injectable|inhaled|nasal|ophthalmic)\b',  # Routes
+        r'\b(prn|qd|bid|tid|qid|qhs|hs|ac|pc|qam|qpm|qod|qw|qm)\b', # Dosing frequency abbreviations
+        r'\b(b12|b6|b1|b2|d3|d2|k2)\b',                             # Vitamin identifiers
     ]
     for pattern in drug_dosage_patterns:
         if re.search(pattern, text_lower):
@@ -409,7 +412,25 @@ def _is_contextual_entity(entity_text: str, entity_type: str) -> bool:
             return True
         
         # All-caps city names from API (allow them in pharmacy context)
-        if text_stripped.isupper() and text_stripped.isalpha() and len(text_stripped) >= 3:
+        # FIX: Handle multi-word strings with spaces, hyphens, apostrophes, periods
+        # Examples: "OKLAHOMA CITY", "WINSTON-SALEM", "O'FALLON", "ST. LOUIS"
+        # Previous bug: isalpha() returns False for strings containing these characters
+        alpha_only = text_stripped.replace(' ', '').replace('-', '').replace("'", '').replace('.', '')
+        if text_stripped.isupper() and alpha_only.isalpha() and len(alpha_only) >= 3:
+            return True
+        
+        # FIX: Cross-check drug patterns (Presidio sometimes misclassifies drug names as LOCATION)
+        # Drug salt forms commonly appear in pharmacy API data (e.g., "METOPROLOL SUCCINATE")
+        drug_salt_forms = ('succinate', 'tartrate', 'maleate', 'fumarate', 'hydrochloride',
+                          'hcl', 'sodium', 'potassium', 'acetate', 'citrate', 'sulfate',
+                          'phosphate', 'chloride', 'bromide', 'besylate', 'mesylate',
+                          'nitrate', 'carbonate', 'oxide', 'lactate', 'gluconate',
+                          'malate', 'stearate', 'palmitate', 'propionate', 'valerate')
+        if any(salt in text_lower for salt in drug_salt_forms):
+            return True
+        
+        # Release type abbreviations (catches drug names like "SUCCINATE ER" misclassified as LOCATION)
+        if re.search(r'\b(ER|SR|CR|XR|XL|LA|DR|CD|SA)\b', text_stripped):
             return True
     
     # ================================================================
@@ -1356,10 +1377,18 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             lenient_mode = True
         
         # ===== STEP 1: Check for PII Leakage =====
-        logger.info(f"Step 1: Leakage detection{' (lenient mode)' if lenient_mode else ''}")
+        # Configurable leakage detection mode: "block", "log", or "disabled"
+        # Note: HIPAA compliance is achieved via masking, not leakage detection
+        leakage_mode = settings.leakage_detection_mode.lower()
         
-        # Detect any NEW PII in response (not from original input)
-        detected_pii = pii_service.detect_pii_phi(response)
+        if leakage_mode == "disabled":
+            logger.info("Step 1: Leakage detection DISABLED (skipping)")
+            leaked_entities = []
+            detected_pii = []
+        else:
+            logger.info(f"Step 1: Leakage detection (mode={leakage_mode}){' (lenient)' if lenient_mode else ''}")
+            # Detect any NEW PII in response (not from original input)
+            detected_pii = pii_service.detect_pii_phi(response)
         
         leaked_entities = []
         for entity in detected_pii:
@@ -1436,34 +1465,51 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                     logger.debug(f"   ✓ Contextual data: {entity_type} = {entity_text[:20]}...")
         
         if leaked_entities:
-            logger.error(
-                f"🚨 PII LEAKAGE DETECTED! Found {len(leaked_entities)} "
-                f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
-            )
-            result = {
-                "response": (
-                    "I apologize, but I cannot display that information due to "
-                    "privacy protection. Please try rephrasing your question."
-                ),
-                "safety_postcheck_passed": False,
-                "metadata": {
-                    **metadata,
-                    "leakage_check": {
-                        "has_leakage": True,
-                        "leaked_entities": [
-                            {
-                                "type": e["entity_type"],
-                                "text": e["text"][:20] + "..."
-                            }
-                            for e in leaked_entities
-                        ]
+            leaked_summary = [
+                {"type": e["entity_type"], "text": e["text"][:20] + "..."}
+                for e in leaked_entities
+            ]
+            
+            if leakage_mode == "block":
+                # BLOCK MODE: Reject response (may cause false positives)
+                logger.error(
+                    f"🚨 PII LEAKAGE DETECTED! BLOCKING response. Found {len(leaked_entities)} "
+                    f"unexpected entities: {[e['entity_type'] for e in leaked_entities]}"
+                )
+                result = {
+                    "response": (
+                        "I apologize, but I cannot display that information due to "
+                        "privacy protection. Please try rephrasing your question."
+                    ),
+                    "safety_postcheck_passed": False,
+                    "metadata": {
+                        **metadata,
+                        "leakage_check": {
+                            "has_leakage": True,
+                            "leaked_entities": leaked_summary,
+                            "action": "blocked"
+                        }
                     }
                 }
-            }
-            await log_state_snapshot(state, node_name, result)
-            return result
+                await log_state_snapshot(state, node_name, result)
+                return result
+            else:
+                # LOG MODE: Log warning but continue with response (recommended for production)
+                logger.warning(
+                    f"⚠️ Potential PII detected (NOT blocking, mode={leakage_mode}): "
+                    f"{len(leaked_entities)} entities: {[e['entity_type'] for e in leaked_entities]}"
+                )
+                # Continue to unmasking - don't block the response
+                # Metadata will include detection info for monitoring
+                metadata["leakage_check"] = {
+                    "has_leakage": True,
+                    "leaked_entities": leaked_summary,
+                    "action": "logged_only"
+                }
+        else:
+            metadata["leakage_check"] = {"has_leakage": False}
         
-        logger.info("✅ No PII leakage detected")
+        logger.info("✅ Leakage check complete - proceeding to unmask")
         
         # ===== STEP 2: Unmask PII/PHI Tokens =====
         logger.info("Step 2: Unmasking tokens")
