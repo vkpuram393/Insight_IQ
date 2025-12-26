@@ -41,10 +41,10 @@ jobs:
           filters: |
             pbmassist-prod:
             - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
-              pbmassist-dev:
-              - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
+            pbmassist-dev:
+            - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
             pbmassist-qa:
-              - '**/deploy-configs/pbmassist-qa/values/v1.yaml'
+            - '**/deploy-configs/pbmassist-qa/values/v1.yaml'
 
       - name: Debug - Show filter outputs
         run: |
