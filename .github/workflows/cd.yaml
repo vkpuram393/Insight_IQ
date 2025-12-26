@@ -7,9 +7,11 @@ on:
       - 'MVP-1'
     paths:
       - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
-      - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
+      # - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
       - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
-      - '**/deploy-configs/pbmassist-dev/k8s/ksa.yaml'
+      # - '**/deploy-configs/pbmassist-dev/k8s/ksa.yaml'
+      - '**/deploy-configs/pbmassist-qa/values/v1.yaml'
+      # - '**/deploy-configs/pbmassist-qa/k8s/ksa.yaml'
   
 permissions:
   id-token: write
@@ -39,14 +41,17 @@ jobs:
           filters: |
             pbmassist-prod:
             - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
-            pbmassist-dev:
-            - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
+              pbmassist-dev:
+              - '**/deploy-configs/pbmassist-dev/values/v1.yaml'
+            pbmassist-qa:
+              - '**/deploy-configs/pbmassist-qa/values/v1.yaml'
 
       - name: Debug - Show filter outputs
         run: |
           echo "Debug: Filter outputs:"
           echo "pbmassist-dev: ${{ steps.changes.outputs.pbmassist-dev }}"
           echo "pbmassist-prod: ${{ steps.changes.outputs.pbmassist-prod }}"
+          echo "pbmassist-qa: ${{ steps.changes.outputs.pbmassist-qa }}"
           echo "Base ref: ${{ github.ref_name }}"
           
       - name: Set Environment Variables
@@ -55,6 +60,7 @@ jobs:
           echo "Debug: Starting environment variable setup"
           echo "Debug: Checking pbmassist-dev filter result: ${{ steps.changes.outputs.pbmassist-dev }}"
           echo "Debug: Checking pbmassist-prod filter result: ${{ steps.changes.outputs.pbmassist-prod }}"
+          echo "Debug: Checking pbmassist-qa filter result: ${{ steps.changes.outputs.pbmassist-qa }}"
           # Get the git SHA (full 40 character SHA)
           GIT_SHA=$(git rev-parse HEAD)
           echo "GIT_SHA=$GIT_SHA" >> $GITHUB_OUTPUT
@@ -68,6 +74,11 @@ jobs:
             echo "ENV_NAME=pbmassist-prod" >> $GITHUB_OUTPUT
             echo "HELM_FILE_VERSION=v1" >> $GITHUB_OUTPUT
             echo "Debug: Set ENV_NAME=pbmassist-prod and HELM_FILE_VERSION=v1"
+          elif [ "${{ steps.changes.outputs.pbmassist-qa }}" = "true" ]; then
+            echo "Debug: Setting environment for pbmassist-qa"
+            echo "ENV_NAME=pbmassist-qa" >> $GITHUB_OUTPUT
+            echo "HELM_FILE_VERSION=v1" >> $GITHUB_OUTPUT
+            echo "Debug: Set ENV_NAME=pbmassist-qa and HELM_FILE_VERSION=v1"
           else
             echo "Debug: No matching filters found, no environment variables set"
           fi
@@ -85,7 +96,7 @@ jobs:
       helm-file-version: ${{ needs.detect-changes.outputs.HELM_FILE_VERSION }}
       helm-template-branch: ${{ vars.HELM_TEMPLATE_BRANCH }}
       canary-weight: "0"
-      lob: 'pss'
+      lob: 'Pharmacy'
       change-description: "Application Deployment"
       rfc-short-desc: "app-deployment"
       change-domain: "Pharmacy Services(PS)"
