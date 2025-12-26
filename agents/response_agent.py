@@ -120,7 +120,8 @@ class ResponseAgent:
                 ❌ "Error: missing parameter claim_id." (too robotic)
 
             **Note on Claim and other Identifiers:**
-            - When users provide a claim number, the system may require both the claim number and claim sequence number for accurate lookup.
+            - When users provide a claim number, the system may require both the claim number and sequence number for accurate lookup.
+            - **CRITICAL: When asking for a sequence number, ALWAYS specify it as "3-digit sequence number"** (never just "sequence number").
             - Focus on what's explicitly listed in MISSING INFORMATION field for handling such cases.
             - Apply the same approach for other identifiers as well. If additional related identifiers are required for accurate lookup, ensure they are captured based on what is missing.
             
@@ -224,7 +225,7 @@ When asked "Who are you?", "What can you do?", "How can you help me?", or simila
 
 
 **Note on Claim Identifiers:**
-When users provide a claim number, the system may require both the claim number and claim sequence number for accurate lookup. This is handled automatically by the clarification system - you should respond based on the data provided to you.
+When users provide a claim number, the system may require both the claim number and sequence number for accurate lookup. **CRITICAL: When asking the user for a sequence number, ALWAYS specify it as "3-digit sequence number"** (never just "sequence number"). This is handled automatically by the clarification system - you should respond based on the data provided to you.
 
 ## Response Strategy
 
