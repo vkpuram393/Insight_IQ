@@ -84,7 +84,7 @@ class CVSIntentEmbedded:
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(ensure_embeddings)
-                future.result(timeout=300)  # Wait for check/generation (5 min timeout)
+                future.result()  # No timeout - startup controls timing
             
             logger.info("🚀 MongoDB Vector Search enabled - embeddings ready, will query on-demand")
             self.intent_embeddings = {}  # Empty dict, queries go to MongoDB
@@ -101,7 +101,7 @@ class CVSIntentEmbedded:
             # Always use ThreadPoolExecutor to avoid event loop conflicts
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_embed_in_thread)
-                self.intent_embeddings = future.result(timeout=180)  # 180s timeout
+                self.intent_embeddings = future.result()  # No timeout - startup controls timing
         
         # Thresholds
         self.confidence_threshold = 0.50  # Match keyword classifier
