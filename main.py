@@ -67,6 +67,23 @@ async def startup_event():
     try:
         await init_graph()
         print("[STARTUP] init_graph done")
+        
+        # Pre-initialize embedding classifier to ensure MongoDB has embeddings
+        # (Embedding generation takes ~3 minutes, must happen before queries arrive)
+        if settings.use_embedding_classifier:
+            print("[STARTUP] Pre-initializing embedding classifier...")
+            import concurrent.futures
+            from classifiers.embedded_classifier import CVSIntentEmbedded
+            
+            def init_classifier():
+                return CVSIntentEmbedded()  # This triggers MongoDB setup
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(init_classifier)
+                future.result()  # No timeout - let it complete (fails naturally if broken)
+            
+            print("[STARTUP] Embedding classifier ready (MongoDB populated)")
+        
     except Exception as e:
         import traceback
         print("[STARTUP] init_graph ERROR:", e)
