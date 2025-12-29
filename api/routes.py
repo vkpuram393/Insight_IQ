@@ -16,6 +16,7 @@ from core.logger import get_logger
 from core.telemetry import log_event, log_request_response, RequestTimer
 from persistence import EventType
 from config.config import settings
+from utils.jwt_utils import extract_user_info_from_jwt
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -50,12 +51,16 @@ async def chat(request: ChatRequest, http_request: Request):
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
+    
+    # Extract user info from JWT for compliance audit logging (email, name, etc.)
+    jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
+    user_info.update(jwt_user_info)
 
     # Log incoming request
     await log_event(
         EventType.REQUEST_RECEIVED,
         session_id,
-        {"text": request.text, "user_info": request.user_info},
+        {"text": request.text, "user_info": user_info},
         user_id
     )
 
@@ -173,12 +178,16 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
+    
+    # Extract user info from JWT for compliance audit logging (email, name, etc.)
+    jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
+    user_info.update(jwt_user_info)
 
     # Log incoming request (follows existing pattern)
     await log_event(
         EventType.REQUEST_RECEIVED,
         session_id,
-        {"text": request.text, "user_info": request.user_info, "streaming": True},
+        {"text": request.text, "user_info": user_info, "streaming": True},
         user_id
     )
 
