@@ -95,5 +95,5 @@ istioHttpRoutes:
     - route: "/api/"
     - route: "/docs/"
     - route: "/health"    
-## Triggers 1
+## Triggers 2
   
