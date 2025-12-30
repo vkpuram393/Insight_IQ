@@ -96,7 +96,7 @@ jobs:
       helm-file-version: ${{ needs.detect-changes.outputs.HELM_FILE_VERSION }}
       helm-template-branch: ${{ vars.HELM_TEMPLATE_BRANCH }}
       canary-weight: "0"
-      lob: 'Pharmacy'
+      lob: 'pharmacy'
       change-description: "Application Deployment"
       rfc-short-desc: "app-deployment"
       change-domain: "Pharmacy Services(PS)"
