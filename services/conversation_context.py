@@ -44,11 +44,12 @@ class ConversationContextService:
             logger.debug("No conversation history to extract from")
             return current_entities
         
-        # Combine all history messages into text
+        # Combine ONLY USER messages into text (exclude assistant messages)
+        # CRITICAL: Including assistant messages can cause entity contamination from API responses
         history_text = " ".join([
             msg.get("content", "") 
             for msg in conversation_history 
-            if isinstance(msg, dict)
+            if isinstance(msg, dict) and msg.get("role") == "user"
         ])
         
         logger.debug(f"Extracting entities from {len(conversation_history)} messages ({len(history_text)} chars)")
