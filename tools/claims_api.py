@@ -37,8 +37,8 @@ from persistence import PersistenceStoreFactory
 # ============================================================================
 logger = get_logger(__name__)
 
-# Module-level auth token (set by call_claims_tool_node before API calls)
-_current_auth_token = ""
+# NOTE: Auth token is now passed as parameter to functions, not stored globally
+# This ensures thread-safety for millions of concurrent users
 
 # ============================================================================
 # MAIN CLAIMS API TOOL NODE
@@ -62,14 +62,13 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
     # Extract logging context if called from LangGraph
     log_ctx = extract_logging_context(state) if isinstance(state, dict) else {}
     
-    # Extract auth token from user_info and set module-level variable
-    global _current_auth_token
+    # Extract auth token from user_info - passed as parameter (thread-safe)
     user_info = state.get("user_info", {}) if isinstance(state, dict) else {}
-    _current_auth_token = user_info.get("auth_token", "") if isinstance(user_info, dict) else ""
+    auth_token = user_info.get("auth_token", "") if isinstance(user_info, dict) else ""
     
     # Debug log to verify token is captured
-    if _current_auth_token:
-        logger.info(f"🔑 Auth token captured: {_current_auth_token[:30]}...")
+    if auth_token:
+        logger.info(f"🔑 Auth token captured: {auth_token[:30]}...")
     else:
         logger.warning("⚠️ No auth token provided in request headers")
     
@@ -241,7 +240,8 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 logger.info(f"🌐 Calling enriched claim details flow")
                 result = combine_claim_details_and_list(
                     claimNumber=claim_num,
-                    claimSequence=claim_seq
+                    claimSequence=claim_seq,
+                    auth_token=auth_token  # Thread-safe: passed as parameter
                 )
                 elapsed_ms = (time.time() - start) * 1000.0
                 
@@ -411,11 +411,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 }
             )
 
-        # 3) call external API (sync call wrapped with retry decorator)
+        # 3) call external API (sync call wrapped with retry decorator) - Thread-safe
         logger.info(f"🌐 Calling external API: {api.name} → {getattr(api, 'full_url', 'N/A')}")
         start = time.time()
         try:
-            result = call_external_api(api, body)
+            result = call_external_api(api, body, auth_token)
             elapsed_ms = (time.time() - start) * 1000.0
             
             logger.info(f"✅ API call succeeded in {elapsed_ms:.2f}ms")
@@ -742,10 +742,15 @@ def match_api(intent: str, entities: Dict[str, Any]):
 # EXTERNAL API CALL WITH RETRY
 # ============================================================================
 @retry(attempts=3, retry_on=(ExternalAPIError, ToolTimeoutError))
-def call_external_api(api, body: Dict[str, Any]) -> Dict[str, Any]:
+def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> Dict[str, Any]:
     """
     Synchronous HTTP call wrapper. Raises ExternalAPIError / ToolTimeoutError on issues.
     Returned value is parsed JSON.
+    
+    Args:
+        api: API configuration object
+        body: Request body as dict
+        auth_token: Authorization token (passed per-request for thread-safety)
     """
     url = getattr(api, "full_url", getattr(api, "endpoint", None))
     method = getattr(api, "method", "POST").upper()
@@ -758,7 +763,7 @@ def call_external_api(api, body: Dict[str, Any]) -> Dict[str, Any]:
         "content-type": "application/json",
         "x-correlation-id": correlation_id,
         "x-clientRefId": correlation_id,
-        "Authorization": _current_auth_token
+        "Authorization": auth_token  # Thread-safe: passed as parameter
     }
 
     # Log request details for debugging
@@ -838,7 +843,7 @@ def get_first_non_none(dicts_and_keys):
     return None
 
 
-def get_claim_details(claimNumber: str, claimSequence: str) -> Dict[str, Any]:
+def get_claim_details(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
     """
     Fetch claim details by claim number and sequence.
     Uses existing call_external_api() with retry logic.
@@ -847,6 +852,7 @@ def get_claim_details(claimNumber: str, claimSequence: str) -> Dict[str, Any]:
     Args:
         claimNumber: The claim number
         claimSequence: The claim sequence
+        auth_token: Authorization token (passed per-request for thread-safety)
         
     Returns:
         Single claim details object as returned by API or fallback
@@ -868,8 +874,8 @@ def get_claim_details(claimNumber: str, claimSequence: str) -> Dict[str, Any]:
         }
         body = api.body_template(entities)
         
-        # Call external API with retry logic
-        result = call_external_api(api, body)
+        # Call external API with retry logic - pass auth_token for thread-safety
+        result = call_external_api(api, body, auth_token)
         logger.debug(f"✅ Successfully fetched claim details")
         return result
     
@@ -918,7 +924,7 @@ def get_claim_details(claimNumber: str, claimSequence: str) -> Dict[str, Any]:
         raise
 
 
-def get_claim_list(claimId: str, claimSequence: str = "1") -> Dict[str, Any]:
+def get_claim_list(claimId: str, claimSequence: str = "1", auth_token: str = "") -> Dict[str, Any]:
     """
     Fetch claim list by claim ID.
     Uses existing call_external_api() with retry logic.
@@ -927,6 +933,7 @@ def get_claim_list(claimId: str, claimSequence: str = "1") -> Dict[str, Any]:
     Args:
         claimId: The claim ID to search for
         claimSequence: The claim sequence (optional, used for fallback data generation)
+        auth_token: Authorization token (passed per-request for thread-safety)
         
     Returns:
         List of claims as returned by API or fallback
@@ -953,8 +960,8 @@ def get_claim_list(claimId: str, claimSequence: str = "1") -> Dict[str, Any]:
         }
         body = api.body_template(entities)
         
-        # Call external API with retry logic
-        result = call_external_api(api, body)
+        # Call external API with retry logic - pass auth_token for thread-safety
+        result = call_external_api(api, body, auth_token)
         logger.debug(f"✅ Successfully fetched claim list")
         return result
     
@@ -1003,7 +1010,7 @@ def get_claim_list(claimId: str, claimSequence: str = "1") -> Dict[str, Any]:
         raise
 
 
-def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict[str, Any]:
+def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
     """
     Enriched claim details: combines claim details with filtered claim list.
     
@@ -1016,6 +1023,7 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
     Args:
         claimNumber: The claim number
         claimSequence: The claim sequence
+        auth_token: Authorization token (passed per-request for thread-safety)
         
     Returns:
         Merged enriched claim details object
@@ -1041,7 +1049,7 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
     # Step 1: Get claim list FIRST (to validate claim and sequence exist)
     logger.info(f"Step 1: Fetching claim list FIRST for claimId={claimNumber}")
     try:
-        claim_list_response = get_claim_list(claimNumber, claimSequence)
+        claim_list_response = get_claim_list(claimNumber, claimSequence, auth_token)
         logger.info(f"   ✅ Claim list fetched successfully")
         logger.debug(f"   Response type: {type(claim_list_response).__name__}")
         if isinstance(claim_list_response, dict):
@@ -1178,7 +1186,7 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str) -> Dict
     # Step 3: Get claim details (only after sequence is validated)
     logger.info("Step 3: Fetching claim details (sequence validated)")
     try:
-        claim_details = get_claim_details(claimNumber, claimSequence)
+        claim_details = get_claim_details(claimNumber, claimSequence, auth_token)
         logger.info(f"   ✅ Claim details fetched successfully")
     except ExternalAPIError as e:
         logger.error(f"   ❌ Claim details API failed: {e}")
