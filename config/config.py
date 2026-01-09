@@ -72,9 +72,21 @@ class Settings(BaseSettings):
     remove_punctuation_in_normalization: bool = True
 
     # Memory Store (cache and session memory)
-    memory_store_type: str = "inmemory"  # Options: "inmemory", "redis", "memorystore"
+    memory_store_type: str = "redis"  # Options: "inmemory", "redis", "memorystore"
     memory_store_host: str | None = None
     memory_store_port: int = 6379
+
+    # Redis/Memorystore Configuration (populated by Vault sidecar)
+    # DEV: REDIS_HOST=10.236.128.156, REDIS_PORT=6378, REDIS_PASSWORD from Vault
+    # PROD: Values injected by Vault sidecar automatically
+    redis_host: str = ""  # ⚠️ From Vault/deployment config (REDIS_HOST)
+    redis_port: int = 6378  # ⚠️ Overridden by REDIS_PORT env var
+    redis_password: str = ""  # ⚠️ From Vault (REDIS_PASSWORD) - NEVER hardcode
+    redis_username: str = ""  # ⚠️ From Vault (REDIS_USERNAME) - optional, for Redis ACL
+    redis_db: int = 0  # ⚠️ Overridden by REDIS_DB env var
+    redis_ssl: bool = True  # ⚠️ Overridden by REDIS_SSL env var - set True in production
+    redis_ssl_cert_reqs: str = ""  # Options: "required", "optional", "none"
+
 
     # Persistence Store (telemetry and analytics)
     # ⚠️ IMPORTANT: This default is OVERRIDDEN by PERSISTENCE_STORE_TYPE in .env file

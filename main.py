@@ -136,6 +136,210 @@ async def llm_test():
     return {"status": "llm_test", "response": response}
 
 
+@app.get("/redis/sessions")
+async def list_redis_sessions():
+    """List all session IDs that have conversations stored in Redis"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Check if it's Redis
+        if type(memory_store).__name__ != "RedisStore":
+            return {
+                "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}",
+                "suggestion": "Set MEMORY_STORE_TYPE=redis in .env file"
+            }
+        
+        # List all sessions
+        session_ids = await memory_store.list_all_sessions()
+        
+        return {
+            "total_sessions": len(session_ids),
+            "sessions": session_ids
+        }
+        
+    except Exception as e:
+        return {
+            "status": "❌ FAILED",
+            "error": str(e)
+        }
+
+@app.get("/redis/session/{session_id}/history")
+async def get_session_history(session_id: str):
+    """Get conversation history for a specific session"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Get conversation history
+        history = await memory_store.get_session_history(session_id)
+        
+        return {
+            "session_id": session_id,
+            "message_count": len(history),
+            "history": history
+        }
+        
+    except Exception as e:
+        return {
+            "status": "❌ FAILED",
+            "error": str(e)
+        }
+
+@app.get("/redis/session/{session_id}/facts")
+async def get_session_facts(session_id: str):
+    """Get extracted facts for a specific session"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Get session facts
+        facts = await memory_store.get_session_facts(session_id)
+        
+        return {
+            "session_id": session_id,
+            "fact_count": len(facts),
+            "facts": facts
+        }
+        
+    except Exception as e:
+        return {
+            "status": "❌ FAILED",
+            "error": str(e)
+        }
+
+@app.get("/redis/session/{session_id}/keys")
+async def get_session_keys(session_id: str):
+    """Get all Redis keys for a specific session"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Check if it's Redis
+        if type(memory_store).__name__ != "RedisStore":
+            return {
+                "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}"
+            }
+        
+        # Get all keys for this session
+        keys = await memory_store.get_all_session_keys(session_id)
+        
+        return {
+            "session_id": session_id,
+            "key_count": len(keys),
+            "keys": keys
+        }
+        
+    except Exception as e:
+        return {
+            "status": "❌ FAILED",
+            "error": str(e)
+        }
+
+@app.get("/redis/session/{session_id}/all")
+async def get_session_all_data(session_id: str):
+    """Get all data (history + facts + keys) for a specific session"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        result = {
+            "session_id": session_id,
+            "store_type": type(memory_store).__name__,
+            "history": {
+                "message_count": 0,
+                "messages": []
+            },
+            "facts": {
+                "fact_count": 0,
+                "facts": []
+            }
+        }
+        
+        # If Redis, add connection diagnostics
+        if type(memory_store).__name__ == "RedisStore":
+            # Get connection status
+            connection_status = await memory_store.get_connection_status()
+            result["redis_connection"] = connection_status
+            
+            # Try to get keys (this will show what keys exist)
+            keys = await memory_store.get_all_session_keys(session_id)
+            result["redis_keys"] = {
+                "key_count": len(keys),
+                "keys": keys,
+                "search_pattern": f"session:{session_id}:*"
+            }
+            
+            # If not connected, return early with diagnostic info
+            if not connection_status.get("connected", False):
+                result["warning"] = "Redis is not connected. Data retrieval may be incomplete."
+                return result
+            
+            # Also try searching for keys with different session_id formats
+            # (in case session_id is stored with/without braces)
+            session_id_variants = [
+                session_id,  # Original
+                session_id.strip("{}"),  # Without braces
+                f"{{{session_id}}}" if not session_id.startswith("{") else session_id  # With braces
+            ]
+            
+            all_keys_found = []
+            for variant in session_id_variants:
+                variant_keys = await memory_store.get_all_session_keys(variant)
+                if variant_keys:
+                    all_keys_found.extend(variant_keys)
+                    if variant != session_id:
+                        result["redis_keys"]["alternative_search"] = {
+                            "session_id_variant": variant,
+                            "keys_found": variant_keys
+                        }
+            
+            # Get all session data
+            history = await memory_store.get_session_history(session_id)
+            facts = await memory_store.get_session_facts(session_id)
+            
+            result["history"] = {
+                "message_count": len(history),
+                "messages": history
+            }
+            result["facts"] = {
+                "fact_count": len(facts),
+                "facts": facts
+            }
+        else:
+            # For non-Redis stores, just get the data
+            history = await memory_store.get_session_history(session_id)
+            facts = await memory_store.get_session_facts(session_id)
+            
+            result["history"] = {
+                "message_count": len(history),
+                "messages": history
+            }
+            result["facts"] = {
+                "fact_count": len(facts),
+                "facts": facts
+            }
+        
+        return result
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "❌ FAILED",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 # Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
     print("🚀 LangGraph Multi-Agent Framework")
@@ -163,7 +367,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
-        port=8000,
+        port=8001,
         reload=enable_reload,
         log_level="debug"
     )

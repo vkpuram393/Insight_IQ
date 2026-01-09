@@ -11,6 +11,7 @@ All cache operations go through this interface.
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from config.config import settings
 
 
 class MemoryStore(ABC):
@@ -96,9 +97,15 @@ class MemoryStoreFactory:
                 from memory.inmemory_store import InMemoryStore
                 cls._instance = InMemoryStore()
             elif store_type == "redis":
-                # TODO: Implement when Redis is available
                 from memory.redis_store import RedisStore
-                cls._instance = RedisStore()
+                cls._instance = RedisStore(
+                    host=settings.redis_host,
+                    port=settings.redis_port,
+                    password=settings.redis_password,
+                    username=settings.redis_username or "",
+                    db=settings.redis_db,
+                    ssl=settings.redis_ssl
+                )
             elif store_type == "memorystore":
                 # TODO: Implement when GCP Memorystore is available
                 from memory.gcp_memorystore import GCPMemoryStore
