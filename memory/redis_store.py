@@ -13,6 +13,7 @@ Supports:
 import json
 import asyncio
 import time
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from memory import MemoryStore
 from core.logger import get_logger
@@ -330,18 +331,29 @@ class RedisStore(MemoryStore):
         """
         Append message to session history.
         Uses RPUSH to add to end of list, then LTRIM to keep only last N messages.
+        
+        Matches InMemoryStore behavior exactly:
+        - Includes timestamp field for consistency
+        - Maintains chronological order
+        - Trims to last max_messages
         """
         try:
             await self._ensure_connected()
             key = f"session:{session_id}:history"
             
-            # Create message object
-            message = json.dumps({"role": role, "content": content})
+            # Create message object matching InMemoryStore format exactly
+            # InMemoryStore includes: role, content, timestamp
+            message = json.dumps({
+                "role": role,
+                "content": content,
+                "timestamp": datetime.now().isoformat()
+            })
             
-            # Add to end of list
+            # Add to end of list (maintains chronological order)
             await self.client.rpush(key, message)
             
-            # Trim to keep only last max_messages
+            # Trim to keep only last max_messages (same as InMemoryStore)
+            # LTRIM with negative indices keeps last N items
             await self.client.ltrim(key, -max_messages, -1)
             
             # Set expiration (24 hours)
@@ -397,18 +409,24 @@ class RedisStore(MemoryStore):
         """
         Add an extracted fact to session.
         Uses Redis LIST to append facts.
+        
+        Matches InMemoryStore behavior exactly:
+        - Includes timestamp field for consistency
+        - Maintains chronological order
         """
         try:
             await self._ensure_connected()
             key = f"session:{session_id}:facts"
             
-            # Create fact object
+            # Create fact object matching InMemoryStore format exactly
+            # InMemoryStore includes: type, data, timestamp
             fact = json.dumps({
                 "type": fact_type,
-                "data": data
+                "data": data,
+                "timestamp": datetime.now().isoformat()
             })
             
-            # Add to list
+            # Add to list (maintains chronological order)
             await self.client.rpush(key, fact)
             
             # Set expiration (24 hours)
@@ -586,6 +604,93 @@ class RedisStore(MemoryStore):
             status["error"] = str(e)
         
         return status
+
+    async def delete_sessions_older_than_days(self, days: int) -> Dict[str, Any]:
+        """
+        Delete all sessions older than specified number of days.
+        
+        Uses the timestamp from the first message in each session's history
+        to determine age. If no history exists, uses TTL to estimate age.
+        
+        Args:
+            days: Number of days (e.g., 2 = delete sessions older than 2 days)
+            
+        Returns:
+            Dictionary with deletion statistics
+        """
+        try:
+            await self._ensure_connected()
+            
+            cutoff_time = datetime.now() - timedelta(days=days)
+            cutoff_timestamp = cutoff_time.isoformat()
+            
+            # Get all sessions
+            all_sessions = await self.list_all_sessions()
+            
+            deleted_sessions = []
+            deleted_keys_count = 0
+            skipped_sessions = []
+            
+            for session_id in all_sessions:
+                try:
+                    # Get history to check timestamp
+                    history = await self.get_session_history(session_id)
+                    
+                    if history and len(history) > 0:
+                        # Check timestamp of first message
+                        first_message = history[0]
+                        first_timestamp = first_message.get("timestamp", "")
+                        
+                        if first_timestamp and first_timestamp < cutoff_timestamp:
+                            # Session is older than cutoff, delete it
+                            keys = await self.get_all_session_keys(session_id)
+                            if keys:
+                                await self.client.delete(*keys)
+                                deleted_keys_count += len(keys)
+                                deleted_sessions.append(session_id)
+                                logger.info(f"Deleted session '{session_id}' ({len(keys)} keys) - older than {days} days")
+                        else:
+                            skipped_sessions.append(session_id)
+                    else:
+                        # No history, check TTL as fallback
+                        # If TTL is close to expiration (less than 1 day remaining), likely old
+                        history_key = f"session:{session_id}:history"
+                        ttl = await self.client.ttl(history_key)
+                        
+                        # If TTL is -1 (no expiration) or -2 (key doesn't exist), skip
+                        # If TTL is very low (< 1 day = 86400 seconds), consider it old
+                        if ttl > 0 and ttl < 86400:
+                            keys = await self.get_all_session_keys(session_id)
+                            if keys:
+                                await self.client.delete(*keys)
+                                deleted_keys_count += len(keys)
+                                deleted_sessions.append(session_id)
+                                logger.info(f"Deleted session '{session_id}' ({len(keys)} keys) - low TTL suggests old session")
+                        else:
+                            skipped_sessions.append(session_id)
+                            
+                except Exception as e:
+                    logger.warning(f"Error processing session '{session_id}' for deletion: {e}")
+                    skipped_sessions.append(session_id)
+            
+            result = {
+                "deleted_sessions": len(deleted_sessions),
+                "deleted_keys": deleted_keys_count,
+                "skipped_sessions": len(skipped_sessions),
+                "cutoff_date": cutoff_time.isoformat(),
+                "days": days
+            }
+            
+            logger.info(f"Deleted {len(deleted_sessions)} sessions ({deleted_keys_count} keys) older than {days} days")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to delete old sessions: {e}")
+            return {
+                "error": str(e),
+                "deleted_sessions": 0,
+                "deleted_keys": 0
+            }
 
     async def close(self) -> None:
         """Close Redis connection."""

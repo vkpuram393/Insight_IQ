@@ -198,10 +198,10 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
 
 async def update_memory_node(state: AgentState) -> Dict[str, Any]:
     """
-    Store conversation in memory and persistent storage.
+    Store conversation in memory store and persistent storage.
 
     This node saves the conversation to:
-    1. In-memory store (Redis/Memorystore) for real-time context
+    1. Memory store (Redis/InMemory/Memorystore) for real-time context
     2. Persistent database (conversation_history table) for long-term storage
     
     IMPORTANT: This runs AFTER response_safety_postcheck, so data is UNMASKED.
@@ -221,7 +221,11 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         print("\n" + "="*80)
         print("🔥 UPDATE_MEMORY_NODE CALLED! 🔥")
         print("="*80)
-        logger.info("💾 Node: Update Memory (in-memory + persistent)")
+        
+        # Get memory store type for accurate logging
+        memory_store_type = settings.memory_store_type
+        memory_store_name = type(_memory_store).__name__
+        logger.info(f"💾 Node: Update Memory ({memory_store_type}/{memory_store_name} + persistent)")
 
         session_id = state["session_id"]
         user_id = log_ctx.get("user_id") or (state.get("user_info", {}) or {}).get("user_id")
@@ -246,7 +250,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             except (TypeError, ValueError):
                 duration_ms = None
 
-        # 1. Update in-memory store (for real-time context)
+        # 1. Update memory store (Redis/InMemory/Memorystore) for real-time context
         await _memory_store.append_to_session(
             session_id=session_id,
             role="user",
@@ -309,11 +313,11 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             traceback.print_exc()
             # Continue execution even if save fails - don't break the workflow
 
-        # Get updated context from in-memory store
+        # Get updated context from memory store
         updated_history = await _memory_store.get_session_history(session_id)
         updated_facts = await _memory_store.get_session_facts(session_id)
-
-        logger.info(f"✅ Memory updated (in-memory + persistent={conversation_saved})")
+        
+        logger.info(f"✅ Memory updated ({memory_store_type}/{memory_store_name} + persistent={conversation_saved})")
         result = {
             "conversation_history": updated_history,
             "relevant_facts": updated_facts,
