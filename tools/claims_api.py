@@ -6,13 +6,14 @@ Uses repository-based API registry and returns ToolResult (with AgentError)
 
 import time
 import uuid
-import requests
+import asyncio
+import httpx
 import traceback
 from typing import Dict, Any, Optional
 
 from tools.api_repository import get_api_repository  # your repository builder
 from core.errors.error_handler import to_agent_error
-from utils.retry import retry
+from utils.retry import async_retry
 from core.errors.exceptions import ExternalAPIError, ToolTimeoutError
 from tools.api_fallbacks import get_fallback_details, get_fallback_list  # dynamic fallback data
 
@@ -238,7 +239,7 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
             start = time.time()
             try:
                 logger.info(f"🌐 Calling enriched claim details flow")
-                result = combine_claim_details_and_list(
+                result = await combine_claim_details_and_list(
                     claimNumber=claim_num,
                     claimSequence=claim_seq,
                     auth_token=auth_token  # Thread-safe: passed as parameter
@@ -411,11 +412,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 }
             )
 
-        # 3) call external API (sync call wrapped with retry decorator) - Thread-safe
+        # 3) call external API (async call wrapped with retry decorator) - Thread-safe
         logger.info(f"🌐 Calling external API: {api.name} → {getattr(api, 'full_url', 'N/A')}")
         start = time.time()
         try:
-            result = call_external_api(api, body, auth_token)
+            result = await call_external_api(api, body, auth_token)
             elapsed_ms = (time.time() - start) * 1000.0
             
             logger.info(f"✅ API call succeeded in {elapsed_ms:.2f}ms")
@@ -739,18 +740,21 @@ def match_api(intent: str, entities: Dict[str, Any]):
 
 
 # ============================================================================
-# EXTERNAL API CALL WITH RETRY
+# EXTERNAL API CALL WITH RETRY (ASYNC)
 # ============================================================================
-@retry(attempts=3, retry_on=(ExternalAPIError, ToolTimeoutError))
-def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> Dict[str, Any]:
+@async_retry(attempts=3, retry_on=(ExternalAPIError, ToolTimeoutError))
+async def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> Dict[str, Any]:
     """
-    Synchronous HTTP call wrapper. Raises ExternalAPIError / ToolTimeoutError on issues.
+    Async HTTP call wrapper using httpx. Raises ExternalAPIError / ToolTimeoutError on issues.
     Returned value is parsed JSON.
     
     Args:
         api: API configuration object
         body: Request body as dict
         auth_token: Authorization token (passed per-request for thread-safety)
+        
+    Returns:
+        Parsed JSON response as dict
     """
     url = getattr(api, "full_url", getattr(api, "endpoint", None))
     method = getattr(api, "method", "POST").upper()
@@ -773,54 +777,69 @@ def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> Dict[s
     logger.info(f"   Headers: {headers}")
     logger.info(f"   Body: {body}")
     
-    try:
-        resp = requests.request(method, url, headers=headers, json=body, timeout=30, verify=True)
-        logger.info(f"   Response Status: {resp.status_code}")
-        if resp.status_code != 200:
-            logger.error(f"   Response Body: {resp.text}")
-        resp.raise_for_status()
-    except requests.exceptions.Timeout as e:
-        # timeout -> retriable
-        raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
-    except requests.RequestException as e:
-        # non-timeout HTTP error or connection error
-        status = getattr(getattr(e, "response", None), "status_code", None)
-        
-        # Capture full error response body for detailed error reporting
-        error_response_body = None
-        error_response_json = None
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"❌ API Error Response:")
-            logger.error(f"   Status: {e.response.status_code}")
-            logger.error(f"   Response Text: {e.response.text[:500]}")
+    # Use httpx.AsyncClient for async HTTP requests
+    async with httpx.AsyncClient(timeout=30.0, verify=True) as client:
+        try:
+            resp = await client.request(method, url, headers=headers, json=body)
+            logger.info(f"   Response Status: {resp.status_code}")
+            if resp.status_code != 200:
+                logger.error(f"   Response Body: {resp.text[:500]}")
+            resp.raise_for_status()
             
-            # Store the full response body
-            error_response_body = e.response.text
-            
-            # Try to parse as JSON for structured error details
+            # parse JSON or raise (inside the context manager to access resp)
             try:
-                error_response_json = e.response.json()
-            except:
-                pass  # Not JSON, use raw text
-        
-        # Build comprehensive error details
-        error_details = {
-            "status": status,
-            "api": getattr(api, "name", url),
-            "response_body": error_response_body,
-            "response_json": error_response_json,
-            "url": url
-        }
-        
-        retriable = status is None or (500 <= status < 600)
-        raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
-
-    # parse JSON or raise
-    try:
-        return resp.json()
-    except ValueError:
-        # non-json response
-        raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
+                return resp.json()
+            except (ValueError, TypeError) as e:
+                # non-json response
+                raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
+                
+        except httpx.TimeoutException as e:
+            # timeout -> retriable
+            raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
+        except httpx.HTTPStatusError as e:
+            # HTTP error (4xx, 5xx)
+            status = e.response.status_code
+            
+            # Capture full error response body for detailed error reporting
+            error_response_body = None
+            error_response_json = None
+            if e.response is not None:
+                logger.error(f"❌ API Error Response:")
+                logger.error(f"   Status: {e.response.status_code}")
+                logger.error(f"   Response Text: {e.response.text[:500]}")
+                
+                # Store the full response body
+                error_response_body = e.response.text
+                
+                # Try to parse as JSON for structured error details
+                try:
+                    error_response_json = e.response.json()
+                except:
+                    pass  # Not JSON, use raw text
+            
+            # Build comprehensive error details
+            error_details = {
+                "status": status,
+                "api": getattr(api, "name", url),
+                "response_body": error_response_body,
+                "response_json": error_response_json,
+                "url": url
+            }
+            
+            retriable = status is None or (500 <= status < 600)
+            raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
+        except httpx.RequestError as e:
+            # Connection error or other request error
+            logger.error(f"❌ Request Error: {e}")
+            error_details = {
+                "status": None,
+                "api": getattr(api, "name", url),
+                "response_body": None,
+                "response_json": None,
+                "url": url
+            }
+            # Connection errors are retriable
+            raise ExternalAPIError(str(e), details=error_details, retriable=True)
 
 
 # ============================================================================
@@ -843,9 +862,9 @@ def get_first_non_none(dicts_and_keys):
     return None
 
 
-def get_claim_details(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
+async def get_claim_details(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
     """
-    Fetch claim details by claim number and sequence.
+    Fetch claim details by claim number and sequence (async).
     Uses existing call_external_api() with retry logic.
     Falls back to JSON file on failure.
     
@@ -875,7 +894,7 @@ def get_claim_details(claimNumber: str, claimSequence: str, auth_token: str = ""
         body = api.body_template(entities)
         
         # Call external API with retry logic - pass auth_token for thread-safety
-        result = call_external_api(api, body, auth_token)
+        result = await call_external_api(api, body, auth_token)
         logger.debug(f"✅ Successfully fetched claim details")
         return result
     
@@ -924,9 +943,9 @@ def get_claim_details(claimNumber: str, claimSequence: str, auth_token: str = ""
         raise
 
 
-def get_claim_list(claimId: str, claimSequence: str = "1", auth_token: str = "") -> Dict[str, Any]:
+async def get_claim_list(claimId: str, claimSequence: str = "1", auth_token: str = "") -> Dict[str, Any]:
     """
-    Fetch claim list by claim ID.
+    Fetch claim list by claim ID (async).
     Uses existing call_external_api() with retry logic.
     Falls back to dynamic generated data on failure.
     
@@ -961,7 +980,7 @@ def get_claim_list(claimId: str, claimSequence: str = "1", auth_token: str = "")
         body = api.body_template(entities)
         
         # Call external API with retry logic - pass auth_token for thread-safety
-        result = call_external_api(api, body, auth_token)
+        result = await call_external_api(api, body, auth_token)
         logger.debug(f"✅ Successfully fetched claim list")
         return result
     
@@ -1010,15 +1029,14 @@ def get_claim_list(claimId: str, claimSequence: str = "1", auth_token: str = "")
         raise
 
 
-def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
+async def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_token: str = "") -> Dict[str, Any]:
     """
-    Enriched claim details: combines claim details with filtered claim list.
+    Enriched claim details: combines claim details with filtered claim list (async).
     
-    OPTIMIZED Flow (list first for early validation):
-        Step 1: Fetch claim list FIRST (to validate sequence exists)
+    OPTIMIZED Flow with concurrent API calls:
+        Step 1: Fetch claim list and claim details CONCURRENTLY (for better performance)
         Step 2: Validate sequence exists in list (FAIL EARLY if not found)
-        Step 3: Fetch claim details (only if sequence is valid)
-        Step 4: Merge filtered list record with claim details
+        Step 3: Merge filtered list record with claim details
         
     Args:
         claimNumber: The claim number
@@ -1031,7 +1049,7 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_to
     Raises:
         ExternalAPIError: With full error details for response agent
     """
-    logger.info(f"🔄 Starting enriched claim details flow (list-first validation)")
+    logger.info(f"🔄 Starting enriched claim details flow (concurrent API calls)")
     logger.info(f"   📌 Input: claimNumber={claimNumber} (type: {type(claimNumber).__name__})")
     logger.info(f"   📌 Input: claimSequence={claimSequence} (type: {type(claimSequence).__name__})")
     
@@ -1046,14 +1064,67 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_to
         claimSequence = str(claimSequence[0]) if claimSequence else "1"
         logger.info(f"   ✅ Converted to: claimSequence={claimSequence}")
     
-    # Step 1: Get claim list FIRST (to validate claim and sequence exist)
-    logger.info(f"Step 1: Fetching claim list FIRST for claimId={claimNumber}")
+    # Step 1: Fetch claim list and claim details CONCURRENTLY for better performance
+    logger.info(f"Step 1: Fetching claim list and claim details concurrently for claimId={claimNumber}")
+    
+    # Initialize variables for error handling
+    claim_details_error = None
+    
     try:
-        claim_list_response = get_claim_list(claimNumber, claimSequence, auth_token)
+        # Execute both API calls concurrently using asyncio.gather
+        claim_list_response, claim_details = await asyncio.gather(
+            get_claim_list(claimNumber, claimSequence, auth_token),
+            get_claim_details(claimNumber, claimSequence, auth_token),
+            return_exceptions=True
+        )
+        
+        # Check if claim_list_response is an exception
+        if isinstance(claim_list_response, Exception):
+            logger.error(f"   ❌ Claim list API failed: {claim_list_response}")
+            if isinstance(claim_list_response, ExternalAPIError):
+                raise claim_list_response
+            raise ExternalAPIError(
+                f"Failed to fetch claim list for claim number '{claimNumber}': {str(claim_list_response)}",
+                details={
+                    "claimNumber": claimNumber,
+                    "claimSequence": claimSequence,
+                    "status": 500,
+                    "error_type": "list_api_error",
+                    "api": "get_claim_list",
+                    "message": f"Unable to retrieve claim information for claim number '{claimNumber}'."
+                },
+                retriable=True
+            )
+        
         logger.info(f"   ✅ Claim list fetched successfully")
         logger.debug(f"   Response type: {type(claim_list_response).__name__}")
         if isinstance(claim_list_response, dict):
             logger.debug(f"   Response keys: {list(claim_list_response.keys())}")
+        
+        # Check if claim_details is an exception
+        if isinstance(claim_details, Exception):
+            logger.error(f"   ❌ Claim details API failed: {claim_details}")
+            # Even if details fails, we can still validate sequence from list
+            # But we'll need to handle this case
+            if isinstance(claim_details, ExternalAPIError):
+                # Store the exception to raise later after sequence validation
+                claim_details_error = claim_details
+            else:
+                claim_details_error = ExternalAPIError(
+                    f"Failed to fetch claim details for claim number '{claimNumber}', sequence '{claimSequence}': {str(claim_details)}",
+                    details={
+                        "claimNumber": claimNumber,
+                        "claimSequence": claimSequence,
+                        "status": 500,
+                        "error_type": "details_api_error",
+                        "api": "get_claim_details",
+                        "message": f"An unexpected error occurred while retrieving claim details."
+                    },
+                    retriable=True
+                )
+            claim_details = None  # Set to None to indicate failure
+        else:
+            logger.info(f"   ✅ Claim details fetched successfully")
     except ExternalAPIError as e:
         # List API failed - re-raise with enhanced details
         logger.error(f"   ❌ Claim list API failed: {e}")
@@ -1089,6 +1160,8 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_to
     
     # Step 2: Extract list and validate sequence IMMEDIATELY (fail fast)
     logger.info("Step 2: Extracting claim list and validating sequence...")
+    
+    # Note: claim_details may be None if the concurrent call failed, but we validate sequence first
     
     claim_list = []
     if isinstance(claim_list_response, dict):
@@ -1181,39 +1254,29 @@ def combine_claim_details_and_list(claimNumber: str, claimSequence: str, auth_to
             retriable=False
         )
     
-    logger.info(f"   ✅ Sequence validated - proceeding to fetch details")
+    logger.info(f"   ✅ Sequence validated")
     
-    # Step 3: Get claim details (only after sequence is validated)
-    logger.info("Step 3: Fetching claim details (sequence validated)")
-    try:
-        claim_details = get_claim_details(claimNumber, claimSequence, auth_token)
-        logger.info(f"   ✅ Claim details fetched successfully")
-    except ExternalAPIError as e:
-        logger.error(f"   ❌ Claim details API failed: {e}")
-        raise ExternalAPIError(
-            f"Failed to fetch claim details for claim number '{claimNumber}', sequence '{claimSequence}': {str(e)}",
-            details={
-                "claimNumber": claimNumber,
-                "claimSequence": claimSequence,
-                "status": e.details.get("status") if hasattr(e, 'details') and e.details else 500,
-                "error_type": "details_api_error",
-                "response_body": e.details.get("response_body") if hasattr(e, 'details') and e.details else None,
-                "response_json": e.details.get("response_json") if hasattr(e, 'details') and e.details else None,
-                "url": e.details.get("url") if hasattr(e, 'details') and e.details else None,
-                "api": "get_claim_details",
-                "message": f"Unable to retrieve claim details for claim number '{claimNumber}', sequence '{claimSequence}'."
-            },
-            retriable=e.retriable if hasattr(e, 'retriable') else True
-        )
+    # Step 3: Check if claim details fetch failed (from concurrent call)
+    if claim_details is None:
+        if claim_details_error is not None:
+            logger.error(f"   ❌ Claim details API failed during concurrent fetch")
+            raise claim_details_error
+        else:
+            # This shouldn't happen, but handle it gracefully
+            logger.error(f"   ❌ Claim details is None but no error was captured")
+            raise ExternalAPIError(
+                f"Failed to fetch claim details for claim number '{claimNumber}', sequence '{claimSequence}'",
+                details={
+                    "claimNumber": claimNumber,
+                    "claimSequence": claimSequence,
+                    "status": 500,
+                    "error_type": "details_api_error",
+                    "api": "get_claim_details",
+                    "message": f"An unexpected error occurred while retrieving claim details."
+                },
+                retriable=True
+            )
     
-    # # Step 4: Merge results
-    # logger.info("Step 4: Merging claim details with list data")
-    # enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
-    # enriched_details["list_data"] = matched_claim
-    # logger.info("✅ Successfully enriched claim details with list_data")
-    
-    # return enriched_details
-
     # Step 4: Merge results
     logger.info("Step 4: Merging claim details with list data")
     enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
