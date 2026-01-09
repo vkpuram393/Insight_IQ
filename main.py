@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import sys
 import os
 import asyncio
+from datetime import datetime
 from services.llm_connection import generate
 # BOOT diagnostics -----------------------------------------------------------
 print("[BOOT] __name__ =", __name__)        # Breakpoint candidate
@@ -136,6 +137,200 @@ async def llm_test():
     return {"status": "llm_test", "response": response}
 
 
+@app.get("/redis/sessions")
+async def list_redis_sessions():
+    """List all session IDs that have conversations stored in Redis"""
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Check if it's Redis
+        if type(memory_store).__name__ != "RedisStore":
+            return {
+                "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}",
+                "suggestion": "Set MEMORY_STORE_TYPE=redis in .env file"
+            }
+        
+        # List all sessions
+        session_ids = await memory_store.list_all_sessions()
+        
+        return {
+            "total_sessions": len(session_ids),
+            "sessions": session_ids
+        }
+        
+    except Exception as e:
+        return {
+            "status": "❌ FAILED",
+            "error": str(e)
+        }
+
+@app.get("/redis/session/{session_id}/info")
+async def get_session_history(session_id: str):
+    """
+    Get complete session information from Redis.
+    
+    Returns:
+    - Complete conversation history (all messages)
+    - Session facts
+    - Redis keys for the session
+    - Connection diagnostics
+    
+    Automatically handles session_id format variations (with/without braces).
+    """
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Try both session_id formats (with and without braces)
+        session_id_variants = [
+            session_id,  # Original format from URL
+            session_id.strip("{}"),  # Without braces
+            f"{{{session_id}}}" if not session_id.startswith("{") else session_id  # With braces
+        ]
+        
+        history = []
+        facts = []
+        found_session_id = None
+        
+        # Try each variant until we find data
+        for variant in session_id_variants:
+            variant_history = await memory_store.get_session_history(variant)
+            variant_facts = await memory_store.get_session_facts(variant)
+            
+            if variant_history or variant_facts:
+                history = variant_history
+                facts = variant_facts
+                found_session_id = variant
+                break
+        
+        # If Redis, add diagnostic information and keys
+        diagnostics = {}
+        redis_keys = {}
+        
+        if type(memory_store).__name__ == "RedisStore":
+            connection_status = await memory_store.get_connection_status()
+            diagnostics["redis_connection"] = connection_status
+            
+            # Get all keys for the found session_id (or try all variants)
+            target_session_id = found_session_id or session_id
+            keys = await memory_store.get_all_session_keys(target_session_id)
+            
+            if keys:
+                redis_keys = {
+                    "key_count": len(keys),
+                    "keys": keys,
+                    "search_pattern": f"session:{target_session_id}:*"
+                }
+            else:
+                # Try all variants to find keys
+                all_keys_found = {}
+                for variant in session_id_variants:
+                    variant_keys = await memory_store.get_all_session_keys(variant)
+                    if variant_keys:
+                        all_keys_found[variant] = variant_keys
+                
+                if all_keys_found:
+                    # Use the first variant that has keys
+                    first_variant_with_keys = list(all_keys_found.keys())[0]
+                    redis_keys = {
+                        "key_count": len(all_keys_found[first_variant_with_keys]),
+                        "keys": all_keys_found[first_variant_with_keys],
+                        "search_pattern": f"session:{first_variant_with_keys}:*",
+                        "alternative_formats": all_keys_found
+                    }
+                else:
+                    # Try to list all sessions to see what's available
+                    try:
+                        all_sessions = await memory_store.list_all_sessions()
+                        diagnostics["available_sessions"] = all_sessions[:20]  # Limit to first 20
+                        diagnostics["total_sessions"] = len(all_sessions)
+                    except Exception:
+                        pass
+        
+        result = {
+            "session_id": session_id,
+            "found_session_id": found_session_id or session_id,
+            "message_count": len(history),
+            "fact_count": len(facts),
+            "history": history,
+            "facts": facts,
+            "retrieved_at": datetime.now().isoformat()
+        }
+        
+        # Add keys if available
+        if redis_keys:
+            result["redis_keys"] = redis_keys
+        
+        # Add diagnostics if available
+        if diagnostics:
+            result["diagnostics"] = diagnostics
+        
+        return result
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "❌ FAILED",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@app.delete("/redis/sessions/cleanup")
+async def delete_old_sessions(days: int = Query(..., ge=1, le=365, description="Number of days - sessions older than this will be deleted (required, 1-365 days)")):
+    """
+    Delete all sessions older than specified number of days.
+    
+    Args:
+        days: Number of days (REQUIRED). Sessions older than this will be deleted.
+              Must be between 1 and 365 days.
+    
+    Example:
+        DELETE /redis/sessions/cleanup?days=2
+        DELETE /redis/sessions/cleanup?days=7
+    
+    Returns:
+        Statistics about deleted sessions
+    """
+    try:
+        from memory import MemoryStoreFactory
+        from config.config import settings
+        
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+        
+        # Check if it's Redis
+        if type(memory_store).__name__ != "RedisStore":
+            return {
+                "status": "❌ FAILED",
+                "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}",
+                "message": "Session cleanup is only available for Redis store"
+            }
+        
+        # Delete old sessions
+        result = await memory_store.delete_sessions_older_than_days(days)
+        
+        return {
+            "status": "✅ SUCCESS",
+            "message": f"Deleted sessions older than {days} days",
+            "deleted_sessions": result.get("deleted_sessions", 0),
+            "deleted_keys": result.get("deleted_keys", 0),
+            "skipped_sessions": result.get("skipped_sessions", 0),
+            "cutoff_date": result.get("cutoff_date"),
+            "days": result.get("days", days)
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "❌ FAILED",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 # Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
     print("🚀 LangGraph Multi-Agent Framework")
@@ -163,7 +358,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
-        port=8000,
+        port=8001,
         reload=enable_reload,
         log_level="debug"
     )
