@@ -903,8 +903,10 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         else:
             logger.info("🔮 Generating response with Gemini...")
         
-        # Call generation method (synchronous but safe to call from async context)
-        response_text = agent.generate_response(system_prompt, user_prompt)
+        # Run in executor to avoid blocking (Gemini client is sync)
+        # Using get_running_loop() - recommended for Python 3.10+ inside async functions
+        loop = asyncio.get_running_loop()
+        response_text = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
         
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
