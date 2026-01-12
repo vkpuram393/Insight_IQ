@@ -130,6 +130,36 @@ class GoogleEmbeddings:
             else:
                 return [list(np.random.rand(dimensions).astype(float)) for _ in texts]
     
+    async def embed_async(self, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+        """
+        Async version of embed() using run_in_executor to avoid blocking.
+        
+        This wraps the synchronous embed() call in a thread pool executor,
+        allowing the async event loop to remain responsive during embedding operations.
+        This is critical for handling concurrent requests without ESOCKETTIMEDOUT errors.
+        
+        Pattern matches llm_judge.py (lines 119-121) for consistency across codebase.
+        
+        Args:
+            text: Single text string or list of text strings to embed
+            
+        Returns:
+            Embedding vector(s) matching the input format:
+            - Single string input: List[float] (768 dimensions for text-embedding-005)
+            - List input: List[List[float]]
+            
+        Example:
+            # Single text (async context)
+            embedding = await embedder.embed_async("Hello world")
+            
+            # Multiple texts (async context)
+            embeddings = await embedder.embed_async(["Hello", "World"])
+        """
+        import asyncio
+        # Using get_running_loop() - recommended for Python 3.10+ inside async functions
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.embed, text)
+    
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """
         Calculate cosine similarity between two vectors
