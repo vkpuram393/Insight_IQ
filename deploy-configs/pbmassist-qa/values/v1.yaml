@@ -20,7 +20,7 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  dockerImageTag: ab1e13605869ae1ecf736e57466fac6498db599e  # This will be overridden by the deployment workflow with git SHA tag.
+  dockerImageTag: da1d045a349f97a62c26eb2520cbf43610ab3799  # This will be overridden by the deployment workflow with git SHA tag.
 
 
 #hpa settings - min and max replicas and minAvailable for PDB
