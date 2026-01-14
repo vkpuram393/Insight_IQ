@@ -6,7 +6,6 @@ Integrates Microsoft Presidio for enterprise-grade PII detection
 import re
 import uuid
 import hashlib
-import asyncio
 from typing import Dict, List, Tuple, Optional, Any
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
@@ -161,11 +160,10 @@ class PIIProtectionService:
         self.analyzer = AnalyzerEngine(registry=registry)
         self.anonymizer = AnonymizerEngine()
         
-        # Token storage for session cleanup - THREAD-SAFE with asyncio.Lock()
+        # Token storage for session cleanup
         self.token_storage: Dict[str, str] = {}
-        self._lock = asyncio.Lock()  # Ensures atomic operations for concurrent requests
         
-        logger.info("✅ PII Protection Service initialized with Presidio (thread-safe)")
+        logger.info("✅ PII Protection Service initialized with Presidio")
     
     def detect_pii_phi(self, text: str, language: str = "en") -> List[Dict]:
         """
@@ -229,12 +227,9 @@ class PIIProtectionService:
         
         return final_filtered
     
-    async def mask_pii_phi(self, text: str, session_id: str) -> Tuple[str, Dict]:
+    def mask_pii_phi(self, text: str, session_id: str) -> Tuple[str, Dict]:
         """
-        Mask PII/PHI with unique tokens - THREAD-SAFE
-        
-        Uses asyncio.Lock() to ensure atomic token_storage operations,
-        supporting millions of concurrent users without race conditions.
+        Mask PII/PHI with unique tokens
         
         Args:
             text: Original text containing PII/PHI
@@ -245,7 +240,6 @@ class PIIProtectionService:
             - masked_text: Text with PII/PHI replaced by tokens
             - metadata: Dict with masking details and token mapping
         """
-        # Detection is read-only, no lock needed
         detected = self.detect_pii_phi(text)
         
         if not detected:
@@ -256,34 +250,32 @@ class PIIProtectionService:
                 "token_mapping": {}
             }
         
-        # CRITICAL: Lock token_storage operations for thread-safety
-        async with self._lock:
-            # Process entities in reverse order to maintain text indices
-            masked_text = text
-            token_mapping = {}
+        # Process entities in reverse order to maintain text indices
+        masked_text = text
+        token_mapping = {}
+        
+        detected_sorted = sorted(detected, key=lambda x: x["start"], reverse=True)
+        
+        for entity in detected_sorted:
+            entity_type = entity["entity_type"]
+            original_value = entity["text"]
+            start = entity["start"]
+            end = entity["end"]
             
-            detected_sorted = sorted(detected, key=lambda x: x["start"], reverse=True)
+            # Generate unique token: [ENTITY_TYPE_XXXXXXXX]
+            token = f"[{entity_type}_{uuid.uuid4().hex[:8].upper()}]"
             
-            for entity in detected_sorted:
-                entity_type = entity["entity_type"]
-                original_value = entity["text"]
-                start = entity["start"]
-                end = entity["end"]
-                
-                # Generate unique token: [ENTITY_TYPE_XXXXXXXX]
-                token = f"[{entity_type}_{uuid.uuid4().hex[:8].upper()}]"
-                
-                # Store mapping for later unmasking - PROTECTED BY LOCK
-                storage_key = f"{session_id}:{token}"
-                self.token_storage[storage_key] = original_value
-                token_mapping[token] = {
-                    "original": original_value,
-                    "entity_type": entity_type,
-                    "position": (start, end)
-                }
-                
-                # Replace in text
-                masked_text = masked_text[:start] + token + masked_text[end:]
+            # Store mapping for later unmasking
+            storage_key = f"{session_id}:{token}"
+            self.token_storage[storage_key] = original_value
+            token_mapping[token] = {
+                "original": original_value,
+                "entity_type": entity_type,
+                "position": (start, end)
+            }
+            
+            # Replace in text
+            masked_text = masked_text[:start] + token + masked_text[end:]
         
         logger.info(
             f"🎭 Masked {len(detected)} PII/PHI entities: "
@@ -605,18 +597,17 @@ class PIIProtectionService:
         
         return cleaned_text
     
-    async def mask_api_response(
+    def mask_api_response(
         self, 
         api_response: Dict[str, Any], 
         session_id: str,
         existing_token_mapping: Optional[Dict] = None
     ) -> Tuple[Dict[str, Any], Dict]:
         """
-        Mask PII/PHI in API response data - THREAD-SAFE
+        Mask PII/PHI in API response data
         
         This is used to mask data coming FROM APIs before sending to LLM.
         It preserves existing token mappings and creates new ones for new PII.
-        Uses asyncio.Lock() to ensure atomic token_storage operations.
         
         Args:
             api_response: Dictionary with API data (may contain PII)
@@ -637,7 +628,7 @@ class PIIProtectionService:
         # Step 2: Convert dict to string for general PII detection
         response_str = json.dumps(api_response, indent=2)
         
-        # Step 3: Detect all PII in the response using Presidio (read-only, no lock needed)
+        # Step 3: Detect all PII in the response using Presidio
         detected = self.detect_pii_phi(response_str)
         
         # Step 4: Add extracted names to detected entities (if not already detected)
@@ -661,42 +652,40 @@ class PIIProtectionService:
             logger.info("ℹ️  No PII detected in API response")
             return api_response, existing_token_mapping or {}
         
-        # CRITICAL: Lock token_storage operations for thread-safety
-        async with self._lock:
-            # Initialize mapping with existing tokens
-            combined_mapping = existing_token_mapping.copy() if existing_token_mapping else {}
-            
-            # Build reverse lookup: original_value → token
-            reverse_lookup = {}
-            for token, info in combined_mapping.items():
-                reverse_lookup[info["original"]] = token
-            
-            # Process detected PII
-            for entity in detected:
-                original_value = entity["text"]
-                entity_type = entity["entity_type"]
-                
-                # Check if we already have a token for this value
-                if original_value in reverse_lookup:
-                    # Reuse existing token (same PII from user input)
-                    token = reverse_lookup[original_value]
-                    logger.info(f"♻️  Reusing token {token} for {entity_type}")
-                else:
-                    # Create new token for API response PII
-                    token = f"[{entity_type}_{uuid.uuid4().hex[:8].upper()}]"
-                    
-                    # Store mapping - PROTECTED BY LOCK
-                    storage_key = f"{session_id}:{token}"
-                    self.token_storage[storage_key] = original_value
-                    combined_mapping[token] = {
-                        "original": original_value,
-                        "entity_type": entity_type,
-                        "source": "api_response"  # Track where it came from
-                    }
-                    reverse_lookup[original_value] = token
-                    logger.info(f"🆕 Created token {token} for API PII {entity_type}")
+        # Initialize mapping with existing tokens
+        combined_mapping = existing_token_mapping.copy() if existing_token_mapping else {}
         
-        # Replace PII in the response dict (recursive) - uses reverse_lookup, no lock needed
+        # Build reverse lookup: original_value → token
+        reverse_lookup = {}
+        for token, info in combined_mapping.items():
+            reverse_lookup[info["original"]] = token
+        
+        # Process detected PII
+        for entity in detected:
+            original_value = entity["text"]
+            entity_type = entity["entity_type"]
+            
+            # Check if we already have a token for this value
+            if original_value in reverse_lookup:
+                # Reuse existing token (same PII from user input)
+                token = reverse_lookup[original_value]
+                logger.info(f"♻️  Reusing token {token} for {entity_type}")
+            else:
+                # Create new token for API response PII
+                token = f"[{entity_type}_{uuid.uuid4().hex[:8].upper()}]"
+                
+                # Store mapping
+                storage_key = f"{session_id}:{token}"
+                self.token_storage[storage_key] = original_value
+                combined_mapping[token] = {
+                    "original": original_value,
+                    "entity_type": entity_type,
+                    "source": "api_response"  # Track where it came from
+                }
+                reverse_lookup[original_value] = token
+                logger.info(f"🆕 Created token {token} for API PII {entity_type}")
+        
+        # Replace PII in the response dict (recursive)
         masked_response = self._replace_pii_in_dict(
             api_response, 
             reverse_lookup
@@ -817,55 +806,22 @@ class PIIProtectionService:
             # Primitive types (int, float, bool, None)
             return data
     
-    async def cleanup_session(self, session_id: str):
+    def cleanup_session(self, session_id: str):
         """
-        Remove token mappings for a session (memory cleanup) - THREAD-SAFE
+        Remove token mappings for a session (memory cleanup)
         
         Args:
             session_id: Session identifier to clean up
         """
-        async with self._lock:
-            keys_to_remove = [
-                k for k in self.token_storage.keys()
-                if k.startswith(f"{session_id}:")
-            ]
-            
-            for key in keys_to_remove:
-                del self.token_storage[key]
+        keys_to_remove = [
+            k for k in self.token_storage.keys()
+            if k.startswith(f"{session_id}:")
+        ]
+        
+        for key in keys_to_remove:
+            del self.token_storage[key]
         
         logger.info(f"🧹 Cleaned {len(keys_to_remove)} tokens for session {session_id}")
-    
-    async def get_token_value_safe(self, session_id: str, hash_upper: str) -> Optional[str]:
-        """
-        Thread-safe lookup of token value by session_id and hash fragment.
-        Used by safety.py for bare hash unmasking without race conditions.
-        
-        Args:
-            session_id: Session identifier
-            hash_upper: Uppercase hash fragment to match (e.g., "FBAA43E0")
-            
-        Returns:
-            Original value if found, None otherwise
-        """
-        async with self._lock:
-            for storage_key, original_value in self.token_storage.items():
-                if storage_key.startswith(f"{session_id}:") and hash_upper in storage_key.upper():
-                    return original_value
-        return None
-    
-    async def get_token_by_key_safe(self, storage_key: str) -> Optional[str]:
-        """
-        Thread-safe lookup of token value by exact storage key.
-        Used for direct token lookups without race conditions.
-        
-        Args:
-            storage_key: Full storage key (e.g., "session_id:[CLAIM_ID_ABC123]")
-            
-        Returns:
-            Original value if found, None otherwise
-        """
-        async with self._lock:
-            return self.token_storage.get(storage_key)
     
     def _prefilter_non_pii_patterns(self, text: str) -> str:
         """
@@ -1490,7 +1446,7 @@ class SafetyCheck:
             
             # Step 1: Still detect & mask PII/PHI for consistency
             logger.info("   Step 1: Detecting PII/PHI (mock mode)")
-            masked_text, pii_metadata = await self.pii_service.mask_pii_phi(text, session_id)
+            masked_text, pii_metadata = self.pii_service.mask_pii_phi(text, session_id)
             
             masked_count = pii_metadata.get("masked_count", 0)
             if masked_count > 0:
@@ -1519,7 +1475,7 @@ class SafetyCheck:
         try:
             # Step 1: Detect & Mask PII/PHI
             logger.info("   Step 1: Masking PII/PHI before Gemini call")
-            masked_text, pii_metadata = await self.pii_service.mask_pii_phi(text, session_id)
+            masked_text, pii_metadata = self.pii_service.mask_pii_phi(text, session_id)
             
             masked_count = pii_metadata.get("masked_count", 0)
             if masked_count > 0:
