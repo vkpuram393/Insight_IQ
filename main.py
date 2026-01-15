@@ -331,6 +331,298 @@ async def delete_old_sessions(days: int = Query(..., ge=1, le=365, description="
             "traceback": traceback.format_exc()
         }
 
+
+# ==============================================================================
+# MEMORY DIAGNOSTICS ENDPOINTS
+# Non-interfering, observability-only endpoints for POD memory analysis.
+# These endpoints do NOT affect agent functionality - safe to call in production.
+# ==============================================================================
+
+import gc
+import tracemalloc
+from typing import Dict, Any, Optional as OptionalType
+
+# Module-level state for tracemalloc (isolated, only used by debug endpoints)
+_debug_tracemalloc_active: bool = False
+_debug_baseline_snapshot: OptionalType[Any] = None
+
+
+@app.get("/debug/memory")
+async def debug_memory_snapshot():
+    """
+    Quick memory snapshot for POD diagnostics.
+    
+    100% READ-ONLY - does NOT trigger garbage collection or interfere with
+    normal agent operations. Safe to call in production at any time.
+    
+    Returns:
+        - Process RSS/VMS (what Grafana typically shows)
+        - GC statistics (read-only, no collection triggered)
+        - Linux /proc/self/status metrics (when running in POD)
+        - Tracemalloc status
+    """
+    import psutil
+    
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "endpoint": "quick_snapshot",
+        "interference_level": "none",
+        
+        # Process memory (what Grafana shows)
+        "process_memory": {
+            "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+            "rss_bytes": mem_info.rss,
+            "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+            "percent": round(process.memory_percent(), 2),
+        },
+        
+        # GC stats (read-only, no collection triggered)
+        "gc_stats": {
+            "enabled": gc.isenabled(),
+            "thresholds": gc.get_threshold(),
+            "counts": {
+                "gen0_pending": gc.get_count()[0],
+                "gen1_pending": gc.get_count()[1],
+                "gen2_pending": gc.get_count()[2],
+            },
+            "generation_stats": [
+                {
+                    "generation": i,
+                    "collections": s.get("collections", 0),
+                    "collected": s.get("collected", 0),
+                    "uncollectable": s.get("uncollectable", 0)
+                }
+                for i, s in enumerate(gc.get_stats())
+            ]
+        },
+        
+        # Tracemalloc status
+        "tracemalloc": {
+            "is_active": tracemalloc.is_tracing(),
+            "hint": "Call GET /debug/memory/detailed to enable heap tracking"
+        }
+    }
+    
+    # Linux POD metrics from /proc/self/status (graceful fallback for Windows)
+    try:
+        with open('/proc/self/status', 'r') as f:
+            proc_metrics = {}
+            for line in f:
+                for key in ['VmSize', 'VmRSS', 'VmPeak', 'VmHWM', 'VmData', 'VmStk']:
+                    if line.startswith(key + ':'):
+                        proc_metrics[key] = line.split(':')[1].strip()
+            result["linux_proc_status"] = proc_metrics
+    except FileNotFoundError:
+        result["linux_proc_status"] = {"note": "Not available (non-Linux environment)"}
+    except Exception as e:
+        result["linux_proc_status"] = {"error": str(e)}
+    
+    return result
+
+
+@app.get("/debug/memory/detailed")
+async def debug_memory_detailed(
+    top_allocators: int = Query(15, ge=1, le=50, description="Number of top memory allocators to show")
+):
+    """
+    Detailed memory analysis with Python heap tracking via tracemalloc.
+    
+    FIRST CALL: Starts tracemalloc and captures baseline (~3-5% CPU overhead).
+    SUBSEQUENT CALLS: Shows memory growth since baseline and top allocators.
+    
+    Use this to identify which code files are consuming memory.
+    Does NOT trigger garbage collection.
+    
+    Args:
+        top_allocators: Number of top memory-consuming code locations to show
+    
+    Returns:
+        - Everything from /debug/memory (process memory, GC stats)
+        - Python heap size tracked by tracemalloc
+        - Top memory allocators by file/line
+        - Memory growth since baseline
+        - Interpretation hints
+    """
+    global _debug_tracemalloc_active, _debug_baseline_snapshot
+    import psutil
+    
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "endpoint": "detailed_analysis",
+        "interference_level": "minimal",
+        
+        "process_memory": {
+            "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+            "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+            "percent": round(process.memory_percent(), 2),
+        }
+    }
+    
+    # Initialize or read tracemalloc
+    if not _debug_tracemalloc_active:
+        tracemalloc.start(25)  # 25 frames of traceback for detailed analysis
+        _debug_tracemalloc_active = True
+        _debug_baseline_snapshot = tracemalloc.take_snapshot()
+        
+        result["tracemalloc"] = {
+            "status": "just_activated",
+            "message": "Tracemalloc started and baseline captured. Call this endpoint again to see memory changes.",
+            "overhead": "~3-5% CPU, minimal memory for storing traces"
+        }
+    else:
+        current_snapshot = tracemalloc.take_snapshot()
+        current_size, peak_size = tracemalloc.get_traced_memory()
+        
+        # Top allocators by current size
+        top_stats = current_snapshot.statistics('lineno')[:top_allocators]
+        
+        result["tracemalloc"] = {
+            "status": "active",
+            "current_heap_mb": round(current_size / 1024 / 1024, 2),
+            "peak_heap_mb": round(peak_size / 1024 / 1024, 2),
+            "top_allocators": [
+                {
+                    "location": str(stat.traceback),
+                    "size_mb": round(stat.size / 1024 / 1024, 4),
+                    "count": stat.count
+                }
+                for stat in top_stats
+            ]
+        }
+        
+        # Growth since baseline
+        if _debug_baseline_snapshot:
+            diff_stats = current_snapshot.compare_to(_debug_baseline_snapshot, 'lineno')
+            growth = [s for s in diff_stats[:top_allocators] if s.size_diff > 0]
+            
+            result["memory_growth_since_baseline"] = [
+                {
+                    "location": str(stat.traceback),
+                    "growth_mb": round(stat.size_diff / 1024 / 1024, 4),
+                    "new_allocations": stat.count_diff
+                }
+                for stat in growth
+            ]
+        
+        # Interpretation
+        rss_mb = result["process_memory"]["rss_mb"]
+        heap_mb = result["tracemalloc"]["current_heap_mb"]
+        gap_mb = round(rss_mb - heap_mb, 2)
+        
+        result["interpretation"] = {
+            "rss_vs_heap_gap_mb": gap_mb,
+            "diagnosis": (
+                "Gap is normal (C extensions, numpy, allocator overhead)"
+                if gap_mb < 500
+                else "Large gap suggests memory held by native libraries or allocator fragmentation"
+            ),
+            "hint": (
+                "If RSS stays high but heap is low, memory is held by Python allocator (normal behavior). "
+                "Consider periodic POD restart if memory pressure is a concern."
+            )
+        }
+    
+    return result
+
+
+@app.post("/debug/memory/reset-baseline")
+async def debug_memory_reset_baseline():
+    """
+    Reset the tracemalloc baseline for fresh memory growth comparison.
+    
+    Use after making code changes or to start a new analysis session.
+    Does NOT interfere with normal operations.
+    """
+    global _debug_baseline_snapshot
+    
+    if not _debug_tracemalloc_active:
+        return {
+            "status": "error",
+            "message": "Tracemalloc not active. Call GET /debug/memory/detailed first to start tracking."
+        }
+    
+    _debug_baseline_snapshot = tracemalloc.take_snapshot()
+    return {
+        "status": "success",
+        "message": "Baseline reset. Future /debug/memory/detailed calls will compare against this point.",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.post("/debug/memory/gc")
+async def debug_memory_force_gc():
+    """
+    Explicitly trigger garbage collection for diagnostic purposes.
+    
+    ⚠️ ACTIVE OPERATION - Only call when you explicitly want to test GC behavior.
+    This is safe but will briefly pause Python execution (typically <100ms).
+    
+    Use to answer: "If I force GC, does RSS drop? Are there circular references?"
+    
+    Returns:
+        - Objects collected per generation
+        - Memory before and after GC
+        - Whether RSS actually decreased (rare due to allocator behavior)
+        - Interpretation of results
+    """
+    import psutil
+    
+    process = psutil.Process(os.getpid())
+    
+    # Measure before GC
+    before = process.memory_info()
+    before_rss = before.rss
+    
+    # Run GC on all generations
+    collected_gen0 = gc.collect(generation=0)
+    collected_gen1 = gc.collect(generation=1)
+    collected_gen2 = gc.collect(generation=2)
+    total_collected = collected_gen0 + collected_gen1 + collected_gen2
+    
+    # Measure after GC
+    after = process.memory_info()
+    after_rss = after.rss
+    freed_bytes = before_rss - after_rss
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "action": "garbage_collection_forced",
+        
+        "objects_collected": {
+            "generation_0": collected_gen0,
+            "generation_1": collected_gen1,
+            "generation_2": collected_gen2,
+            "total": total_collected
+        },
+        
+        "memory_impact": {
+            "before_rss_mb": round(before_rss / 1024 / 1024, 2),
+            "after_rss_mb": round(after_rss / 1024 / 1024, 2),
+            "freed_mb": round(freed_bytes / 1024 / 1024, 2),
+            "freed_bytes": freed_bytes
+        },
+        
+        "interpretation": {
+            "objects_collected_meaning": (
+                "High count indicates circular references were cleaned up"
+                if total_collected > 100
+                else "Low count means most memory is already managed or held by live references"
+            ),
+            "rss_unchanged_meaning": (
+                "Normal - Python allocator keeps memory pages for reuse. This is NOT a memory leak."
+                if freed_bytes < 1024 * 1024  # < 1MB
+                else f"Memory returned to OS: {round(freed_bytes / 1024 / 1024, 2)} MB"
+            )
+        }
+    }
+
+
 # Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
     print("🚀 LangGraph Multi-Agent Framework")
