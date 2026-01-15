@@ -1038,15 +1038,15 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
     try:
         pii_service = get_pii_service()
         
-        # Mask text (user input PII) - THREAD-SAFE async operation
-        masked_text, text_metadata = await pii_service.mask_pii_phi(text, session_id)
+        # Mask text (user input PII)
+        masked_text, text_metadata = pii_service.mask_pii_phi(text, session_id)
         
         # Mask tool results using mask_api_response (handles structured data properly)
         # This will reuse tokens from text_metadata if same PII appears, and track API-sourced PII separately
         if tool_results and isinstance(tool_results, dict):
             logger.info(f"🔍 Masking tool results (API data)...")
             existing_token_mapping = text_metadata.get("token_mapping", {})
-            masked_tool_results, combined_token_mapping = await pii_service.mask_api_response(
+            masked_tool_results, combined_token_mapping = pii_service.mask_api_response(
                 api_response=tool_results,
                 session_id=session_id,
                 existing_token_mapping=existing_token_mapping
@@ -1092,7 +1092,7 @@ async def response_safety_pii_precheck_node(state: AgentState) -> Dict[str, Any]
                 
                 if content:
                     # Mask content and CAPTURE the metadata (FIX: don't discard with _)
-                    masked_content, history_msg_metadata = await pii_service.mask_pii_phi(content, session_id)
+                    masked_content, history_msg_metadata = pii_service.mask_pii_phi(content, session_id)
                     
                     # FIX: Collect history token mappings for unmasking
                     msg_token_mapping = history_msg_metadata.get("token_mapping", {})
@@ -1266,12 +1266,12 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             for key, value in entities.items():
                 if isinstance(value, str):
                     unmasked_value = value
-                    # Handle full tokens [CLAIM_ID_XXXXXXXX] - THREAD-SAFE
+                    # Handle full tokens [CLAIM_ID_XXXXXXXX]
                     full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', value)
                     if full_token_match:
                         storage_key = f"{session_id}:{value}"
-                        original = await pii_service.get_token_by_key_safe(storage_key)
-                        if original:
+                        if storage_key in pii_service.token_storage:
+                            original = pii_service.token_storage[storage_key]
                             # Strip "claim" prefix for claim-related entities
                             if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                 numeric_match = re.search(r'\d+$', str(original))
@@ -1289,8 +1289,8 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                             full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', item)
                             if full_token_match:
                                 storage_key = f"{session_id}:{item}"
-                                original = await pii_service.get_token_by_key_safe(storage_key)
-                                if original:
+                                if storage_key in pii_service.token_storage:
+                                    original = pii_service.token_storage[storage_key]
                                     if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                         numeric_match = re.search(r'\d+$', str(original))
                                         unmasked_item = numeric_match.group(0) if numeric_match else original
@@ -1533,19 +1533,19 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             session_id = state.get("session_id", "")
             
             if entities and session_id:
-                logger.info("🔍 Unmasking entities using token_storage fallback (thread-safe)...")
+                logger.info("🔍 Unmasking entities using token_storage fallback...")
                 unmasked_entities = {}
                 
                 for key, value in entities.items():
                     if isinstance(value, str):
                         unmasked_value = value
                         
-                        # Handle full tokens like [CLAIM_ID_BC3D5E2E] - THREAD-SAFE
+                        # Handle full tokens like [CLAIM_ID_BC3D5E2E] using token_storage lookup
                         full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', value)
                         if full_token_match:
                             storage_key = f"{session_id}:{value}"
-                            original = await pii_service.get_token_by_key_safe(storage_key)
-                            if original:
+                            if storage_key in pii_service.token_storage:
+                                original = pii_service.token_storage[storage_key]
                                 # Strip "claim" prefix for claim-related entities
                                 if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                     numeric_match = re.search(r'\d+$', str(original))
@@ -1558,21 +1558,22 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                                 entities_tokens_unmasked += 1
                                 logger.info(f"   🔓 Unmasked full token '{key}': {value} → {unmasked_value}")
                         
-                        # Handle bare hash like BC3D5E2E (LLM corrupted token) - THREAD-SAFE
+                        # Handle bare hash like BC3D5E2E (LLM corrupted token)
                         elif re.match(r'^[A-Fa-f0-9]{8}$', value) and not value.isdigit():
                             hash_upper = value.upper()
-                            original = await pii_service.get_token_value_safe(session_id, hash_upper)
-                            if original:
-                                if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
-                                    numeric_match = re.search(r'\d+$', str(original))
-                                    if numeric_match:
-                                        unmasked_value = numeric_match.group(0)
+                            for storage_key, original in pii_service.token_storage.items():
+                                if storage_key.startswith(f"{session_id}:") and hash_upper in storage_key.upper():
+                                    if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
+                                        numeric_match = re.search(r'\d+$', str(original))
+                                        if numeric_match:
+                                            unmasked_value = numeric_match.group(0)
+                                        else:
+                                            unmasked_value = original
                                     else:
                                         unmasked_value = original
-                                else:
-                                    unmasked_value = original
-                                entities_tokens_unmasked += 1
-                                logger.info(f"   🔓 Unmasked bare hash '{key}': {value} → {unmasked_value}")
+                                    entities_tokens_unmasked += 1
+                                    logger.info(f"   🔓 Unmasked bare hash '{key}': {value} → {unmasked_value}")
+                                    break
                         
                         unmasked_entities[key] = unmasked_value
                         
@@ -1582,12 +1583,12 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                             if isinstance(item, str):
                                 unmasked_item = item
                                 
-                                # Handle full tokens in list items - THREAD-SAFE
+                                # Handle full tokens in list items
                                 full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', item)
                                 if full_token_match:
                                     storage_key = f"{session_id}:{item}"
-                                    original = await pii_service.get_token_by_key_safe(storage_key)
-                                    if original:
+                                    if storage_key in pii_service.token_storage:
+                                        original = pii_service.token_storage[storage_key]
                                         if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                             numeric_match = re.search(r'\d+$', str(original))
                                             if numeric_match:
@@ -1599,21 +1600,22 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                                         entities_tokens_unmasked += 1
                                         logger.info(f"   🔓 Unmasked full token '{key}' item: {item} → {unmasked_item}")
                                 
-                                # Handle bare hash in list items - THREAD-SAFE
+                                # Handle bare hash in list items
                                 elif re.match(r'^[A-Fa-f0-9]{8}$', item) and not item.isdigit():
                                     hash_upper = item.upper()
-                                    original = await pii_service.get_token_value_safe(session_id, hash_upper)
-                                    if original:
-                                        if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
-                                            numeric_match = re.search(r'\d+$', str(original))
-                                            if numeric_match:
-                                                unmasked_item = numeric_match.group(0)
+                                    for storage_key, original in pii_service.token_storage.items():
+                                        if storage_key.startswith(f"{session_id}:") and hash_upper in storage_key.upper():
+                                            if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
+                                                numeric_match = re.search(r'\d+$', str(original))
+                                                if numeric_match:
+                                                    unmasked_item = numeric_match.group(0)
+                                                else:
+                                                    unmasked_item = original
                                             else:
                                                 unmasked_item = original
-                                        else:
-                                            unmasked_item = original
-                                        entities_tokens_unmasked += 1
-                                        logger.info(f"   🔓 Unmasked bare hash '{key}' item: {item} → {unmasked_item}")
+                                            entities_tokens_unmasked += 1
+                                            logger.info(f"   🔓 Unmasked bare hash '{key}' item: {item} → {unmasked_item}")
+                                            break
                                 
                                 unmasked_list.append(unmasked_item)
                             else:
@@ -1701,15 +1703,15 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                             if numeric_match:
                                 unmasked_value = numeric_match.group(0)
                     
-                    # FIX: Handle tokens not in combined_token_mapping using token_storage fallback - THREAD-SAFE
+                    # FIX: Handle tokens not in combined_token_mapping using token_storage fallback
                     # This handles both full tokens and bare hash fragments
                     if unmasked_value == value and session_id:
                         # Pattern 1: Full token like [CLAIM_ID_BC3D5E2E] not in mapping
                         full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', value)
                         if full_token_match:
                             storage_key = f"{session_id}:{value}"
-                            original_value = await pii_service.get_token_by_key_safe(storage_key)
-                            if original_value:
+                            if storage_key in pii_service.token_storage:
+                                original_value = pii_service.token_storage[storage_key]
                                 if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                     id_match = re.search(r'\d+$', str(original_value))
                                     if id_match:
@@ -1720,20 +1722,22 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                                     unmasked_value = original_value
                                 logger.info(f"   🔓 Matched full token '{value}' to stored token → {unmasked_value}")
                         
-                        # Pattern 2: Bare hash like BD6783CC (LLM corrupted token) - THREAD-SAFE
+                        # Pattern 2: Bare hash like BD6783CC (LLM corrupted token)
                         elif re.match(r'^[A-Fa-f0-9]{8}$', value) and not value.isdigit():
                             hash_upper = value.upper()
                             # Search singleton's token_storage for any token containing this hash
-                            original_value = await pii_service.get_token_value_safe(session_id, hash_upper)
-                            if original_value:
-                                # Extract just the numeric ID portion from original value
-                                # e.g., "claim 233211748898001" → "233211748898001"
-                                id_match = re.search(r'\d{8,20}', str(original_value))
-                                if id_match:
-                                    unmasked_value = id_match.group(0)
-                                else:
-                                    unmasked_value = original_value  # Fallback to full original
-                                logger.info(f"   🔓 Matched bare hash '{value}' to stored token → {unmasked_value}")
+                            for storage_key, original_value in pii_service.token_storage.items():
+                                # Match: session_id:[ENTITY_TYPE_HASH] where HASH matches our bare hash
+                                if storage_key.startswith(f"{session_id}:") and hash_upper in storage_key.upper():
+                                    # Extract just the numeric ID portion from original value
+                                    # e.g., "claim 233211748898001" → "233211748898001"
+                                    id_match = re.search(r'\d{8,20}', str(original_value))
+                                    if id_match:
+                                        unmasked_value = id_match.group(0)
+                                    else:
+                                        unmasked_value = original_value  # Fallback to full original
+                                    logger.info(f"   🔓 Matched bare hash '{value}' to stored token → {unmasked_value}")
+                                    break
                     
                     if unmasked_value != value:
                         entities_tokens_unmasked += 1
@@ -1762,14 +1766,14 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                                     if numeric_match:
                                         unmasked_item = numeric_match.group(0)
                             
-                            # FIX: Handle tokens not in mapping in list items using token_storage fallback - THREAD-SAFE
+                            # FIX: Handle tokens not in mapping in list items using token_storage fallback
                             if unmasked_item == item and session_id:
                                 # Pattern 1: Full token like [CLAIM_ID_BC3D5E2E] not in mapping
                                 full_token_match = re.match(r'^\[([A-Z_]+)_([A-Fa-f0-9]{8})\]$', item)
                                 if full_token_match:
                                     storage_key = f"{session_id}:{item}"
-                                    original_value = await pii_service.get_token_by_key_safe(storage_key)
-                                    if original_value:
+                                    if storage_key in pii_service.token_storage:
+                                        original_value = pii_service.token_storage[storage_key]
                                         if key in ('claim_number', 'claim_id', 'claim_ids', 'claimNumber', 'claimId'):
                                             id_match = re.search(r'\d+$', str(original_value))
                                             if id_match:
@@ -1780,17 +1784,18 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
                                             unmasked_item = original_value
                                         logger.info(f"   🔓 Matched full token '{item}' in list to stored token → {unmasked_item}")
                                 
-                                # Pattern 2: Bare hash like BD6783CC (LLM corrupted) - THREAD-SAFE
+                                # Pattern 2: Bare hash like BD6783CC (LLM corrupted)
                                 elif re.match(r'^[A-Fa-f0-9]{8}$', item) and not item.isdigit():
                                     hash_upper = item.upper()
-                                    original_value = await pii_service.get_token_value_safe(session_id, hash_upper)
-                                    if original_value:
-                                        id_match = re.search(r'\d{8,20}', str(original_value))
-                                        if id_match:
-                                            unmasked_item = id_match.group(0)
-                                        else:
-                                            unmasked_item = original_value
-                                        logger.info(f"   🔓 Matched bare hash '{item}' in list to stored token → {unmasked_item}")
+                                    for storage_key, original_value in pii_service.token_storage.items():
+                                        if storage_key.startswith(f"{session_id}:") and hash_upper in storage_key.upper():
+                                            id_match = re.search(r'\d{8,20}', str(original_value))
+                                            if id_match:
+                                                unmasked_item = id_match.group(0)
+                                            else:
+                                                unmasked_item = original_value
+                                            logger.info(f"   🔓 Matched bare hash '{item}' in list to stored token → {unmasked_item}")
+                                            break
                             
                             if unmasked_item != item:
                                 entities_tokens_unmasked += 1
