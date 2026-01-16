@@ -71,19 +71,21 @@ async def startup_event():
         
         # Pre-initialize embedding classifier to ensure MongoDB has embeddings
         # (Embedding generation takes ~3 minutes, must happen before queries arrive)
+        # This also loads embeddings into memory once (singleton pattern prevents reloads)
         if settings.use_embedding_classifier:
             print("[STARTUP] Pre-initializing embedding classifier...")
             import concurrent.futures
-            from classifiers.embedded_classifier import CVSIntentEmbedded
+            from classifiers.embedded_classifier import get_embedded_classifier
             
             def init_classifier():
-                return CVSIntentEmbedded()  # This triggers MongoDB setup
+                # Use singleton to ensure embeddings are loaded once
+                return get_embedded_classifier()  # This triggers MongoDB setup and loads embeddings
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(init_classifier)
                 future.result()  # No timeout - let it complete (fails naturally if broken)
             
-            print("[STARTUP] Embedding classifier ready (MongoDB populated)")
+            print("[STARTUP] Embedding classifier ready (MongoDB populated, embeddings loaded)")
         
         # Start background tasks for memory management
         asyncio.create_task(_periodic_cleanup_task())

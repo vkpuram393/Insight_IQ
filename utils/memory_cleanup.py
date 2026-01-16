@@ -86,6 +86,29 @@ async def cleanup_after_tests() -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"⚠️ GC failed: {e}")
         
+        # 5. Clear embedding classifier cache if needed (only if using in-memory embeddings)
+        try:
+            from config.config import settings
+            if settings.use_embedding_classifier and not settings.use_mongodb_for_embeddings:
+                # In-memory embeddings mode - check if we can optimize
+                from classifiers.embedded_classifier import _embedded_classifier_instance
+                if _embedded_classifier_instance is not None:
+                    # Embeddings are loaded in memory - this is expected and necessary
+                    # We can't clear them as they're needed for classification
+                    # But we can log the size for monitoring
+                    import sys
+                    if hasattr(_embedded_classifier_instance, 'intent_embeddings'):
+                        embeddings = _embedded_classifier_instance.intent_embeddings
+                        if embeddings:
+                            # Estimate memory size (rough calculation)
+                            total_size = sum(
+                                arr.nbytes if hasattr(arr, 'nbytes') else sys.getsizeof(arr)
+                                for arr in embeddings.values()
+                            )
+                            logger.debug(f"📊 Embedding classifier memory: ~{total_size / 1024 / 1024:.1f} MB")
+        except Exception as e:
+            logger.debug(f"Could not check embedding classifier memory: {e}")
+        
         logger.info(f"✅ Memory cleanup completed: {results}")
         return results
         

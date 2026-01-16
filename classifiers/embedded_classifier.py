@@ -41,6 +41,19 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
+# Global singleton instance to prevent memory leaks
+# Creating new instances loads all embeddings into memory (~800MB)
+_embedded_classifier_instance = None
+
+
+def get_embedded_classifier() -> "CVSIntentEmbedded":
+    """Get global embedded classifier instance (singleton pattern)"""
+    global _embedded_classifier_instance
+    if _embedded_classifier_instance is None:
+        _embedded_classifier_instance = CVSIntentEmbedded()
+        logger.info("🔄 Created singleton CVSIntentEmbedded instance")
+    return _embedded_classifier_instance
+
 
 class CVSIntentEmbedded:
     """

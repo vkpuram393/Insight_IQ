@@ -50,7 +50,8 @@ def classifiers():
     
     print("   Loading embedding classifier (this takes ~30-40 seconds)...")
     try:
-        embedding_classifier = CVSIntentEmbedded()
+        from classifiers.embedded_classifier import get_embedded_classifier
+        embedding_classifier = get_embedded_classifier()  # Use singleton to prevent memory leaks
         print("   ✅ Embedding classifier ready")
     except Exception as e:
         print(f"   ⚠️  Embedding classifier failed to initialize: {e}")

@@ -517,6 +517,28 @@ async def get_memory_stats():
         except Exception as e:
             stats["gc_stats"] = {"error": str(e)}
         
+        # Embedding classifier memory (if using in-memory embeddings)
+        try:
+            from config.config import settings
+            if settings.use_embedding_classifier and not settings.use_mongodb_for_embeddings:
+                from classifiers.embedded_classifier import _embedded_classifier_instance
+                if _embedded_classifier_instance is not None and hasattr(_embedded_classifier_instance, 'intent_embeddings'):
+                    embeddings = _embedded_classifier_instance.intent_embeddings
+                    if embeddings:
+                        import sys
+                        import numpy as np
+                        total_size = sum(
+                            arr.nbytes if isinstance(arr, np.ndarray) else sys.getsizeof(arr)
+                            for arr in embeddings.values()
+                        )
+                        stats["embedding_classifier"] = {
+                            "embeddings_loaded": len(embeddings),
+                            "estimated_memory_mb": round(total_size / 1024 / 1024, 1),
+                            "note": "Embeddings loaded in memory (required for classification)"
+                        }
+        except Exception as e:
+            stats["embedding_classifier"] = {"error": str(e)}
+        
         return stats
         
     except Exception as e:
