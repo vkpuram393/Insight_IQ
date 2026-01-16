@@ -2,7 +2,7 @@
 API Routes - HTTP endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, AsyncIterator
@@ -410,6 +410,118 @@ async def batch_test(request: BatchTestRequest):
     finally:
         # Restore original telemetry setting
         settings.enable_telemetry = original_telemetry_setting
+        
+        # Cleanup memory after test execution to prevent accumulation
+        try:
+            from utils.memory_cleanup import cleanup_after_tests
+            cleanup_results = await cleanup_after_tests()
+            logger.debug(f"🧹 Post-test cleanup: {cleanup_results}")
+        except Exception as e:
+            logger.warning(f"⚠️ Post-test cleanup failed: {e}")
+
+
+@router.post("/cleanup/memory")
+async def cleanup_memory(aggressive: bool = Query(False, description="Perform aggressive cleanup (1 hour sessions, 1 day checkpoints)")):
+    """
+    Manual memory cleanup endpoint.
+    
+    Use this endpoint to clean up memory after test runs or when memory usage is high.
+    
+    Query Parameters:
+    - aggressive (bool, default=False): If True, performs more aggressive cleanup
+        - Sessions older than 1 hour (instead of 24 hours)
+        - Checkpoints older than 1 day (instead of 7 days)
+        - Multiple GC passes
+    
+    Returns:
+        Dict with cleanup statistics
+    """
+    try:
+        from utils.memory_cleanup import cleanup_after_tests, force_memory_cleanup
+        
+        if aggressive:
+            results = await force_memory_cleanup()
+            logger.info(f"🧹 Aggressive memory cleanup completed: {results}")
+        else:
+            results = await cleanup_after_tests()
+            logger.info(f"🧹 Memory cleanup completed: {results}")
+        
+        return {
+            "status": "success",
+            "cleanup_type": "aggressive" if aggressive else "normal",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"❌ Memory cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Memory cleanup failed: {str(e)}")
+
+
+@router.get("/cleanup/memory/stats")
+async def get_memory_stats():
+    """
+    Get memory statistics for monitoring and debugging.
+    
+    Returns:
+        Dict with memory usage statistics including:
+        - Memory store stats (sessions, cache keys)
+        - Checkpoint count (approximate)
+        - GC statistics
+    """
+    try:
+        import gc
+        import psutil
+        import os
+        
+        stats = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "process_memory": {},
+            "memory_store": {},
+            "gc_stats": {}
+        }
+        
+        # Process memory
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            stats["process_memory"] = {
+                "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+                "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+                "percent": round(process.memory_percent(), 2)
+            }
+        except Exception as e:
+            stats["process_memory"] = {"error": str(e)}
+        
+        # Memory store stats
+        try:
+            from memory import MemoryStoreFactory
+            memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+            if hasattr(memory_store, 'get_stats'):
+                stats["memory_store"] = await memory_store.get_stats()
+            else:
+                stats["memory_store"] = {"note": "Stats not available for this store type"}
+        except Exception as e:
+            stats["memory_store"] = {"error": str(e)}
+        
+        # GC stats
+        try:
+            stats["gc_stats"] = {
+                "enabled": gc.isenabled(),
+                "thresholds": gc.get_threshold(),
+                "counts": {
+                    "gen0": gc.get_count()[0],
+                    "gen1": gc.get_count()[1],
+                    "gen2": gc.get_count()[2]
+                },
+                "collections": [s.get("collections", 0) for s in gc.get_stats()]
+            }
+        except Exception as e:
+            stats["gc_stats"] = {"error": str(e)}
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"❌ Memory stats error: {e}")
+        raise HTTPException(status_code=500, detail=f"Memory stats failed: {str(e)}")
 
 
 @router.get("/analytics")

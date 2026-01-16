@@ -85,11 +85,95 @@ async def startup_event():
             
             print("[STARTUP] Embedding classifier ready (MongoDB populated)")
         
+        # Start background tasks for memory management
+        asyncio.create_task(_periodic_cleanup_task())
+        print("[STARTUP] Background cleanup tasks started")
+        
     except Exception as e:
         import traceback
         print("[STARTUP] init_graph ERROR:", e)
         traceback.print_exc()
         raise
+
+async def _periodic_cleanup_task():
+    """
+    Background task that periodically cleans up memory to prevent leaks.
+    Runs every hour (or more frequently if memory pressure is detected) to:
+    - Clean old sessions from memory store
+    - Clean old checkpoints from LangGraph
+    - Trigger garbage collection
+    
+    Adapts cleanup frequency based on memory usage:
+    - Normal: Every hour
+    - High memory (>80%): Every 15 minutes
+    - Critical (>90%): Every 5 minutes
+    """
+    import gc
+    import asyncio
+    import psutil
+    import os
+    from datetime import datetime
+    
+    # Track last cleanup time for adaptive frequency
+    last_cleanup = datetime.now()
+    base_interval = 3600  # 1 hour base interval
+    
+    while True:
+        try:
+            # Check memory pressure and adjust interval
+            try:
+                process = psutil.Process(os.getpid())
+                memory_percent = process.memory_percent()
+                
+                if memory_percent > 90:
+                    interval = 300  # 5 minutes for critical
+                    logger.warning(f"⚠️ High memory usage ({memory_percent:.1f}%) - increasing cleanup frequency")
+                elif memory_percent > 80:
+                    interval = 900  # 15 minutes for high
+                    logger.info(f"📊 Elevated memory usage ({memory_percent:.1f}%) - more frequent cleanup")
+                else:
+                    interval = base_interval  # 1 hour for normal
+            except Exception:
+                interval = base_interval  # Fallback to base interval
+            
+            await asyncio.sleep(interval)
+            
+            logger.info("🧹 Running periodic memory cleanup...")
+            
+            # Cleanup old sessions in memory store
+            try:
+                from memory import MemoryStoreFactory
+                from config.config import settings
+                memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+                if hasattr(memory_store, '_cleanup_old_sessions'):
+                    cleaned = await memory_store._cleanup_old_sessions()
+                    logger.info(f"   ✅ Cleaned {cleaned} old sessions")
+            except Exception as e:
+                logger.warning(f"   ⚠️ Session cleanup failed: {e}")
+            
+            # Cleanup old checkpoints
+            try:
+                from langgraph_agent import cleanup_old_checkpoints
+                cleaned = await cleanup_old_checkpoints(days=7)
+                logger.info(f"   ✅ Cleaned {cleaned} old checkpoints")
+            except Exception as e:
+                logger.warning(f"   ⚠️ Checkpoint cleanup failed: {e}")
+            
+            # Trigger garbage collection
+            try:
+                collected = gc.collect()
+                logger.info(f"   ✅ Garbage collection: {collected} objects collected")
+            except Exception as e:
+                logger.warning(f"   ⚠️ GC failed: {e}")
+            
+            logger.info("✅ Periodic cleanup completed")
+            
+        except asyncio.CancelledError:
+            logger.info("🧹 Cleanup task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"❌ Cleanup task error: {e}")
+            await asyncio.sleep(60)  # Wait a minute before retrying
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -101,6 +185,40 @@ async def shutdown_event():
         import traceback
         print("[SHUTDOWN] close_graph ERROR:", e)
         traceback.print_exc()
+    
+    # Close shared HTTP client to prevent memory leaks
+    try:
+        from tools.claims_api import _close_shared_http_client
+        await _close_shared_http_client()
+        print("[SHUTDOWN] HTTP client closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] HTTP client close ERROR: {e}")
+    
+    # Close memory store connections
+    try:
+        from memory import MemoryStoreFactory
+        await MemoryStoreFactory.close_instance()
+        print("[SHUTDOWN] Memory store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] Memory store close ERROR: {e}")
+    
+    # Close persistence store connections
+    try:
+        from persistence import PersistenceStoreFactory
+        store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        if hasattr(store, 'close'):
+            await store.close()
+        print("[SHUTDOWN] Persistence store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] Persistence store close ERROR: {e}")
+    
+    # Close MongoDB embedding store connections
+    try:
+        from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
+        await MongoDBEmbeddingStoreFactory.close_instance()
+        print("[SHUTDOWN] MongoDB embedding store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] MongoDB embedding store close ERROR: {e}")
 
 # Routes --------------------------------------------------------------------
 app.include_router(api_router, prefix="/pss/pbmassist/v1")
