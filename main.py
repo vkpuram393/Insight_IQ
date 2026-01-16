@@ -268,6 +268,7 @@ async def health():
     """
     # If startup failed, return 503 so Kubernetes doesn't route traffic
     if _startup_error:
+        print(f"[HEALTH] ❌ Startup error detected: {_startup_error}")
         return Response(
             content=f'{{"status": "unhealthy", "error": "{_startup_error}"}}',
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -276,6 +277,7 @@ async def health():
     
     # If startup not complete, return 503 so readiness probe waits
     if not _startup_complete:
+        print("[HEALTH] ⏳ Startup not complete - returning 503")
         return Response(
             content='{"status": "starting", "message": "Application is still initializing"}',
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -283,6 +285,7 @@ async def health():
         )
     
     # Startup complete and no errors - application is ready
+    print("[HEALTH] ✅ Application ready - returning 200")
     return {"status": "healthy"}
 
 @app.get("/llm_test")
