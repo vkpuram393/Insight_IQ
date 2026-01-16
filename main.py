@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import sys
@@ -61,9 +61,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Startup state tracking for readiness probe
+_startup_complete = False
+_startup_error = None
+
 # Startup / Shutdown hooks --------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
+    global _startup_complete, _startup_error
     print("[STARTUP] init_graph begin")      # Breakpoint candidate
     try:
         await init_graph()
@@ -91,8 +96,13 @@ async def startup_event():
         asyncio.create_task(_periodic_cleanup_task())
         print("[STARTUP] Background cleanup tasks started")
         
+        # Mark startup as complete
+        _startup_complete = True
+        print("[STARTUP] ✅ Startup complete - application ready")
+        
     except Exception as e:
         import traceback
+        _startup_error = str(e)
         print("[STARTUP] init_graph ERROR:", e)
         traceback.print_exc()
         raise
@@ -115,6 +125,9 @@ async def _periodic_cleanup_task():
     import psutil
     import os
     from datetime import datetime
+    from core.logger import get_logger
+    
+    logger = get_logger(__name__)
     
     # Track last cleanup time for adaptive frequency
     last_cleanup = datetime.now()
@@ -246,8 +259,30 @@ async def root():
 
 @app.get("/health")
 async def health():
-    # Breakpoint candidate
-    x=1
+    """
+    Health check endpoint for Kubernetes liveness and readiness probes.
+    
+    Returns:
+        - 200 OK: Application is healthy and ready
+        - 503 Service Unavailable: Application is still starting up or failed to start
+    """
+    # If startup failed, return 503 so Kubernetes doesn't route traffic
+    if _startup_error:
+        return Response(
+            content=f'{{"status": "unhealthy", "error": "{_startup_error}"}}',
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+    
+    # If startup not complete, return 503 so readiness probe waits
+    if not _startup_complete:
+        return Response(
+            content='{"status": "starting", "message": "Application is still initializing"}',
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+    
+    # Startup complete and no errors - application is ready
     return {"status": "healthy"}
 
 @app.get("/llm_test")
