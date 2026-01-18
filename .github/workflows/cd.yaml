@@ -5,6 +5,7 @@ on:
     branches:
       - 'release/*'
       - 'MVP-1'
+      - 'azhagu-context-defect-fix'
     paths:
       - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
       # - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
