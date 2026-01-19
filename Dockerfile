@@ -45,6 +45,7 @@ EXPOSE 8000
 ENTRYPOINT []
 
 # Start our application (main.py is at root, not in app/ subdirectory)
-# CRITICAL: --no-reload is required in production to prevent server restarts
-# Database file writes (checkpoints.db, telemetry.db) trigger reloads if enabled
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-reload"]
+# CRITICAL: Do NOT use --reload flag in production to prevent server restarts
+# Database file writes (checkpoints.db, telemetry.db) trigger reloads if --reload is enabled
+# Default behavior (no --reload flag) = reload disabled = stable production behavior
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
