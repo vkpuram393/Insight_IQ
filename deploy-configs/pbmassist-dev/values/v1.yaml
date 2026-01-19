@@ -21,7 +21,7 @@ appData:
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
   #dockerImageTag: a3d11e738d93d6b7d8f0a3a93aaf8c60657b7595  # This will be overridden by the deployment workflow with git SHA tag.
-  dockerImageTag: 7c081c19af633eef8edcff38dd544e0c882cc441
+  dockerImageTag: 66f1b130ad122524b7ea4f19615fea21369f8c89
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
@@ -101,5 +101,7 @@ istioHttpRoutes:
     - route: "/health"
     - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
 ## Triggers 3
   
