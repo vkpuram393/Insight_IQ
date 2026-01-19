@@ -805,11 +805,22 @@ if __name__ == "__main__":
         print("[BOOT]    To enable: set RELOAD=true environment variable")
         print("[BOOT]    Note: Manual server restart required for code changes")
     
+    # Configure reload exclusions to prevent restarts from database file writes
+    reload_excludes = [
+        "*.db",
+        "*.db-wal",
+        "*.db-shm",
+        "*.db-journal",
+        "checkpoints.db*",
+        "telemetry.db*"
+    ] if enable_reload else None
+    
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
         port=8001,
         reload=enable_reload,
+        reload_excludes=reload_excludes,
         log_level="debug"
     )
 
