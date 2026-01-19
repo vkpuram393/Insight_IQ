@@ -574,6 +574,45 @@ async def get_memory_stats():
         except Exception as e:
             stats["embedding_classifier"] = {"error": str(e)}
         
+        # MongoDB connection pool diagnostics
+        try:
+            from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
+            if MongoDBEmbeddingStoreFactory._instance is not None:
+                instance = MongoDBEmbeddingStoreFactory._instance
+                if hasattr(instance, 'client') and instance.client is not None:
+                    # Get connection pool stats
+                    try:
+                        pool_stats = instance.client._topology._servers
+                        stats["mongodb_embedding_store"] = {
+                            "connected": True,
+                            "connection_pool_size": len(pool_stats) if pool_stats else 0,
+                            "note": "MongoDB connection pool info"
+                        }
+                    except Exception:
+                        stats["mongodb_embedding_store"] = {
+                            "connected": True,
+                            "note": "MongoDB connected (pool stats unavailable)"
+                        }
+                else:
+                    stats["mongodb_embedding_store"] = {
+                        "connected": False,
+                        "note": "MongoDB client not initialized"
+                    }
+        except Exception as e:
+            stats["mongodb_embedding_store"] = {"error": str(e)}
+        
+        # Persistence store MongoDB connection
+        try:
+            from persistence import PersistenceStoreFactory
+            store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+            if hasattr(store, 'client') and store.client is not None:
+                stats["mongodb_persistence_store"] = {
+                    "connected": True,
+                    "note": "MongoDB persistence store connected"
+                }
+        except Exception as e:
+            pass  # Don't fail if persistence store doesn't use MongoDB
+        
         return stats
         
     except Exception as e:
