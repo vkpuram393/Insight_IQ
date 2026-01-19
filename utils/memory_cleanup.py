@@ -6,11 +6,65 @@ Provides functions to clean up memory after tests and optimize memory usage.
 
 import gc
 import asyncio
+import ctypes
+import sys
 from typing import Dict, Any
 from core.logger import get_logger
 from config.config import settings
 
 logger = get_logger(__name__)
+
+
+def _try_release_memory_to_os() -> Dict[str, Any]:
+    """
+    Attempt to force Python to release memory back to the OS.
+    
+    This uses malloc_trim on Linux (if available) to release freed memory
+    from the allocator back to the operating system.
+    
+    Note: This is Linux-specific and may not work on all systems.
+    Python's allocator normally keeps freed memory for reuse, which is why
+    RSS doesn't drop even after GC. This function attempts to force release.
+    
+    Returns:
+        Dict with results of the attempt
+    """
+    result = {
+        "attempted": False,
+        "success": False,
+        "method": None,
+        "note": None
+    }
+    
+    # Try malloc_trim on Linux (requires libc)
+    if sys.platform == 'linux':
+        try:
+            # Try to get malloc_trim from libc
+            libc = ctypes.CDLL("libc.so.6")
+            if hasattr(libc, 'malloc_trim'):
+                malloc_trim = libc.malloc_trim
+                malloc_trim.argtypes = [ctypes.c_size_t]
+                malloc_trim.restype = ctypes.c_int
+                
+                # Call malloc_trim(0) to release as much memory as possible
+                result["attempted"] = True
+                result["method"] = "malloc_trim"
+                trimmed = malloc_trim(0)
+                
+                if trimmed == 1:
+                    result["success"] = True
+                    result["note"] = "Memory released to OS via malloc_trim"
+                else:
+                    result["success"] = False
+                    result["note"] = "malloc_trim returned 0 (no memory released or not supported)"
+            else:
+                result["note"] = "malloc_trim not available in libc"
+        except (OSError, AttributeError) as e:
+            result["note"] = f"Could not use malloc_trim: {e}"
+    else:
+        result["note"] = f"malloc_trim only available on Linux (current: {sys.platform})"
+    
+    return result
 
 
 async def cleanup_after_tests() -> Dict[str, Any]:
@@ -85,6 +139,15 @@ async def cleanup_after_tests() -> Dict[str, Any]:
             logger.info(f"🧹 Garbage collection: {collected} objects collected")
         except Exception as e:
             logger.warning(f"⚠️ GC failed: {e}")
+        
+        # 5. Attempt to force memory release to OS (Linux only)
+        try:
+            release_result = _try_release_memory_to_os()
+            results["memory_release_to_os"] = release_result
+            if release_result.get("success"):
+                logger.info(f"✅ Memory released to OS: {release_result.get('note')}")
+        except Exception as e:
+            logger.debug(f"Could not attempt memory release: {e}")
         
         # 5. Clear embedding classifier cache if needed (only if using in-memory embeddings)
         try:
@@ -179,6 +242,18 @@ async def force_memory_cleanup() -> Dict[str, Any]:
             total_collected += collected
         results["objects_collected"] = total_collected
         logger.info(f"🧹 Aggressive GC: {total_collected} objects collected")
+        
+        # Attempt to force memory release to OS (Linux only)
+        try:
+            release_result = _try_release_memory_to_os()
+            results["memory_release_to_os"] = release_result
+            if release_result.get("success"):
+                logger.info(f"✅ Memory released to OS: {release_result.get('note')}")
+            else:
+                logger.debug(f"ℹ️ Memory release attempt: {release_result.get('note')}")
+        except Exception as e:
+            logger.debug(f"Could not attempt memory release: {e}")
+            results["memory_release_to_os"] = {"error": str(e)}
         
         logger.info(f"✅ Aggressive memory cleanup completed: {results}")
         return results
