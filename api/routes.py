@@ -411,11 +411,31 @@ async def batch_test(request: BatchTestRequest):
         # Restore original telemetry setting
         settings.enable_telemetry = original_telemetry_setting
         
-        # Cleanup memory after test execution to prevent accumulation
+        # CRITICAL: Aggressive cleanup after each test to prevent memory accumulation
         try:
-            from utils.memory_cleanup import cleanup_after_tests
-            cleanup_results = await cleanup_after_tests()
-            logger.debug(f"🧹 Post-test cleanup: {cleanup_results}")
+            import gc
+            from utils.memory_cleanup import force_memory_cleanup
+            
+            # Force immediate cleanup after each test
+            cleanup_results = await force_memory_cleanup()
+            
+            # Multiple GC passes to ensure memory is released
+            for _ in range(3):
+                gc.collect()
+            
+            logger.info(f"🧹 Post-test cleanup: {cleanup_results}")
+            
+            # Log memory usage for monitoring
+            try:
+                import psutil
+                import os
+                process = psutil.Process(os.getpid())
+                memory_mb = process.memory_info().rss / 1024 / 1024
+                memory_percent = process.memory_percent()
+                logger.info(f"📊 Memory after cleanup: {memory_mb:.1f} MB ({memory_percent:.1f}%)")
+            except Exception:
+                pass  # Don't fail if memory monitoring fails
+                
         except Exception as e:
             logger.warning(f"⚠️ Post-test cleanup failed: {e}")
 
@@ -517,25 +537,40 @@ async def get_memory_stats():
         except Exception as e:
             stats["gc_stats"] = {"error": str(e)}
         
-        # Embedding classifier memory (if using in-memory embeddings)
+        # Embedding classifier memory and singleton status
         try:
             from config.config import settings
-            if settings.use_embedding_classifier and not settings.use_mongodb_for_embeddings:
+            if settings.use_embedding_classifier:
                 from classifiers.embedded_classifier import _embedded_classifier_instance
-                if _embedded_classifier_instance is not None and hasattr(_embedded_classifier_instance, 'intent_embeddings'):
-                    embeddings = _embedded_classifier_instance.intent_embeddings
-                    if embeddings:
-                        import sys
-                        import numpy as np
-                        total_size = sum(
-                            arr.nbytes if isinstance(arr, np.ndarray) else sys.getsizeof(arr)
-                            for arr in embeddings.values()
-                        )
-                        stats["embedding_classifier"] = {
-                            "embeddings_loaded": len(embeddings),
-                            "estimated_memory_mb": round(total_size / 1024 / 1024, 1),
-                            "note": "Embeddings loaded in memory (required for classification)"
-                        }
+                if _embedded_classifier_instance is not None:
+                    stats["embedding_classifier"] = {
+                        "singleton_exists": True,
+                        "singleton_id": id(_embedded_classifier_instance),  # Memory address to verify it's the same instance
+                        "using_mongodb": settings.use_mongodb_for_embeddings
+                    }
+                    
+                    # If using in-memory embeddings (not MongoDB), calculate size
+                    if not settings.use_mongodb_for_embeddings and hasattr(_embedded_classifier_instance, 'intent_embeddings'):
+                        embeddings = _embedded_classifier_instance.intent_embeddings
+                        if embeddings:
+                            import sys
+                            import numpy as np
+                            total_size = sum(
+                                arr.nbytes if isinstance(arr, np.ndarray) else sys.getsizeof(arr)
+                                for arr in embeddings.values()
+                            )
+                            stats["embedding_classifier"].update({
+                                "embeddings_loaded": len(embeddings),
+                                "estimated_memory_mb": round(total_size / 1024 / 1024, 1),
+                                "note": "Embeddings loaded in memory (required for classification)"
+                            })
+                    else:
+                        stats["embedding_classifier"]["note"] = "Using MongoDB for embeddings (not loaded in memory)"
+                else:
+                    stats["embedding_classifier"] = {
+                        "singleton_exists": False,
+                        "note": "Singleton not initialized yet"
+                    }
         except Exception as e:
             stats["embedding_classifier"] = {"error": str(e)}
         

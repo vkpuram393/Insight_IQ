@@ -52,6 +52,9 @@ def get_embedded_classifier() -> "CVSIntentEmbedded":
     if _embedded_classifier_instance is None:
         _embedded_classifier_instance = CVSIntentEmbedded()
         logger.info("🔄 Created singleton CVSIntentEmbedded instance")
+    else:
+        # Log if singleton is being reused (should happen on every request after first)
+        logger.debug("♻️ Reusing existing CVSIntentEmbedded singleton instance")
     return _embedded_classifier_instance
 
 
