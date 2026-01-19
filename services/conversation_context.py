@@ -111,12 +111,22 @@ class ConversationContextService:
                 logger.debug(f"✓ Extracted prescription_number from history: {extracted['prescription_number']}")
         
         # ========================================================================
-        # Pattern 5: Sequence Numbers - MUST have "seq"/"sequence" keyword
+        # Pattern 5: Sequence Numbers - ALIGNED WITH EntityExtractor
         # ========================================================================
-        # Matches: "sequence 997", "seq 997", "sequence number 997", "seq# 997"
-        # Sequence numbers are exactly 3 digits (e.g., 997, 998, 999)
+        # Step 1: Try keyword-based extraction (with seq/sequence)
+        # Matches: "sequence 001", "seq 001", "sequence number 001", "seq# 001"
         sequence_pattern = r'(?:seq(?:uence)?)\s*(?:number|num|#)?\s*:?\s*(\d{3})\b'
         sequence_matches = re.findall(sequence_pattern, history_text, re.IGNORECASE)
+        
+        # Step 2: FALLBACK - If no keyword match, try standalone 3-digit (like EntityExtractor)
+        # This catches cases where user says "claim 260158058207352 and 001" without "seq" keyword
+        if not sequence_matches:
+            # Mask claim numbers (10+ digits) to avoid extracting sequences from them
+            masked_history = re.sub(r'\d{10,}', 'CLAIM_MASKED', history_text)
+            standalone_pattern = r'(?<!\d)\b(\d{3})\b(?!\d)'
+            sequence_matches = re.findall(standalone_pattern, masked_history)
+            if sequence_matches:
+                logger.debug(f"   Found sequence via standalone fallback: {sequence_matches}")
         
         if sequence_matches:
             # Use the most recent sequence number

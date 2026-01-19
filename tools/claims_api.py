@@ -175,9 +175,38 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
         # If claim number is provided but sequence is missing, return error
         if has_claim_number and not has_sequence:
             claim_num = entities.get("claimNumber") or entities.get("claimId")
-            logger.warning(f"⚠️ Validation failed: Claim number provided without sequence number")
-            logger.warning(f"   📍 ClaimNumber: {claim_num}")
-            logger.warning(f"   📍 ClaimSequence: MISSING")
+            
+            # ========================================================================
+            # 🚨 CLARIFICATION DECISION LOG - Detailed diagnostic (GCP + MongoDB)
+            # ========================================================================
+            history_preview = "(no history)"
+            if isinstance(state, dict):
+                conv_history = state.get("conversation_history", [])
+                user_messages = [m.get("content", "") for m in conv_history if m.get("role") == "user"]
+                if user_messages:
+                    history_preview = " | ".join(user_messages)
+                    if len(history_preview) > 200:
+                        history_preview = "..." + history_preview[-200:]
+            
+            # Log to GCP (stdout only - no MongoDB to avoid latency)
+            logger.warning(
+                f"\n{'='*70}\n"
+                f"🚨 CLARIFICATION_DECISION: SEQUENCE_MISSING\n"
+                f"{'='*70}\n"
+                f"SESSION: {log_ctx.get('session_id', 'unknown')[:20] if log_ctx else 'unknown'}\n"
+                f"INTENT: {intent}\n"
+                f"\n"
+                f"WHAT WE HAVE:\n"
+                f"  ✅ Claim Number: {claim_num}\n"
+                f"  ❌ Sequence: NOT FOUND\n"
+                f"\n"
+                f"WHERE WE LOOKED:\n"
+                f"  • Current message entities: {list(current_entities.keys()) if current_entities else '(empty)'}\n"
+                f"  • History extracted_slots: {list(extracted_slots.keys()) if extracted_slots else '(empty)'}\n"
+                f"\n"
+                f"HISTORY PREVIEW: {history_preview}\n"
+                f"{'='*70}"
+            )
             
             error_msg = f"Sequence number is required for claim number '{claim_num}'. Please provide the sequence number along with the claim number."
             
