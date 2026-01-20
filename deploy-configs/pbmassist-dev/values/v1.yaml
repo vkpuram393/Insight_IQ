@@ -33,10 +33,10 @@ hpaSettings:
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "1"
-    memory: "1Gi"
+    cpu: "2000m"
+    memory: "2Gi"
   limits:
-    cpu: "2"
+    cpu: "2000m"
     memory: "2Gi"
 
 # environment variables for app - secret values come from vault.
