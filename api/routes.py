@@ -514,6 +514,7 @@ async def get_memory_stats():
         # Memory store stats
         try:
             from memory import MemoryStoreFactory
+            # Use settings from top-level import (line 18)
             memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
             if hasattr(memory_store, 'get_stats'):
                 stats["memory_store"] = await memory_store.get_stats()
@@ -539,7 +540,7 @@ async def get_memory_stats():
         
         # Embedding classifier memory and singleton status
         try:
-            from config.config import settings
+            # Use settings from top-level import (line 18) - no need to re-import
             if settings.use_embedding_classifier:
                 from classifiers.embedded_classifier import _embedded_classifier_instance
                 if _embedded_classifier_instance is not None:

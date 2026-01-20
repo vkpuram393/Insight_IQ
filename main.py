@@ -262,31 +262,47 @@ async def health():
     """
     Health check endpoint for Kubernetes liveness and readiness probes.
     
+    CRITICAL: This endpoint must NEVER throw exceptions or return 500 errors.
+    If it does, Kubernetes will restart the pod.
+    
     Returns:
         - 200 OK: Application is healthy and ready
         - 503 Service Unavailable: Application is still starting up or failed to start
     """
-    # If startup failed, return 503 so Kubernetes doesn't route traffic
-    if _startup_error:
-        print(f"[HEALTH] ❌ Startup error detected: {_startup_error}")
+    try:
+        # Access module-level variables (defined at top of file)
+        # If startup failed, return 503 so Kubernetes doesn't route traffic
+        if _startup_error:
+            return Response(
+                content=f'{{"status": "unhealthy", "error": "{_startup_error}"}}',
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                media_type="application/json"
+            )
+        
+        # If startup not complete, return 503 so readiness probe waits
+        if not _startup_complete:
+            return Response(
+                content='{"status": "starting", "message": "Application is still initializing"}',
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                media_type="application/json"
+            )
+        
+        # Startup complete and no errors - application is ready
+        return {"status": "healthy"}
+    except Exception as e:
+        # CRITICAL: Never let exceptions propagate from health endpoint
+        # If health endpoint throws 500, Kubernetes will restart the pod
+        # Log the error but return 503 (temporary unavailability) instead of 500
+        import traceback
+        print(f"[HEALTH] ❌ CRITICAL: Health endpoint exception: {e}")
+        traceback.print_exc()
+        # Return 503 instead of 500 to indicate temporary unavailability
+        # This prevents Kubernetes from restarting the pod
         return Response(
-            content=f'{{"status": "unhealthy", "error": "{_startup_error}"}}',
+            content=f'{{"status": "error", "message": "Health check failed: {str(e)}"}}',
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             media_type="application/json"
         )
-    
-    # If startup not complete, return 503 so readiness probe waits
-    if not _startup_complete:
-        print("[HEALTH] ⏳ Startup not complete - returning 503")
-        return Response(
-            content='{"status": "starting", "message": "Application is still initializing"}',
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            media_type="application/json"
-        )
-    
-    # Startup complete and no errors - application is ready
-    print("[HEALTH] ✅ Application ready - returning 200")
-    return {"status": "healthy"}
 
 @app.get("/llm_test")
 async def llm_test():
