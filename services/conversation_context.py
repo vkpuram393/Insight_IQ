@@ -76,6 +76,21 @@ class ConversationContextService:
             logger.info(f"✓ Extracted claim_number from history: {extracted['claim_number']}")
         
         # ========================================================================
+        # FALLBACK: Standalone 15-digit claim ID (no keyword required)
+        # ========================================================================
+        # Aligned with EntityExtractor pattern: r'\b(CLM\d{3,10}|\d{15})\b'
+        # This catches user input like "253016267966353 - 1" without "claim" keyword
+        # Safe: 15-digit numbers are highly specific, low false positive risk
+        # Only runs if keyword-based extraction above found nothing
+        if "claim_number" not in extracted:
+            standalone_claim_pattern = r'\b(\d{15})\b'
+            standalone_claim_matches = re.findall(standalone_claim_pattern, history_text)
+            if standalone_claim_matches:
+                # Use most recent 15-digit number (last in list)
+                extracted["claim_number"] = standalone_claim_matches[-1]
+                logger.info(f"✓ Extracted claim_number from history (standalone 15-digit): {extracted['claim_number']}")
+        
+        # ========================================================================
         # Pattern 2: Member IDs - MUST have "member"/"patient" keyword
         # ========================================================================
         # Matches: "member ID ABC123", "patient 78318GG3001"
@@ -166,17 +181,27 @@ class ConversationContextService:
         if not conversation_history:
             return False
         
-        # Combine history
+        # FIXED: Use USER messages only (consistent with extract_entities_from_history)
+        # Previously used ALL messages which caused router/extraction mismatch:
+        # - Router would find "claim X" in assistant response → return True
+        # - Extraction only looked at user messages → return {} (empty)
+        # - Result: API call failed with "No entities provided"
         history_text = " ".join([
             msg.get("content", "") 
             for msg in conversation_history 
-            if isinstance(msg, dict)
+            if isinstance(msg, dict) and msg.get("role") == "user"
         ])
         
         # Check for claim ID (context-aware: if "claim" keyword + digits, treat as claim ID)
         # No rigid digit count - context matters more than pattern
         claim_pattern = r'(?:claim|clm)\s*(?:number|id|#)?\s*:?\s*\d+'
         has_claim_id = bool(re.search(claim_pattern, history_text, re.IGNORECASE))
+        
+        # ADDED: Also check for standalone 15-digit claim IDs (consistent with extraction)
+        # This ensures router and extraction agree on what constitutes "entities in history"
+        if not has_claim_id:
+            standalone_claim_pattern = r'\b\d{15}\b'
+            has_claim_id = bool(re.search(standalone_claim_pattern, history_text))
         
         # Check for dates
         date_pattern = r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'
