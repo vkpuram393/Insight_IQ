@@ -42,6 +42,38 @@ logger = get_logger(__name__)
 # This ensures thread-safety for millions of concurrent users
 
 # ============================================================================
+# SHARED HTTP CLIENT (Memory Optimization)
+# ============================================================================
+# Reuse a single httpx.AsyncClient instance to prevent memory leaks
+# Creating new clients for each request causes connection pool buildup
+_shared_http_client: Optional[httpx.AsyncClient] = None
+_client_lock = asyncio.Lock()
+
+async def _get_shared_http_client() -> httpx.AsyncClient:
+    """Get or create shared httpx.AsyncClient instance for connection pooling"""
+    global _shared_http_client
+    if _shared_http_client is None:
+        async with _client_lock:
+            if _shared_http_client is None:
+                _shared_http_client = httpx.AsyncClient(
+                    timeout=30.0,
+                    verify=True,
+                    limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+                )
+                logger.info("🌐 Created shared HTTP client for connection pooling")
+    return _shared_http_client
+
+async def _close_shared_http_client():
+    """Close shared HTTP client (called on shutdown)"""
+    global _shared_http_client
+    if _shared_http_client is not None:
+        async with _client_lock:
+            if _shared_http_client is not None:
+                await _shared_http_client.aclose()
+                _shared_http_client = None
+                logger.info("🔌 Closed shared HTTP client")
+
+# ============================================================================
 # MAIN CLAIMS API TOOL NODE
 # ============================================================================
 # Main Claims API Tool Node
@@ -806,69 +838,70 @@ async def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> 
     logger.info(f"   Headers: {headers}")
     logger.info(f"   Body: {body}")
     
-    # Use httpx.AsyncClient for async HTTP requests
-    async with httpx.AsyncClient(timeout=30.0, verify=True) as client:
+    # Use shared httpx.AsyncClient for connection pooling and memory efficiency
+    # This prevents creating new clients for each request which can cause memory leaks
+    client = await _get_shared_http_client()
+    try:
+        resp = await client.request(method, url, headers=headers, json=body)
+        logger.info(f"   Response Status: {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"   Response Body: {resp.text[:500]}")
+        resp.raise_for_status()
+        
+        # parse JSON or raise
         try:
-            resp = await client.request(method, url, headers=headers, json=body)
-            logger.info(f"   Response Status: {resp.status_code}")
-            if resp.status_code != 200:
-                logger.error(f"   Response Body: {resp.text[:500]}")
-            resp.raise_for_status()
+            return resp.json()
+        except (ValueError, TypeError) as e:
+            # non-json response
+            raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
             
-            # parse JSON or raise (inside the context manager to access resp)
+    except httpx.TimeoutException as e:
+        # timeout -> retriable
+        raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
+    except httpx.HTTPStatusError as e:
+        # HTTP error (4xx, 5xx)
+        status = e.response.status_code
+        
+        # Capture full error response body for detailed error reporting
+        error_response_body = None
+        error_response_json = None
+        if e.response is not None:
+            logger.error(f"❌ API Error Response:")
+            logger.error(f"   Status: {e.response.status_code}")
+            logger.error(f"   Response Text: {e.response.text[:500]}")
+            
+            # Store the full response body
+            error_response_body = e.response.text
+            
+            # Try to parse as JSON for structured error details
             try:
-                return resp.json()
-            except (ValueError, TypeError) as e:
-                # non-json response
-                raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
-                
-        except httpx.TimeoutException as e:
-            # timeout -> retriable
-            raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
-        except httpx.HTTPStatusError as e:
-            # HTTP error (4xx, 5xx)
-            status = e.response.status_code
-            
-            # Capture full error response body for detailed error reporting
-            error_response_body = None
-            error_response_json = None
-            if e.response is not None:
-                logger.error(f"❌ API Error Response:")
-                logger.error(f"   Status: {e.response.status_code}")
-                logger.error(f"   Response Text: {e.response.text[:500]}")
-                
-                # Store the full response body
-                error_response_body = e.response.text
-                
-                # Try to parse as JSON for structured error details
-                try:
-                    error_response_json = e.response.json()
-                except:
-                    pass  # Not JSON, use raw text
-            
-            # Build comprehensive error details
-            error_details = {
-                "status": status,
-                "api": getattr(api, "name", url),
-                "response_body": error_response_body,
-                "response_json": error_response_json,
-                "url": url
-            }
-            
-            retriable = status is None or (500 <= status < 600)
-            raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
-        except httpx.RequestError as e:
-            # Connection error or other request error
-            logger.error(f"❌ Request Error: {e}")
-            error_details = {
-                "status": None,
-                "api": getattr(api, "name", url),
-                "response_body": None,
-                "response_json": None,
-                "url": url
-            }
-            # Connection errors are retriable
-            raise ExternalAPIError(str(e), details=error_details, retriable=True)
+                error_response_json = e.response.json()
+            except:
+                pass  # Not JSON, use raw text
+        
+        # Build comprehensive error details
+        error_details = {
+            "status": status,
+            "api": getattr(api, "name", url),
+            "response_body": error_response_body,
+            "response_json": error_response_json,
+            "url": url
+        }
+        
+        retriable = status is None or (500 <= status < 600)
+        raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
+    except httpx.RequestError as e:
+        # Connection error or other request error
+        logger.error(f"❌ Request Error: {e}")
+        error_details = {
+            "status": None,
+            "api": getattr(api, "name", url),
+            "response_body": None,
+            "response_json": None,
+            "url": url
+        }
+        # Connection errors are retriable
+        raise ExternalAPIError(str(e), details=error_details, retriable=True)
 
 
 # ============================================================================

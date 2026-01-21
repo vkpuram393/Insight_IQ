@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import sys
@@ -61,9 +61,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Startup state tracking for readiness probe
+_startup_complete = False
+_startup_error = None
+
 # Startup / Shutdown hooks --------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
+    global _startup_complete, _startup_error
     print("[STARTUP] init_graph begin")      # Breakpoint candidate
     try:
         await init_graph()
@@ -71,25 +76,119 @@ async def startup_event():
         
         # Pre-initialize embedding classifier to ensure MongoDB has embeddings
         # (Embedding generation takes ~3 minutes, must happen before queries arrive)
+        # This also loads embeddings into memory once (singleton pattern prevents reloads)
         if settings.use_embedding_classifier:
             print("[STARTUP] Pre-initializing embedding classifier...")
             import concurrent.futures
-            from classifiers.embedded_classifier import CVSIntentEmbedded
+            from classifiers.embedded_classifier import get_embedded_classifier
             
             def init_classifier():
-                return CVSIntentEmbedded()  # This triggers MongoDB setup
+                # Use singleton to ensure embeddings are loaded once
+                return get_embedded_classifier()  # This triggers MongoDB setup and loads embeddings
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(init_classifier)
                 future.result()  # No timeout - let it complete (fails naturally if broken)
             
-            print("[STARTUP] Embedding classifier ready (MongoDB populated)")
+            print("[STARTUP] Embedding classifier ready (MongoDB populated, embeddings loaded)")
+        
+        # Start background tasks for memory management
+        asyncio.create_task(_periodic_cleanup_task())
+        print("[STARTUP] Background cleanup tasks started")
+        
+        # Mark startup as complete
+        _startup_complete = True
+        print("[STARTUP] ✅ Startup complete - application ready")
         
     except Exception as e:
         import traceback
+        _startup_error = str(e)
         print("[STARTUP] init_graph ERROR:", e)
         traceback.print_exc()
         raise
+
+async def _periodic_cleanup_task():
+    """
+    Background task that periodically cleans up memory to prevent leaks.
+    Runs every hour (or more frequently if memory pressure is detected) to:
+    - Clean old sessions from memory store
+    - Clean old checkpoints from LangGraph
+    - Trigger garbage collection
+    
+    Adapts cleanup frequency based on memory usage:
+    - Normal: Every hour
+    - High memory (>80%): Every 15 minutes
+    - Critical (>90%): Every 5 minutes
+    """
+    import gc
+    import asyncio
+    import psutil
+    import os
+    from datetime import datetime
+    from core.logger import get_logger
+    
+    logger = get_logger(__name__)
+    
+    # Track last cleanup time for adaptive frequency
+    last_cleanup = datetime.now()
+    base_interval = 3600  # 1 hour base interval
+    
+    while True:
+        try:
+            # Check memory pressure and adjust interval
+            try:
+                process = psutil.Process(os.getpid())
+                memory_percent = process.memory_percent()
+                
+                if memory_percent > 90:
+                    interval = 300  # 5 minutes for critical
+                    logger.warning(f"⚠️ High memory usage ({memory_percent:.1f}%) - increasing cleanup frequency")
+                elif memory_percent > 80:
+                    interval = 900  # 15 minutes for high
+                    logger.info(f"📊 Elevated memory usage ({memory_percent:.1f}%) - more frequent cleanup")
+                else:
+                    interval = base_interval  # 1 hour for normal
+            except Exception:
+                interval = base_interval  # Fallback to base interval
+            
+            await asyncio.sleep(interval)
+            
+            logger.info("🧹 Running periodic memory cleanup...")
+            
+            # Cleanup old sessions in memory store
+            try:
+                from memory import MemoryStoreFactory
+                from config.config import settings
+                memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+                if hasattr(memory_store, '_cleanup_old_sessions'):
+                    cleaned = await memory_store._cleanup_old_sessions()
+                    logger.info(f"   ✅ Cleaned {cleaned} old sessions")
+            except Exception as e:
+                logger.warning(f"   ⚠️ Session cleanup failed: {e}")
+            
+            # Cleanup old checkpoints
+            try:
+                from langgraph_agent import cleanup_old_checkpoints
+                cleaned = await cleanup_old_checkpoints(days=7)
+                logger.info(f"   ✅ Cleaned {cleaned} old checkpoints")
+            except Exception as e:
+                logger.warning(f"   ⚠️ Checkpoint cleanup failed: {e}")
+            
+            # Trigger garbage collection
+            try:
+                collected = gc.collect()
+                logger.info(f"   ✅ Garbage collection: {collected} objects collected")
+            except Exception as e:
+                logger.warning(f"   ⚠️ GC failed: {e}")
+            
+            logger.info("✅ Periodic cleanup completed")
+            
+        except asyncio.CancelledError:
+            logger.info("🧹 Cleanup task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"❌ Cleanup task error: {e}")
+            await asyncio.sleep(60)  # Wait a minute before retrying
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -101,6 +200,40 @@ async def shutdown_event():
         import traceback
         print("[SHUTDOWN] close_graph ERROR:", e)
         traceback.print_exc()
+    
+    # Close shared HTTP client to prevent memory leaks
+    try:
+        from tools.claims_api import _close_shared_http_client
+        await _close_shared_http_client()
+        print("[SHUTDOWN] HTTP client closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] HTTP client close ERROR: {e}")
+    
+    # Close memory store connections
+    try:
+        from memory import MemoryStoreFactory
+        await MemoryStoreFactory.close_instance()
+        print("[SHUTDOWN] Memory store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] Memory store close ERROR: {e}")
+    
+    # Close persistence store connections
+    try:
+        from persistence import PersistenceStoreFactory
+        store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        if hasattr(store, 'close'):
+            await store.close()
+        print("[SHUTDOWN] Persistence store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] Persistence store close ERROR: {e}")
+    
+    # Close MongoDB embedding store connections
+    try:
+        from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
+        await MongoDBEmbeddingStoreFactory.close_instance()
+        print("[SHUTDOWN] MongoDB embedding store closed")
+    except Exception as e:
+        print(f"[SHUTDOWN] MongoDB embedding store close ERROR: {e}")
 
 # Routes --------------------------------------------------------------------
 app.include_router(api_router, prefix="/pss/pbmassist/v1")
@@ -126,9 +259,50 @@ async def root():
 
 @app.get("/health")
 async def health():
-    # Breakpoint candidate
-    x=1
-    return {"status": "healthy"}
+    """
+    Health check endpoint for Kubernetes liveness and readiness probes.
+    
+    CRITICAL: This endpoint must NEVER throw exceptions or return 500 errors.
+    If it does, Kubernetes will restart the pod.
+    
+    Returns:
+        - 200 OK: Application is healthy and ready
+        - 503 Service Unavailable: Application is still starting up or failed to start
+    """
+    try:
+        # Access module-level variables (defined at top of file)
+        # If startup failed, return 503 so Kubernetes doesn't route traffic
+        if _startup_error:
+            return Response(
+                content=f'{{"status": "unhealthy", "error": "{_startup_error}"}}',
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                media_type="application/json"
+            )
+        
+        # If startup not complete, return 503 so readiness probe waits
+        if not _startup_complete:
+            return Response(
+                content='{"status": "starting", "message": "Application is still initializing"}',
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                media_type="application/json"
+            )
+        
+        # Startup complete and no errors - application is ready
+        return {"status": "healthy"}
+    except Exception as e:
+        # CRITICAL: Never let exceptions propagate from health endpoint
+        # If health endpoint throws 500, Kubernetes will restart the pod
+        # Log the error but return 503 (temporary unavailability) instead of 500
+        import traceback
+        print(f"[HEALTH] ❌ CRITICAL: Health endpoint exception: {e}")
+        traceback.print_exc()
+        # Return 503 instead of 500 to indicate temporary unavailability
+        # This prevents Kubernetes from restarting the pod
+        return Response(
+            content=f'{{"status": "error", "message": "Health check failed: {str(e)}"}}',
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
 
 @app.get("/llm_test")
 async def llm_test():
@@ -647,11 +821,22 @@ if __name__ == "__main__":
         print("[BOOT]    To enable: set RELOAD=true environment variable")
         print("[BOOT]    Note: Manual server restart required for code changes")
     
+    # Configure reload exclusions to prevent restarts from database file writes
+    reload_excludes = [
+        "*.db",
+        "*.db-wal",
+        "*.db-shm",
+        "*.db-journal",
+        "checkpoints.db*",
+        "telemetry.db*"
+    ] if enable_reload else None
+    
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
         port=8001,
         reload=enable_reload,
+        reload_excludes=reload_excludes,
         log_level="debug"
     )
 

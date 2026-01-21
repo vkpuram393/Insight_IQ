@@ -2,7 +2,7 @@
 API Routes - HTTP endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, AsyncIterator
@@ -410,6 +410,215 @@ async def batch_test(request: BatchTestRequest):
     finally:
         # Restore original telemetry setting
         settings.enable_telemetry = original_telemetry_setting
+        
+        # CRITICAL: Aggressive cleanup after each test to prevent memory accumulation
+        try:
+            import gc
+            from utils.memory_cleanup import force_memory_cleanup
+            
+            # Force immediate cleanup after each test
+            cleanup_results = await force_memory_cleanup()
+            
+            # Multiple GC passes to ensure memory is released
+            for _ in range(3):
+                gc.collect()
+            
+            logger.info(f"🧹 Post-test cleanup: {cleanup_results}")
+            
+            # Log memory usage for monitoring
+            try:
+                import psutil
+                import os
+                process = psutil.Process(os.getpid())
+                memory_mb = process.memory_info().rss / 1024 / 1024
+                memory_percent = process.memory_percent()
+                logger.info(f"📊 Memory after cleanup: {memory_mb:.1f} MB ({memory_percent:.1f}%)")
+            except Exception:
+                pass  # Don't fail if memory monitoring fails
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Post-test cleanup failed: {e}")
+
+
+@router.post("/cleanup/memory")
+async def cleanup_memory(aggressive: bool = Query(False, description="Perform aggressive cleanup (1 hour sessions, 1 day checkpoints)")):
+    """
+    Manual memory cleanup endpoint.
+    
+    Use this endpoint to clean up memory after test runs or when memory usage is high.
+    
+    Query Parameters:
+    - aggressive (bool, default=False): If True, performs more aggressive cleanup
+        - Sessions older than 1 hour (instead of 24 hours)
+        - Checkpoints older than 1 day (instead of 7 days)
+        - Multiple GC passes
+    
+    Returns:
+        Dict with cleanup statistics
+    """
+    try:
+        from utils.memory_cleanup import cleanup_after_tests, force_memory_cleanup
+        
+        if aggressive:
+            results = await force_memory_cleanup()
+            logger.info(f"🧹 Aggressive memory cleanup completed: {results}")
+        else:
+            results = await cleanup_after_tests()
+            logger.info(f"🧹 Memory cleanup completed: {results}")
+        
+        return {
+            "status": "success",
+            "cleanup_type": "aggressive" if aggressive else "normal",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"❌ Memory cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Memory cleanup failed: {str(e)}")
+
+
+@router.get("/cleanup/memory/stats")
+async def get_memory_stats():
+    """
+    Get memory statistics for monitoring and debugging.
+    
+    Returns:
+        Dict with memory usage statistics including:
+        - Memory store stats (sessions, cache keys)
+        - Checkpoint count (approximate)
+        - GC statistics
+    """
+    try:
+        import gc
+        import psutil
+        import os
+        
+        stats = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "process_memory": {},
+            "memory_store": {},
+            "gc_stats": {}
+        }
+        
+        # Process memory
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            stats["process_memory"] = {
+                "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+                "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+                "percent": round(process.memory_percent(), 2)
+            }
+        except Exception as e:
+            stats["process_memory"] = {"error": str(e)}
+        
+        # Memory store stats
+        try:
+            from memory import MemoryStoreFactory
+            # Use settings from top-level import (line 18)
+            memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+            if hasattr(memory_store, 'get_stats'):
+                stats["memory_store"] = await memory_store.get_stats()
+            else:
+                stats["memory_store"] = {"note": "Stats not available for this store type"}
+        except Exception as e:
+            stats["memory_store"] = {"error": str(e)}
+        
+        # GC stats
+        try:
+            stats["gc_stats"] = {
+                "enabled": gc.isenabled(),
+                "thresholds": gc.get_threshold(),
+                "counts": {
+                    "gen0": gc.get_count()[0],
+                    "gen1": gc.get_count()[1],
+                    "gen2": gc.get_count()[2]
+                },
+                "collections": [s.get("collections", 0) for s in gc.get_stats()]
+            }
+        except Exception as e:
+            stats["gc_stats"] = {"error": str(e)}
+        
+        # Embedding classifier memory and singleton status
+        try:
+            # Use settings from top-level import (line 18) - no need to re-import
+            if settings.use_embedding_classifier:
+                from classifiers.embedded_classifier import _embedded_classifier_instance
+                if _embedded_classifier_instance is not None:
+                    stats["embedding_classifier"] = {
+                        "singleton_exists": True,
+                        "singleton_id": id(_embedded_classifier_instance),  # Memory address to verify it's the same instance
+                        "using_mongodb": settings.use_mongodb_for_embeddings
+                    }
+                    
+                    # If using in-memory embeddings (not MongoDB), calculate size
+                    if not settings.use_mongodb_for_embeddings and hasattr(_embedded_classifier_instance, 'intent_embeddings'):
+                        embeddings = _embedded_classifier_instance.intent_embeddings
+                        if embeddings:
+                            import sys
+                            import numpy as np
+                            total_size = sum(
+                                arr.nbytes if isinstance(arr, np.ndarray) else sys.getsizeof(arr)
+                                for arr in embeddings.values()
+                            )
+                            stats["embedding_classifier"].update({
+                                "embeddings_loaded": len(embeddings),
+                                "estimated_memory_mb": round(total_size / 1024 / 1024, 1),
+                                "note": "Embeddings loaded in memory (required for classification)"
+                            })
+                    else:
+                        stats["embedding_classifier"]["note"] = "Using MongoDB for embeddings (not loaded in memory)"
+                else:
+                    stats["embedding_classifier"] = {
+                        "singleton_exists": False,
+                        "note": "Singleton not initialized yet"
+                    }
+        except Exception as e:
+            stats["embedding_classifier"] = {"error": str(e)}
+        
+        # MongoDB connection pool diagnostics
+        try:
+            from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
+            if MongoDBEmbeddingStoreFactory._instance is not None:
+                instance = MongoDBEmbeddingStoreFactory._instance
+                if hasattr(instance, 'client') and instance.client is not None:
+                    # Get connection pool stats
+                    try:
+                        pool_stats = instance.client._topology._servers
+                        stats["mongodb_embedding_store"] = {
+                            "connected": True,
+                            "connection_pool_size": len(pool_stats) if pool_stats else 0,
+                            "note": "MongoDB connection pool info"
+                        }
+                    except Exception:
+                        stats["mongodb_embedding_store"] = {
+                            "connected": True,
+                            "note": "MongoDB connected (pool stats unavailable)"
+                        }
+                else:
+                    stats["mongodb_embedding_store"] = {
+                        "connected": False,
+                        "note": "MongoDB client not initialized"
+                    }
+        except Exception as e:
+            stats["mongodb_embedding_store"] = {"error": str(e)}
+        
+        # Persistence store MongoDB connection
+        try:
+            from persistence import PersistenceStoreFactory
+            store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+            if hasattr(store, 'client') and store.client is not None:
+                stats["mongodb_persistence_store"] = {
+                    "connected": True,
+                    "note": "MongoDB persistence store connected"
+                }
+        except Exception as e:
+            pass  # Don't fail if persistence store doesn't use MongoDB
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"❌ Memory stats error: {e}")
+        raise HTTPException(status_code=500, detail=f"Memory stats failed: {str(e)}")
 
 
 @router.get("/analytics")
