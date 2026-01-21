@@ -20,7 +20,7 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  dockerImageTag: 41d8474c5f1882003a2475c284d4907ddf8dd900  # This will be overridden by the deployment workflow with git SHA tag.
+  dockerImageTag: fd26a16bce18953258896d63fb0f7bb497e34c0b  # This will be overridden by the deployment workflow with git SHA tag.
 
 
 #hpa settings - min and max replicas and minAvailable for PDB
@@ -33,10 +33,10 @@ hpaSettings:
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "1"
-    memory: "1Gi"
+    cpu: "2000m"
+    memory: "2Gi"
   limits:
-    cpu: "2"
+    cpu: "2000m"
     memory: "2Gi"
 
 # environment variables for app - secret values come from vault.
@@ -101,8 +101,7 @@ istioHttpRoutes:
     - route: "/health"
     - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
-    - route: "/redis/sessions"
-    - route: "/redis/session"
-    - route: "/redis/sessions/cleanup"
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
 ## Triggers 1
   
