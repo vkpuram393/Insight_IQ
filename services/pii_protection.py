@@ -506,6 +506,82 @@ class PIIProtectionService:
             cleanup_count += len(bare_matches)
             logger.info(f"🧹 Cleanup: Removed brackets from {len(bare_matches)} bare numeric ID(s)")
         
+        # =========================================================================
+        # HALLUCINATION FALLBACK - Handle LLM-fabricated placeholder patterns
+        # =========================================================================
+        # Despite system prompt instructions, LLM may copy/modify placeholder examples.
+        # These fabricated patterns must be detected and replaced with natural language.
+        #
+        # Real tokens follow pattern: [ENTITY_TYPE_HASH] where HASH is 8 uppercase hex chars
+        # Hallucinated patterns have literal X's instead of hex characters.
+        #
+        # Observed hallucination patterns in production:
+        # - (CLAIM_ID: XXXXXXXX)  - parentheses with colon, literal X's
+        # - (CLAIM_ID_XXXXXXXX)   - parentheses with underscore, literal X's
+        # - [CLAIM_ID_XXXXXXXX]   - brackets with literal X's (copied from instructions)
+        # =========================================================================
+        
+        hallucination_patterns = [
+            # Parentheses with colon and X placeholders: (CLAIM_ID: XXXXXXXX)
+            (r'\(CLAIM_ID:\s*X+\)', 'claim'),
+            (r'\(CLM_ID:\s*X+\)', 'claim'),
+            (r'\(CLM:\s*X+\)', 'claim'),
+            (r'\(MEMBER_ID:\s*X+\)', 'member'),
+            # Parentheses with underscore and X placeholders: (CLAIM_ID_XXXXXXXX)
+            (r'\(CLAIM_ID_X+\)', 'claim'),
+            (r'\(CLM_X+\)', 'claim'),
+            (r'\(MEMBER_ID_X+\)', 'member'),
+            # Brackets with colon (malformed): [CLAIM_ID: XXXXXXXX]
+            (r'\[CLAIM_ID:\s*X+\]', 'claim'),
+            (r'\[MEMBER_ID:\s*X+\]', 'member'),
+            # Brackets with X placeholders (copied from instructions): [CLAIM_ID_XXXXXXXX]
+            (r'\[CLAIM_ID_X{4,}\]', 'claim'),
+            (r'\[MEMBER_ID_X{4,}\]', 'member'),
+            (r'\[PERSON_X{4,}\]', 'member'),
+            (r'\[US_SSN_X{4,}\]', 'SSN'),
+            # Generic catch-all for CLAIM patterns with 4+ X's in parentheses
+            (r'\(CLAIM[_\s]*(?:ID)?[:\s_]*X{4,}\)', 'claim'),
+        ]
+        
+        hallucination_cleanup_count = 0
+        for pattern, entity_type in hallucination_patterns:
+            matches_found = re.findall(pattern, cleaned_text, re.IGNORECASE)
+            if matches_found:
+                # Extensive logging for debugging
+                logger.warning("=" * 60)
+                logger.warning(f"🚨 HALLUCINATION DETECTED - LLM fabricated a placeholder pattern!")
+                logger.warning(f"   Pattern matched: {pattern}")
+                logger.warning(f"   Matches found: {len(matches_found)}")
+                logger.warning(f"   Match content: {matches_found}")
+                logger.warning(f"   Entity type: {entity_type}")
+                
+                # Determine grammatically correct replacement based on preceding context
+                def get_contextual_replacement(match_obj):
+                    start = match_obj.start()
+                    # Look at preceding 20 chars to determine article usage
+                    preceding = cleaned_text[max(0, start-20):start].lower().rstrip()
+                    
+                    # Context-aware replacement for grammatical correctness
+                    if preceding.endswith(('for', 'of', 'about', 'regarding', 'on', 'with')):
+                        return f"the {entity_type}"
+                    elif preceding.endswith(('is', 'was', 'were', 'are', "'s")):
+                        return f"this {entity_type}"
+                    elif preceding.endswith(('this', 'that', 'the')):
+                        return entity_type  # Already has article
+                    else:
+                        return f"the {entity_type}"
+                
+                # Apply replacement with context-aware function
+                cleaned_text = re.sub(pattern, get_contextual_replacement, cleaned_text, flags=re.IGNORECASE)
+                hallucination_cleanup_count += len(matches_found)
+                
+                logger.warning(f"   ✅ REPLACED with grammatically appropriate phrase")
+                logger.warning("=" * 60)
+        
+        if hallucination_cleanup_count > 0:
+            cleanup_count += hallucination_cleanup_count
+            logger.info(f"🧹 Cleanup: Replaced {hallucination_cleanup_count} fabricated placeholder pattern(s) with natural language")
+        
         # Pattern to match token-like strings: [ENTITY_TYPE_HASH]
         # Captures: entity_type (group 1), hash_part (group 2)
         token_pattern = r'\[([A-Z_]+)_([A-Za-z0-9]+)\]'
