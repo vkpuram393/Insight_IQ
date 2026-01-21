@@ -25,112 +25,6 @@ logger = get_logger(__name__)
 # Load config cache
 _config_cache = None
 
-def _extract_json_from_text(text: str) -> Dict[str, Any]:
-    """
-    Robustly extract JSON from LLM response text.
-    
-    Handles various edge cases:
-    - Markdown code blocks (```json ... ```)
-    - Extra text before/after JSON
-    - Nested JSON structures
-    - Incomplete or malformed JSON
-    - Multiple JSON objects (returns first valid one)
-    
-    Args:
-        text: Raw response text from LLM
-        
-    Returns:
-        Parsed JSON dictionary
-        
-    Raises:
-        json.JSONDecodeError: If no valid JSON can be extracted
-    """
-    if not text or not text.strip():
-        raise json.JSONDecodeError("Empty response text", text, 0)
-    
-    # Strategy 1: Remove markdown code blocks
-    cleaned = text.strip()
-    cleaned = re.sub(r'^```json\s*', '', cleaned, flags=re.MULTILINE)
-    cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
-    cleaned = re.sub(r'```\s*$', '', cleaned, flags=re.MULTILINE)
-    cleaned = cleaned.strip()
-    
-    # Strategy 2: Try parsing the cleaned text directly
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-    
-    # Strategy 3: Find JSON object boundaries by counting braces
-    # This handles nested structures properly
-    # Prefer objects that contain "intent" field
-    brace_count = 0
-    start_idx = -1
-    candidates = []  # Store all valid JSON objects found
-    
-    for i, char in enumerate(cleaned):
-        if char == '{':
-            if brace_count == 0:
-                start_idx = i
-            brace_count += 1
-        elif char == '}':
-            brace_count -= 1
-            if brace_count == 0 and start_idx != -1:
-                # Found a complete JSON object
-                json_str = cleaned[start_idx:i+1]
-                try:
-                    parsed = json.loads(json_str)
-                    # Prefer objects with "intent" field
-                    if "intent" in parsed:
-                        return parsed
-                    candidates.append(parsed)
-                except json.JSONDecodeError:
-                    pass
-                start_idx = -1
-    
-    # If we found any valid JSON objects, return the first one
-    if candidates:
-        return candidates[0]
-    
-    # Strategy 4: Try to find JSON using regex with balanced braces
-    # Look for pattern: { ... "intent" ... } with proper nesting
-    pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*"intent"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-    matches = re.finditer(pattern, cleaned, re.DOTALL)
-    for match in matches:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            continue
-    
-    # Strategy 5: Try to extract JSON by finding the first { and last }
-    # This is a last resort and may fail with nested structures
-    first_brace = cleaned.find('{')
-    last_brace = cleaned.rfind('}')
-    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-        json_str = cleaned[first_brace:last_brace+1]
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError:
-            pass
-    
-    # Strategy 6: Try to fix common JSON issues
-    # Remove trailing commas, fix quotes, etc.
-    fixed = cleaned
-    # Remove trailing commas before closing braces/brackets
-    fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
-    # Try parsing fixed version
-    try:
-        return json.loads(fixed)
-    except json.JSONDecodeError:
-        pass
-    
-    # All strategies failed
-    raise json.JSONDecodeError(
-        f"Could not extract valid JSON from response. Response length: {len(text)} chars",
-        text,
-        0
-    )
-
 def _load_config() -> Dict[str, Any]:
     """Load domain config from JSON file"""
     global _config_cache
@@ -140,8 +34,7 @@ def _load_config() -> Dict[str, Any]:
             _config_cache = json.load(f)
         return _config_cache
     except Exception as e:
-        logger.critical(f"🚨 CRITICAL: Failed to load domain config from {config_path}: {e}")
-        logger.critical(f"   This is a fatal configuration error. Using default threshold (0.7)")
+        logger.error(f"Failed to load config: {e}")
         # Return defaults
         return {
             "confidence_threshold": 0.7
@@ -227,10 +120,22 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
         loop = asyncio.get_event_loop()
         gemini_response = await loop.run_in_executor(None, _generate_core, req)
         
-        # Parse JSON response using robust extraction
+        # Parse JSON response
         try:
-            response_text = gemini_response.text
-            llm_result = _extract_json_from_text(response_text)
+            response_text = gemini_response.text.strip()
+            
+            # Remove markdown code blocks if present
+            response_text = re.sub(r'^```json\s*', '', response_text, flags=re.MULTILINE)
+            response_text = re.sub(r'^```\s*', '', response_text, flags=re.MULTILINE)
+            response_text = re.sub(r'```\s*$', '', response_text, flags=re.MULTILINE)
+            response_text = response_text.strip()
+            
+            # Try to extract JSON from response
+            json_match = re.search(r'\{[^{}]*"intent"[^{}]*\}', response_text, re.DOTALL)
+            if json_match:
+                llm_result = json.loads(json_match.group(0))
+            else:
+                llm_result = json.loads(response_text)
             
             # Extract new intent, confidence, and entities from LLM response
             new_intent = llm_result.get("intent", original_intent)
@@ -274,61 +179,14 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             logger.info(f"   Entities: {new_entities}")
             
         except json.JSONDecodeError as e:
-            if hasattr(gemini_response, 'text'):
-                full_response = gemini_response.text
-                response_length = len(full_response)
-                logger.critical(f"🚨 CRITICAL: Failed to parse JSON from LLM response: {e}")
-                logger.critical(f"   Response length: {response_length} chars")
-                logger.critical(f"   Complete JSON response that failed to parse:")
-                logger.critical(f"   {'='*70}")
-                # Log complete response - split into chunks if too long to avoid truncation
-                if response_length > 10000:
-                    # For very long responses, log in chunks
-                    chunk_size = 5000
-                    for i in range(0, response_length, chunk_size):
-                        chunk = full_response[i:i+chunk_size]
-                        logger.critical(f"   [Chunk {i//chunk_size + 1}]: {chunk}")
-                else:
-                    # Log complete response for shorter ones
-                    logger.critical(f"   {full_response}")
-                logger.critical(f"   {'='*70}")
-            else:
-                response_preview = str(gemini_response)[:1000]
-                logger.critical(f"🚨 CRITICAL: Failed to parse JSON from LLM response: {e}")
-                logger.critical(f"   Response preview (first 1000 chars): {response_preview}")
-                logger.critical(f"   Full response: {str(gemini_response)}")
+            logger.warning(f"Failed to parse JSON from LLM response: {e}")
+            logger.warning(f"   Response was: {gemini_response.text[:500]}")
             # Fallback to original values
             new_intent = original_intent
             new_confidence = original_confidence
             new_entities = original_entities
         except Exception as e:
-            if hasattr(gemini_response, 'text'):
-                full_response = gemini_response.text
-                response_length = len(full_response)
-                logger.critical(f"🚨 CRITICAL: Error parsing LLM response: {e}")
-                logger.critical(f"   Exception type: {type(e).__name__}")
-                logger.critical(f"   Response length: {response_length} chars")
-                logger.critical(f"   Complete JSON response that failed to parse:")
-                logger.critical(f"   {'='*70}")
-                # Log complete response - split into chunks if too long to avoid truncation
-                if response_length > 10000:
-                    # For very long responses, log in chunks
-                    chunk_size = 5000
-                    for i in range(0, response_length, chunk_size):
-                        chunk = full_response[i:i+chunk_size]
-                        logger.critical(f"   [Chunk {i//chunk_size + 1}]: {chunk}")
-                else:
-                    # Log complete response for shorter ones
-                    logger.critical(f"   {full_response}")
-                logger.critical(f"   {'='*70}")
-                logger.critical(f"   Traceback: {traceback.format_exc()}")
-            else:
-                response_preview = str(gemini_response)[:1000]
-                logger.critical(f"🚨 CRITICAL: Error parsing LLM response: {e}")
-                logger.critical(f"   Exception type: {type(e).__name__}")
-                logger.critical(f"   Response preview (first 1000 chars): {response_preview}")
-                logger.critical(f"   Full response: {str(gemini_response)}")
-                logger.critical(f"   Traceback: {traceback.format_exc()}")
+            logger.error(f"Error parsing LLM response: {e}")
             # Fallback to original values
             new_intent = original_intent
             new_confidence = original_confidence
@@ -388,7 +246,7 @@ async def llm_judge_node(state: AgentState) -> Dict[str, Any]:
             user_id=log_ctx["user_id"]
         )
         
-        logger.critical(f"🚨 CRITICAL: Exception in LLM Judge: {e}\n{tb}")
+        logger.error(f" Exception in LLM Judge: {e}\n{tb}")
         
         # Return error state - but still set flag to prevent loops
         result = {
