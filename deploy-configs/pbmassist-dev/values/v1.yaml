@@ -101,5 +101,7 @@ istioHttpRoutes:
     - route: "/health"
     - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
-## Triggers 3
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
+## Triggers 1
   
