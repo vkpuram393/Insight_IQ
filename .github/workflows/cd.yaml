@@ -87,7 +87,7 @@ jobs:
           echo "Debug: Environment variable setup completed"
          
   deploy:
-    uses: cvs-health-source-code/gitops-cd-workflow/.github/workflows/helm-deploy.yaml@v1
+    uses: cvs-health-source-code/gitops-cd-workflow/.github/workflows/helm-deploy.yaml@yarnFix
     needs: [detect-changes]
     secrets: inherit
     with:
