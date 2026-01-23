@@ -15,7 +15,7 @@ from typing import Dict
 from classifiers.embedded_classifier import CVS_INTENT_EXAMPLES
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Import embeddings utility

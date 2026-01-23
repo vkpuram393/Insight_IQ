@@ -837,7 +837,7 @@ if __name__ == "__main__":
         port=8001,
         reload=enable_reload,
         reload_excludes=reload_excludes,
-        log_level="debug"
+        log_level="error"
     )
 
     # This line executes only when server stops
