@@ -33,6 +33,14 @@ from config.config import settings
 from persistence import PersistenceStoreFactory
 # Note: PII masking is handled by safety layer, not in tools layer
 
+# =============================================================================
+# CLAIMS API RESPONSE CACHE
+# =============================================================================
+# Import cache wrapper for Claims API responses
+# This enables caching to avoid redundant API calls for follow-up questions
+# Cache key format: session:{sessionId}:api_cache:{userId}_{claimNumber}_{sequenceNumber}
+from tools.api_cache import get_cached_or_fetch_enriched_details
+
 # ============================================================================
 # LOGGER
 # ============================================================================
@@ -296,20 +304,41 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                     }
                 )
             
-            # Execute enriched claim details flow
+            # Execute enriched claim details flow (WITH CACHING)
+            # Cache key format: session:{sessionId}:api_cache:{userId}_{claimNumber}_{sequenceNumber}
             start = time.time()
             try:
-                logger.info(f"🌐 Calling enriched claim details flow")
-                result = await combine_claim_details_and_list(
-                    claimNumber=claim_num,
-                    claimSequence=claim_seq,
-                    auth_token=auth_token  # Thread-safe: passed as parameter
+                logger.info(f"🌐 Fetching enriched claim details (cache-aware)")
+                
+                # Extract user_id from user_info for cache key
+                # This ensures each user's cached data is isolated (security)
+                user_id_for_cache = user_info.get("user_id", "anonymous") if isinstance(user_info, dict) else "anonymous"
+                
+                # Extract session_id from state for cache key
+                # This ensures cache is scoped to the current conversation session
+                session_id_for_cache = state.get("session_id", "unknown") if isinstance(state, dict) else "unknown"
+                
+                # Use cache-aware wrapper instead of direct API call
+                # This checks cache first, calls API on miss, and caches the result
+                # Returns tuple: (result, from_cache) where from_cache is True if cache hit
+                result, from_cache = await get_cached_or_fetch_enriched_details(
+                    claim_number=claim_num,        # The 15-digit claim number user asked about
+                    claim_sequence=claim_seq,      # The 3-digit sequence number user specified
+                    user_id=user_id_for_cache,     # For cache key (security isolation)
+                    session_id=session_id_for_cache,  # For cache key (session isolation)
+                    auth_token=auth_token,         # For API authentication (if cache miss)
+                    fetch_function=combine_claim_details_and_list  # The actual API function to call on miss
                 )
                 elapsed_ms = (time.time() - start) * 1000.0
                 
-                logger.info(f"✅ Enriched claim details flow succeeded in {elapsed_ms:.2f}ms")
+                # Log whether we got a cache hit or made an API call
+                # This helps with monitoring cache effectiveness
+                if from_cache:
+                    logger.info(f"🎯 CACHE HIT! Retrieved in {elapsed_ms:.2f}ms (saved external API call)")
+                else:
+                    logger.info(f"✅ API call succeeded in {elapsed_ms:.2f}ms (response now cached for follow-ups)")
                 
-                # Log success
+                # Log success (include cache status in audit log)
                 if log_ctx and persistence_store:
                     await persistence_store.log_audit(
                         session_id=log_ctx.get("session_id"),
@@ -320,7 +349,8 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                         data={
                             "flow_type": "claim_details_enriched",
                             "execution_time_ms": elapsed_ms,
-                            "status": "success"
+                            "status": "success",
+                            "from_cache": from_cache  # Track cache hits for analytics
                         }
                     )
                 

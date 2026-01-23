@@ -68,6 +68,22 @@ class Settings(BaseSettings):
     # Cache
     enable_semantic_cache: bool = False
     
+    # =========================================================================
+    # CLAIMS API RESPONSE CACHE
+    # =========================================================================
+    # These settings control caching of external Claims API responses.
+    # Caching reduces API calls for follow-up questions about the same claim.
+    # Cache key format: session:{sessionId}:api_cache:{userId}_{claimNumber}_{sequenceNumber}
+    
+    # Feature flag to enable/disable caching (set ENABLE_CLAIMS_API_CACHE=false to disable)
+    # When disabled, all requests go directly to the external API
+    enable_claims_api_cache: bool = True
+    
+    # Time-To-Live for cached responses in seconds (default: 1 hour)
+    # After this time, Redis automatically deletes the cached entry
+    # Recommended: 300 (5min) for dev, 1800 (30min) for QA, 3600 (1hr) for prod
+    claims_api_cache_ttl_seconds: int = 3600
+
     # Orchestrator
     remove_punctuation_in_normalization: bool = True
 
