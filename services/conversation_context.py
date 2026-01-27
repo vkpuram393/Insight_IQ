@@ -69,11 +69,11 @@ class ConversationContextService:
         claim_matches = re.findall(claim_pattern, history_text, re.IGNORECASE)
         
         if claim_matches:
-            # Use longest match (real claim IDs are typically longer than codes)
-            # Example: If both "12345" and "253152732536005" found, use the 15-digit one
-            claim_matches_sorted = sorted(claim_matches, key=len, reverse=True)
-            extracted["claim_number"] = claim_matches_sorted[0]
-            logger.info(f"✓ Extracted claim_number from history: {extracted['claim_number']}")
+            # FIX: Claim IDs are exactly 15-digit numbers; use most recent from history
+            # re.findall returns matches in document order, so [-1] is most recent
+            # This is consistent with other entity extractions (member_id, date, sequence all use [-1])
+            extracted["claim_number"] = claim_matches[-1]
+            logger.info(f"✓ Extracted claim_number from history (most recent): {extracted['claim_number']}")
         
         # ========================================================================
         # FALLBACK: Standalone 15-digit claim ID (no keyword required)
