@@ -24,6 +24,7 @@ from core.errors.models import create_internal_error, create_llm_error
 from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
+from tools.claims_api import normalize_entities
 import uuid
 
 logger = get_logger(__name__)
@@ -112,7 +113,7 @@ class ResponseAgent:
             **Input:**
                 USER QUERY: Current question (may contain ambiguous terms - ignore those)
                 CONVERSATION HISTORY: Previous messages (check this first).
-                MISSING INFORMATION: What you need to ask for (e.g., "claim number or claim ID")
+                MISSING INFORMATION: What you need to ask for (e.g., "claim number", "3-digit sequence number")
                 PROVIDED INFORMATION: What's in current message
 
             **Output:**
@@ -120,8 +121,8 @@ class ResponseAgent:
 
             **Examples of Good Questions:**
                 ✅ "I can help with that. Could you please provide your claim number?"
-                ✅ "To look that up for you, could you provide your claim number or claim ID?"
-                ✅ "I'd be happy to help! Could you please provide your claim number?"
+                ✅ "To look that up for you, could you provide your claim number?"
+                ✅ "I'd be happy to help! Could you please provide your claim number and 3-digit sequence number?"
 
             **Examples of Poor Questions:**
                 ❌ "What does 'TF' stand for?" (asking about ambiguous term, not missing entity)
@@ -133,7 +134,13 @@ class ResponseAgent:
             - When users provide a claim number, the system may require both the claim number and sequence number for accurate lookup.
             - **CRITICAL: When asking for a sequence number, ALWAYS specify it as "3-digit sequence number"** (never just "sequence number").
             - Focus on what's explicitly listed in MISSING INFORMATION field for handling such cases.
-            - Apply the same approach for other identifiers as well. If additional related identifiers are required for accurate lookup, ensure they are captured based on what is missing.
+            
+            **⚠️ HARD CONSTRAINT - VALID ENTITIES TO ASK FOR:**
+            This system ONLY supports looking up information by **claim number** and **3-digit sequence number**.
+            - ✅ VALID to ask for: claim number, 3-digit sequence number
+            - ❌ NEVER ask for: member ID, member number, patient ID, prescription ID, or any other identifier
+            - Even if the user's query seems to require member-level data (like "Medicare accumulation"), still ask for the claim number - the system will extract member info from the claim data.
+            - This is a pharmacy claims system - ALL lookups are claim-based.
             
              ## Communication Style
 
@@ -252,6 +259,12 @@ When asked "Who are you?", "What can you do?", "How can you help me?", or simila
 
 **Note on Claim Identifiers:**
 When users provide a claim number, the system may require both the claim number and sequence number for accurate lookup. **CRITICAL: When asking the user for a sequence number, ALWAYS specify it as "3-digit sequence number"** (never just "sequence number"). This is handled automatically by the clarification system - you should respond based on the data provided to you.
+
+**CRITICAL - Always Include Identifiers in Response:**
+When providing claim information in your response, always include the claim number and sequence number for absolute clarity. This ensures the user knows exactly which claim the displayed data belongs to. Reference these identifiers naturally within your response text rather than asking for them again if they are already available in the ENTITIES section provided to you.
+
+**CRITICAL - Entity Freshness (Respond to Current Query Only):**
+The ENTITIES section provided to you contains the authoritative identifiers for THIS specific query. When conversation history mentions different claims from earlier turns, IGNORE those - your response must be about the claim(s) in the ENTITIES section only. The claim data provided corresponds to ENTITIES section identifiers, not to older claims in history.
 
 ## Response Strategy
 
@@ -594,7 +607,17 @@ Generate ONE specific, helpful follow-up question to get the missing information
             intent = state.get("intent", "unknown")
             tool_results = state.get("tool_results")
             history = state.get("conversation_history", [])
-            entities = state.get("entities", {})  # FIX 8: Get entities for error messages
+            
+            # CRITICAL FIX: Merge extracted_slots (from history) with current entities
+            # Normalize keys first so claim_ids and claim_number both become claimNumber
+            # This ensures current claim properly overwrites old claim from history
+            # Priority: current entities overwrite history entities (for recency)
+            extracted_slots = state.get("extracted_slots", {})
+            current_entities = state.get("entities", {})
+            normalized_extracted = normalize_entities(extracted_slots) if extracted_slots else {}
+            normalized_current = normalize_entities(current_entities) if current_entities else {}
+            entities = {**normalized_extracted, **normalized_current}
+            self.logger.debug(f"🔗 Merged entities (normalized): extracted={list(normalized_extracted.keys())}, current={list(normalized_current.keys())}, merged={list(entities.keys())}")
             
             # Defensive check
             if state.get("clarification_context"):
@@ -603,24 +626,24 @@ Generate ONE specific, helpful follow-up question to get the missing information
             # Format tool results, history, and entities
             claim_data = self._format_tool_results(tool_results) if tool_results else "No claim data available"
             history_str = self._format_conversation_history(history) if history else "No previous conversation"
-            entities_str = self._format_entities(entities) if entities else "No entities extracted"  # FIX 8: Format entities
+            entities_str = self._format_entities(entities) if entities else "No entities extracted"
             
             # Build normal response prompt
             prompt_template = ChatPromptTemplate.from_messages([
                 ("user", """USER QUERY: {user_query}
 
-INTENT: {intent} <- Focus your response on this specific intent
+INTENT: {intent}
 
-=== EXTRACTED ENTITIES ===
+=== ENTITIES TO USE IN RESPONSE ===
 {entities}
 
 === CLAIM DATA ===
 {claim_data}
 
-=== CONVERSATION HISTORY ===
+=== CONVERSATION HISTORY (for context only) ===
 {conversation_history}
 
-Provide a targeted response that directly answers the user's question based on the INTENT above. Only include sections relevant to their specific query. Do not provide a full summary unless the query is general or asks for comprehensive information.""")
+Provide a targeted response that directly addresses the user's question using the claim data corresponding to the entities listed above. When referencing identifiers in your response, always use the values from ENTITIES TO USE section, not from conversation history. Always include the claim number and sequence number in your response for clarity when providing claim-specific information. Only include sections relevant to the specific query.""")
             ])
             
             messages = prompt_template.format_messages(
