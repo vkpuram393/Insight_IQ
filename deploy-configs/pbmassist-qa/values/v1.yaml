@@ -25,18 +25,18 @@ appData:
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 3
-  minReplicas: 3
-  maxReplicas: 4
+  minAvailable: 1
+  minReplicas: 1
+  maxReplicas: 1
   averageUtilization: 80
 
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "1"
-    memory: "1Gi"
+    cpu: "2000m"
+    memory: "2Gi"
   limits:
-    cpu: "2"
+    cpu: "2000m"
     memory: "2Gi"
 
 # environment variables for app - secret values come from vault.
@@ -101,8 +101,7 @@ istioHttpRoutes:
     - route: "/health"
     - route: "/pss/pbmassist/v1"
     - route: "/pss/pbmassist/"
-    - route: "/redis/sessions"
-    - route: "/redis/session"
-    - route: "/redis/sessions/cleanup"
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
 ## Triggers 1
   
