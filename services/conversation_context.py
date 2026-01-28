@@ -69,11 +69,26 @@ class ConversationContextService:
         claim_matches = re.findall(claim_pattern, history_text, re.IGNORECASE)
         
         if claim_matches:
-            # Use longest match (real claim IDs are typically longer than codes)
-            # Example: If both "12345" and "253152732536005" found, use the 15-digit one
-            claim_matches_sorted = sorted(claim_matches, key=len, reverse=True)
-            extracted["claim_number"] = claim_matches_sorted[0]
-            logger.info(f"✓ Extracted claim_number from history: {extracted['claim_number']}")
+            # FIX: Claim IDs are exactly 15-digit numbers; use most recent from history
+            # re.findall returns matches in document order, so [-1] is most recent
+            # This is consistent with other entity extractions (member_id, date, sequence all use [-1])
+            extracted["claim_number"] = claim_matches[-1]
+            logger.info(f"✓ Extracted claim_number from history (most recent): {extracted['claim_number']}")
+        
+        # ========================================================================
+        # FALLBACK: Standalone 15-digit claim ID (no keyword required)
+        # ========================================================================
+        # Aligned with EntityExtractor pattern: r'\b(CLM\d{3,10}|\d{15})\b'
+        # This catches user input like "253016267966353 - 1" without "claim" keyword
+        # Safe: 15-digit numbers are highly specific, low false positive risk
+        # Only runs if keyword-based extraction above found nothing
+        if "claim_number" not in extracted:
+            standalone_claim_pattern = r'\b(\d{15})\b'
+            standalone_claim_matches = re.findall(standalone_claim_pattern, history_text)
+            if standalone_claim_matches:
+                # Use most recent 15-digit number (last in list)
+                extracted["claim_number"] = standalone_claim_matches[-1]
+                logger.info(f"✓ Extracted claim_number from history (standalone 15-digit): {extracted['claim_number']}")
         
         # ========================================================================
         # Pattern 2: Member IDs - MUST have "member"/"patient" keyword
@@ -111,12 +126,22 @@ class ConversationContextService:
                 logger.debug(f"✓ Extracted prescription_number from history: {extracted['prescription_number']}")
         
         # ========================================================================
-        # Pattern 5: Sequence Numbers - MUST have "seq"/"sequence" keyword
+        # Pattern 5: Sequence Numbers - ALIGNED WITH EntityExtractor
         # ========================================================================
-        # Matches: "sequence 997", "seq 997", "sequence number 997", "seq# 997"
-        # Sequence numbers are exactly 3 digits (e.g., 997, 998, 999)
+        # Step 1: Try keyword-based extraction (with seq/sequence)
+        # Matches: "sequence 001", "seq 001", "sequence number 001", "seq# 001"
         sequence_pattern = r'(?:seq(?:uence)?)\s*(?:number|num|#)?\s*:?\s*(\d{3})\b'
         sequence_matches = re.findall(sequence_pattern, history_text, re.IGNORECASE)
+        
+        # Step 2: FALLBACK - If no keyword match, try standalone 3-digit (like EntityExtractor)
+        # This catches cases where user says "claim 260158058207352 and 001" without "seq" keyword
+        if not sequence_matches:
+            # Mask claim numbers (10+ digits) to avoid extracting sequences from them
+            masked_history = re.sub(r'\d{10,}', 'CLAIM_MASKED', history_text)
+            standalone_pattern = r'(?<!\d)\b(\d{3})\b(?!\d)'
+            sequence_matches = re.findall(standalone_pattern, masked_history)
+            if sequence_matches:
+                logger.debug(f"   Found sequence via standalone fallback: {sequence_matches}")
         
         if sequence_matches:
             # Use the most recent sequence number
@@ -156,17 +181,27 @@ class ConversationContextService:
         if not conversation_history:
             return False
         
-        # Combine history
+        # FIXED: Use USER messages only (consistent with extract_entities_from_history)
+        # Previously used ALL messages which caused router/extraction mismatch:
+        # - Router would find "claim X" in assistant response → return True
+        # - Extraction only looked at user messages → return {} (empty)
+        # - Result: API call failed with "No entities provided"
         history_text = " ".join([
             msg.get("content", "") 
             for msg in conversation_history 
-            if isinstance(msg, dict)
+            if isinstance(msg, dict) and msg.get("role") == "user"
         ])
         
         # Check for claim ID (context-aware: if "claim" keyword + digits, treat as claim ID)
         # No rigid digit count - context matters more than pattern
         claim_pattern = r'(?:claim|clm)\s*(?:number|id|#)?\s*:?\s*\d+'
         has_claim_id = bool(re.search(claim_pattern, history_text, re.IGNORECASE))
+        
+        # ADDED: Also check for standalone 15-digit claim IDs (consistent with extraction)
+        # This ensures router and extraction agree on what constitutes "entities in history"
+        if not has_claim_id:
+            standalone_claim_pattern = r'\b\d{15}\b'
+            has_claim_id = bool(re.search(standalone_claim_pattern, history_text))
         
         # Check for dates
         date_pattern = r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'

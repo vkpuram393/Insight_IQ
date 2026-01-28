@@ -33,6 +33,14 @@ from config.config import settings
 from persistence import PersistenceStoreFactory
 # Note: PII masking is handled by safety layer, not in tools layer
 
+# =============================================================================
+# CLAIMS API RESPONSE CACHE
+# =============================================================================
+# Import cache wrapper for Claims API responses
+# This enables caching to avoid redundant API calls for follow-up questions
+# Cache key format: session:{sessionId}:api_cache:{userId}_{claimNumber}_{sequenceNumber}
+from tools.api_cache import get_cached_or_fetch_enriched_details
+
 # ============================================================================
 # LOGGER
 # ============================================================================
@@ -40,6 +48,38 @@ logger = get_logger(__name__)
 
 # NOTE: Auth token is now passed as parameter to functions, not stored globally
 # This ensures thread-safety for millions of concurrent users
+
+# ============================================================================
+# SHARED HTTP CLIENT (Memory Optimization)
+# ============================================================================
+# Reuse a single httpx.AsyncClient instance to prevent memory leaks
+# Creating new clients for each request causes connection pool buildup
+_shared_http_client: Optional[httpx.AsyncClient] = None
+_client_lock = asyncio.Lock()
+
+async def _get_shared_http_client() -> httpx.AsyncClient:
+    """Get or create shared httpx.AsyncClient instance for connection pooling"""
+    global _shared_http_client
+    if _shared_http_client is None:
+        async with _client_lock:
+            if _shared_http_client is None:
+                _shared_http_client = httpx.AsyncClient(
+                    timeout=30.0,
+                    verify=True,
+                    limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+                )
+                logger.info("🌐 Created shared HTTP client for connection pooling")
+    return _shared_http_client
+
+async def _close_shared_http_client():
+    """Close shared HTTP client (called on shutdown)"""
+    global _shared_http_client
+    if _shared_http_client is not None:
+        async with _client_lock:
+            if _shared_http_client is not None:
+                await _shared_http_client.aclose()
+                _shared_http_client = None
+                logger.info("🔌 Closed shared HTTP client")
 
 # ============================================================================
 # MAIN CLAIMS API TOOL NODE
@@ -175,9 +215,38 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
         # If claim number is provided but sequence is missing, return error
         if has_claim_number and not has_sequence:
             claim_num = entities.get("claimNumber") or entities.get("claimId")
-            logger.warning(f"⚠️ Validation failed: Claim number provided without sequence number")
-            logger.warning(f"   📍 ClaimNumber: {claim_num}")
-            logger.warning(f"   📍 ClaimSequence: MISSING")
+            
+            # ========================================================================
+            # 🚨 CLARIFICATION DECISION LOG - Detailed diagnostic (GCP + MongoDB)
+            # ========================================================================
+            history_preview = "(no history)"
+            if isinstance(state, dict):
+                conv_history = state.get("conversation_history", [])
+                user_messages = [m.get("content", "") for m in conv_history if m.get("role") == "user"]
+                if user_messages:
+                    history_preview = " | ".join(user_messages)
+                    if len(history_preview) > 200:
+                        history_preview = "..." + history_preview[-200:]
+            
+            # Log to GCP (stdout only - no MongoDB to avoid latency)
+            logger.warning(
+                f"\n{'='*70}\n"
+                f"🚨 CLARIFICATION_DECISION: SEQUENCE_MISSING\n"
+                f"{'='*70}\n"
+                f"SESSION: {log_ctx.get('session_id', 'unknown')[:20] if log_ctx else 'unknown'}\n"
+                f"INTENT: {intent}\n"
+                f"\n"
+                f"WHAT WE HAVE:\n"
+                f"  ✅ Claim Number: {claim_num}\n"
+                f"  ❌ Sequence: NOT FOUND\n"
+                f"\n"
+                f"WHERE WE LOOKED:\n"
+                f"  • Current message entities: {list(current_entities.keys()) if current_entities else '(empty)'}\n"
+                f"  • History extracted_slots: {list(extracted_slots.keys()) if extracted_slots else '(empty)'}\n"
+                f"\n"
+                f"HISTORY PREVIEW: {history_preview}\n"
+                f"{'='*70}"
+            )
             
             error_msg = f"Sequence number is required for claim number '{claim_num}'. Please provide the sequence number along with the claim number."
             
@@ -235,20 +304,41 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                     }
                 )
             
-            # Execute enriched claim details flow
+            # Execute enriched claim details flow (WITH CACHING)
+            # Cache key format: session:{sessionId}:api_cache:{userId}_{claimNumber}_{sequenceNumber}
             start = time.time()
             try:
-                logger.info(f"🌐 Calling enriched claim details flow")
-                result = await combine_claim_details_and_list(
-                    claimNumber=claim_num,
-                    claimSequence=claim_seq,
-                    auth_token=auth_token  # Thread-safe: passed as parameter
+                logger.info(f"🌐 Fetching enriched claim details (cache-aware)")
+                
+                # Extract user_id from user_info for cache key
+                # This ensures each user's cached data is isolated (security)
+                user_id_for_cache = user_info.get("user_id", "anonymous") if isinstance(user_info, dict) else "anonymous"
+                
+                # Extract session_id from state for cache key
+                # This ensures cache is scoped to the current conversation session
+                session_id_for_cache = state.get("session_id", "unknown") if isinstance(state, dict) else "unknown"
+                
+                # Use cache-aware wrapper instead of direct API call
+                # This checks cache first, calls API on miss, and caches the result
+                # Returns tuple: (result, from_cache) where from_cache is True if cache hit
+                result, from_cache = await get_cached_or_fetch_enriched_details(
+                    claim_number=claim_num,        # The 15-digit claim number user asked about
+                    claim_sequence=claim_seq,      # The 3-digit sequence number user specified
+                    user_id=user_id_for_cache,     # For cache key (security isolation)
+                    session_id=session_id_for_cache,  # For cache key (session isolation)
+                    auth_token=auth_token,         # For API authentication (if cache miss)
+                    fetch_function=combine_claim_details_and_list  # The actual API function to call on miss
                 )
                 elapsed_ms = (time.time() - start) * 1000.0
                 
-                logger.info(f"✅ Enriched claim details flow succeeded in {elapsed_ms:.2f}ms")
+                # Log whether we got a cache hit or made an API call
+                # This helps with monitoring cache effectiveness
+                if from_cache:
+                    logger.info(f"🎯 CACHE HIT! Retrieved in {elapsed_ms:.2f}ms (saved external API call)")
+                else:
+                    logger.info(f"✅ API call succeeded in {elapsed_ms:.2f}ms (response now cached for follow-ups)")
                 
-                # Log success
+                # Log success (include cache status in audit log)
                 if log_ctx and persistence_store:
                     await persistence_store.log_audit(
                         session_id=log_ctx.get("session_id"),
@@ -259,7 +349,8 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                         data={
                             "flow_type": "claim_details_enriched",
                             "execution_time_ms": elapsed_ms,
-                            "status": "success"
+                            "status": "success",
+                            "from_cache": from_cache  # Track cache hits for analytics
                         }
                     )
                 
@@ -777,69 +868,70 @@ async def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> 
     logger.info(f"   Headers: {headers}")
     logger.info(f"   Body: {body}")
     
-    # Use httpx.AsyncClient for async HTTP requests
-    async with httpx.AsyncClient(timeout=30.0, verify=True) as client:
+    # Use shared httpx.AsyncClient for connection pooling and memory efficiency
+    # This prevents creating new clients for each request which can cause memory leaks
+    client = await _get_shared_http_client()
+    try:
+        resp = await client.request(method, url, headers=headers, json=body)
+        logger.info(f"   Response Status: {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"   Response Body: {resp.text[:500]}")
+        resp.raise_for_status()
+        
+        # parse JSON or raise
         try:
-            resp = await client.request(method, url, headers=headers, json=body)
-            logger.info(f"   Response Status: {resp.status_code}")
-            if resp.status_code != 200:
-                logger.error(f"   Response Body: {resp.text[:500]}")
-            resp.raise_for_status()
+            return resp.json()
+        except (ValueError, TypeError) as e:
+            # non-json response
+            raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
             
-            # parse JSON or raise (inside the context manager to access resp)
+    except httpx.TimeoutException as e:
+        # timeout -> retriable
+        raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
+    except httpx.HTTPStatusError as e:
+        # HTTP error (4xx, 5xx)
+        status = e.response.status_code
+        
+        # Capture full error response body for detailed error reporting
+        error_response_body = None
+        error_response_json = None
+        if e.response is not None:
+            logger.error(f"❌ API Error Response:")
+            logger.error(f"   Status: {e.response.status_code}")
+            logger.error(f"   Response Text: {e.response.text[:500]}")
+            
+            # Store the full response body
+            error_response_body = e.response.text
+            
+            # Try to parse as JSON for structured error details
             try:
-                return resp.json()
-            except (ValueError, TypeError) as e:
-                # non-json response
-                raise ExternalAPIError("Non-JSON response", details={"status": resp.status_code, "raw": resp.text, "api": getattr(api, "name", url)}, retriable=False)
-                
-        except httpx.TimeoutException as e:
-            # timeout -> retriable
-            raise ToolTimeoutError(str(e), details={"api": getattr(api, "name", url)}, retriable=True)
-        except httpx.HTTPStatusError as e:
-            # HTTP error (4xx, 5xx)
-            status = e.response.status_code
-            
-            # Capture full error response body for detailed error reporting
-            error_response_body = None
-            error_response_json = None
-            if e.response is not None:
-                logger.error(f"❌ API Error Response:")
-                logger.error(f"   Status: {e.response.status_code}")
-                logger.error(f"   Response Text: {e.response.text[:500]}")
-                
-                # Store the full response body
-                error_response_body = e.response.text
-                
-                # Try to parse as JSON for structured error details
-                try:
-                    error_response_json = e.response.json()
-                except:
-                    pass  # Not JSON, use raw text
-            
-            # Build comprehensive error details
-            error_details = {
-                "status": status,
-                "api": getattr(api, "name", url),
-                "response_body": error_response_body,
-                "response_json": error_response_json,
-                "url": url
-            }
-            
-            retriable = status is None or (500 <= status < 600)
-            raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
-        except httpx.RequestError as e:
-            # Connection error or other request error
-            logger.error(f"❌ Request Error: {e}")
-            error_details = {
-                "status": None,
-                "api": getattr(api, "name", url),
-                "response_body": None,
-                "response_json": None,
-                "url": url
-            }
-            # Connection errors are retriable
-            raise ExternalAPIError(str(e), details=error_details, retriable=True)
+                error_response_json = e.response.json()
+            except:
+                pass  # Not JSON, use raw text
+        
+        # Build comprehensive error details
+        error_details = {
+            "status": status,
+            "api": getattr(api, "name", url),
+            "response_body": error_response_body,
+            "response_json": error_response_json,
+            "url": url
+        }
+        
+        retriable = status is None or (500 <= status < 600)
+        raise ExternalAPIError(str(e), details=error_details, retriable=retriable)
+    except httpx.RequestError as e:
+        # Connection error or other request error
+        logger.error(f"❌ Request Error: {e}")
+        error_details = {
+            "status": None,
+            "api": getattr(api, "name", url),
+            "response_body": None,
+            "response_json": None,
+            "url": url
+        }
+        # Connection errors are retriable
+        raise ExternalAPIError(str(e), details=error_details, retriable=True)
 
 
 # ============================================================================

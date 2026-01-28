@@ -220,9 +220,25 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
 
         # RULE 3: No entities (current OR history) → Clarification (except for whitelisted intents)
         if not has_entities_anywhere and intent not in INTENTS_WITHOUT_ENTITIES:
-            logger.info(f"⚠️ No entities extracted for intent '{intent}' -> Clarification")
-            logger.info(f"   Reason: Intent requires entities but none in current message or history")
-            logger.info("   Flag: intent_reclassified=False (initial classification)")
+            # ========================================================================
+            # 🚨 CLARIFICATION DECISION LOG - Router Path (GCP only)
+            # ========================================================================
+            logger.warning(
+                f"\n{'='*70}\n"
+                f"🚨 CLARIFICATION_DECISION [confidence_check_router]: NO_ENTITIES_ANYWHERE\n"
+                f"{'='*70}\n"
+                f"SESSION: {state.get('session_id', 'unknown')[:20] if state.get('session_id') else 'unknown'}\n"
+                f"INTENT: {intent}\n"
+                f"CONFIDENCE: {confidence:.2f}\n"
+                f"\n"
+                f"ENTITY CHECK:\n"
+                f"  • Current message entities: {has_entities}\n"
+                f"  • History has entities: {has_entities_in_history}\n"
+                f"  • Combined (has_entities_anywhere): {has_entities_anywhere}\n"
+                f"\n"
+                f"RESULT: Routing to clarification node\n"
+                f"{'='*70}"
+            )
             return "clarification"
 
         # RULE 4: High confidence + Has entities anywhere (or doesn't need them) → Build Context (direct path)
@@ -259,10 +275,27 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
 
         # RULE 2: Missing entities (current AND history) OR low confidence → Clarification (template-based)
         if (not has_entities_anywhere and intent not in INTENTS_WITHOUT_ENTITIES) or confidence < threshold:
-            logger.info(f"⚠️ Missing entities or low confidence -> Clarification (template)")
-            logger.info(f"   Confidence: {confidence:.2f}, Has entities anywhere: {has_entities_anywhere}")
-            logger.info("   Reason: LLM Judge still uncertain - use template clarification")
-            logger.info("   Flag: intent_reclassified=True (LLM judge already ran, won't route to LLM judge again)")
+            # ========================================================================
+            # 🚨 CLARIFICATION DECISION LOG - Router Path after LLM Judge (GCP only)
+            # ========================================================================
+            reason = "NO_ENTITIES_ANYWHERE" if not has_entities_anywhere else "LOW_CONFIDENCE"
+            logger.warning(
+                f"\n{'='*70}\n"
+                f"🚨 CLARIFICATION_DECISION [confidence_check_router]: {reason}\n"
+                f"{'='*70}\n"
+                f"SESSION: {state.get('session_id', 'unknown')[:20] if state.get('session_id') else 'unknown'}\n"
+                f"INTENT: {intent}\n"
+                f"CONFIDENCE: {confidence:.2f} (threshold: {threshold})\n"
+                f"LLM_JUDGE_RAN: True\n"
+                f"\n"
+                f"ENTITY CHECK:\n"
+                f"  • Current message entities: {has_entities}\n"
+                f"  • History has entities: {has_entities_in_history}\n"
+                f"  • Combined (has_entities_anywhere): {has_entities_anywhere}\n"
+                f"\n"
+                f"RESULT: Routing to clarification node (template-based)\n"
+                f"{'='*70}"
+            )
             return "clarification"
 
     # Fallback: Default to build_context if all else fails

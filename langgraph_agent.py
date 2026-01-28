@@ -273,6 +273,45 @@ async def close_graph():
         _graph_compiled = None
         logger.info("✅ Saver closed")
 
+async def cleanup_old_checkpoints(days: int = 7):
+    """
+    Clean up old checkpoints from SQLite database to prevent unbounded growth.
+    
+    Args:
+        days: Remove checkpoints older than this many days (default: 7)
+    """
+    global _async_saver
+    if _async_saver is None:
+        return
+    
+    try:
+        import aiosqlite
+        from datetime import datetime, timedelta
+        
+        cutoff_time = datetime.now() - timedelta(days=days)
+        cutoff_timestamp = cutoff_time.timestamp()
+        
+        # Get database connection from saver
+        # Note: AsyncSqliteSaver uses aiosqlite internally
+        db_path = settings.checkpoint_db_path
+        
+        async with aiosqlite.connect(db_path) as db:
+            # Delete old checkpoints
+            cursor = await db.execute(
+                "DELETE FROM checkpoints WHERE created_at < ?",
+                (cutoff_timestamp,)
+            )
+            deleted = cursor.rowcount
+            await db.commit()
+            
+            if deleted > 0:
+                logger.info(f"🧹 Cleaned up {deleted} old checkpoints (older than {days} days)")
+            
+            return deleted
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to cleanup old checkpoints: {e}")
+        return 0
+
 # Execution ------------------------------------------------------------------
 
 async def run_graph(text: str, session_id: str, user_info: dict = None):

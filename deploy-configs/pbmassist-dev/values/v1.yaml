@@ -3,7 +3,7 @@ envName: pbmassist-dev
 skipSecurityContext: true
 projectId: pbm-nonprod-myclaims   # top-level projectId
 
-#Workload Identity configuration..
+#Workload Identity configuration.
 workloadIdentity:
   enabled: true
   # ksaName: sa-myclaims-ai-dev
@@ -21,13 +21,13 @@ appData:
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
   #dockerImageTag: a3d11e738d93d6b7d8f0a3a93aaf8c60657b7595  # This will be overridden by the deployment workflow with git SHA tag.
-  dockerImageTag: f1fa5a064ebb95124f16fd3f648673767b2883cf
+  dockerImageTag: 9c6e3e30df616d3e7d22fc09a925c0629515499b
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 1
-  minReplicas: 1
-  maxReplicas: 1
+  minAvailable: 3
+  minReplicas: 3
+  maxReplicas: 4
   averageUtilization: 80
 
 # Pod resource requests and limits
@@ -64,7 +64,7 @@ envVars: |
   - name: APP_NAME
     value: pss-myclaims-ai-agent
   - name: APP_VERSION
-    value: "2.0.0"
+    value: "2.0.0.4"
   - name: LOG_LEVEL
     value: INFO
   - name: USE_MOCK_LLM

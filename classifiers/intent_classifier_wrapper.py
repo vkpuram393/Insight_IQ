@@ -41,10 +41,11 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
     if settings.use_embedding_classifier:
         # Use Embedding-based Classifier (semantic understanding)
         logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic - Async)")
-        from classifiers.embedded_classifier import CVSIntentEmbedded
+        from classifiers.embedded_classifier import get_embedded_classifier
         
         try:
-            classifier = CVSIntentEmbedded()
+            # Use singleton to prevent memory leaks (embeddings loaded once, ~800MB)
+            classifier = get_embedded_classifier()
             # Use async version - reuses MongoDB connection like team's pattern
             result = await classifier.classify_async(query)
         except RuntimeError as e:

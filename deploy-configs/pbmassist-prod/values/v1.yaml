@@ -17,7 +17,8 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  dockerImageTag: 0f4cb87eff83a336cf06619466cb9820aef95f81  # This will be overridden by the deployment workflow with git SHA tag
+  dockerImageTag: 9c6e3e30df616d3e7d22fc09a925c0629515499b
+  # This will be overridden by the deployment workflow with git SHA tag
 
 
 #hpa settings - min and max replicas and minAvailable for PDB
@@ -30,11 +31,11 @@ hpaSettings:
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "1"
-    memory: "4Gi"
+    cpu: "2000m"
+    memory: "2Gi"
   limits:
-    cpu: "2"
-    memory: "8Gi"
+    cpu: "2000m"
+    memory: "2Gi"
 
 # environment variables for app - secret values come from vault
 envVars: |
@@ -61,9 +62,9 @@ envVars: |
   - name: APP_NAME
     value: pss-myclaims-ai-agent
   - name: APP_VERSION
-    value: "2.0.0"
+    value: "1.0.2.0"
   - name: LOG_LEVEL
-    value: INFO
+    value: ERROR
   - name: USE_MOCK_LLM
     value: "false"
   - name: LLM_MODEL
@@ -80,6 +81,8 @@ envVars: |
     value: "myclaims-PROD"
   - name: SWAGGER_URL
     value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
+  - name: use_embedding_classifier
+    value: 'true'
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 # Environment secrets from HashiCorp Vault
@@ -94,6 +97,10 @@ istioHttpRoutes:
     - route: "/"
     - route: "/api/"
     - route: "/docs/"
-    - route: "/health"    
+    - route: "/health"
+    - route: "/pss/pbmassist/v1"
+    - route: "/pss/pbmassist/"
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
 ## Triggers 2
   
