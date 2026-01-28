@@ -261,10 +261,29 @@ When asked "Who are you?", "What can you do?", "How can you help me?", or simila
 When users provide a claim number, the system may require both the claim number and sequence number for accurate lookup. **CRITICAL: When asking the user for a sequence number, ALWAYS specify it as "3-digit sequence number"** (never just "sequence number"). This is handled automatically by the clarification system - you should respond based on the data provided to you.
 
 **CRITICAL - Always Include Identifiers in Response:**
-When providing claim information in your response, always include the claim number and sequence number for absolute clarity. This ensures the user knows exactly which claim the displayed data belongs to. Reference these identifiers naturally within your response text rather than asking for them again if they are already available in the ENTITIES section provided to you.
+When providing claim information, always include the claim number and sequence number for absolute clarity so the user knows exactly which claim the data belongs to. These identifiers MUST come from the ENTITIES section provided to you.
 
-**CRITICAL - Entity Freshness (Respond to Current Query Only):**
-The ENTITIES section provided to you contains the authoritative identifiers for THIS specific query. When conversation history mentions different claims from earlier turns, IGNORE those - your response must be about the claim(s) in the ENTITIES section only. The claim data provided corresponds to ENTITIES section identifiers, not to older claims in history.
+## CRITICAL - ENTITY SOURCE RULE (MUST FOLLOW)
+
+You receive information in THREE sections: ENTITIES, CLAIM DATA, and CONVERSATION HISTORY.
+
+**FOR ANSWERING QUESTIONS:** Use ONLY the CLAIM DATA section. This contains the actual claim information retrieved for the current request. All financial amounts, drug details, pharmacy info, and member info come from CLAIM DATA.
+
+**FOR CITING IDENTIFIERS IN YOUR RESPONSE:** Use ONLY the values from the ENTITIES section. The ENTITIES section contains the AUTHORITATIVE claim number and sequence number for the current request. When you write "For claim X sequence Y..." in your response, X and Y MUST come from ENTITIES.
+
+**CONVERSATION HISTORY - READ CAREFULLY:**
+- CONVERSATION HISTORY exists SOLELY to help you understand what the user is asking about
+- It provides context for follow-up questions like "what was the patient pay?" (you understand they mean the claim discussed earlier)
+- NEVER extract, copy, or reference ANY claim numbers, sequence numbers, member IDs, or other identifiers from CONVERSATION HISTORY
+- Identifiers in history may belong to COMPLETELY DIFFERENT claims from previous turns
+- Using identifiers from history instead of ENTITIES WILL CAUSE INCORRECT RESPONSES
+
+**WHEN MENTIONING IDENTIFIERS:**
+1. Look at the ENTITIES section
+2. Use those exact values in your response text
+3. Do NOT look at conversation history for identifiers under ANY circumstances
+
+This rule exists because users may ask about multiple claims in a conversation. The ENTITIES section tells you which claim THIS specific question is about.
 
 ## Response Strategy
 
@@ -634,16 +653,22 @@ Generate ONE specific, helpful follow-up question to get the missing information
 
 INTENT: {intent}
 
-=== ENTITIES TO USE IN RESPONSE ===
+=== ENTITIES (USE IN RESPONSE FOR IDENTIFIERS) ===
 {entities}
 
-=== CLAIM DATA ===
+=== CLAIM DATA (USE FOR ANSWERING) ===
 {claim_data}
 
-=== CONVERSATION HISTORY (for context only) ===
+=== CONVERSATION HISTORY (CONTEXT ONLY - DO NOT USE FOR IDENTIFIERS) ===
 {conversation_history}
 
-Provide a targeted response that directly addresses the user's question using the claim data corresponding to the entities listed above. When referencing identifiers in your response, always use the values from ENTITIES TO USE section, not from conversation history. Always include the claim number and sequence number in your response for clarity when providing claim-specific information. Only include sections relevant to the specific query.""")
+INSTRUCTIONS:
+1. Provide a targeted response that directly addresses the user's question
+2. Answer using information from CLAIM DATA section
+3. When citing claim number or sequence number in your response, use ONLY values from ENTITIES section above
+4. NEVER use any identifiers from CONVERSATION HISTORY - it contains old claims from previous turns
+5. Include claim number and sequence number from ENTITIES for clarity
+6. Only include sections relevant to the specific query""")
             ])
             
             messages = prompt_template.format_messages(
