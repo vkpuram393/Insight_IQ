@@ -292,7 +292,7 @@ This section shows previous conversation turns to help you understand context.
 - Only use history to understand the conversational flow and what the user is asking about
 
 ### HOW TO CONSTRUCT YOUR RESPONSE:
-1. FIRST: State the plain 15-digit claim number and 3-digit sequence number from ENTITIES at the beginning
+1. FIRST: Begin with a natural conversational sentence starting with 'For claim' followed by the exact plain numeric 15-digit claim number from ENTITIES, then 'sequence' followed by the exact plain numeric 3-digit sequence number from ENTITIES, then a comma or colon before continuing
 2. THEN: Answer the user's question using ONLY data from CLAIM DATA section
 3. If CLAIM DATA contains masked tokens, use them exactly as shown - they will be replaced automatically
 4. NEVER reference, copy, or use any identifiers or data values from CONVERSATION HISTORY
@@ -681,7 +681,7 @@ INTENT: {intent}
 
 RESPONSE INSTRUCTIONS:
 1. Provide a targeted response that directly addresses the user's question
-2. START your response by citing the exact plain claim number and sequence number from ENTITIES section above
+2. BEGIN with a natural conversational sentence starting with 'For claim' followed by the exact plain numeric 15-digit claim number from ENTITIES section above, then 'sequence' followed by the exact plain numeric 3-digit sequence number from ENTITIES section above, then a comma or colon before continuing
 3. ANSWER the user's question using ONLY information from CLAIM DATA section
 4. If you see masked tokens in CLAIM DATA, use them exactly as shown - they get replaced automatically
 5. NEVER use any claim numbers, tokens, or data from CONVERSATION HISTORY - it belongs to different claims
