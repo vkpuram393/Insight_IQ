@@ -825,7 +825,7 @@ RESPONSE INSTRUCTIONS:
         self,
         system_prompt: str,
         user_prompt: str
-    ) -> str:
+    ) -> tuple:
         """
         Generate response using Gemini LLM.
         
@@ -837,32 +837,72 @@ RESPONSE INSTRUCTIONS:
             user_prompt: User query and context
             
         Returns:
-            str: Complete response text from Gemini
+            tuple: (response_text: str, llm_metadata: dict)
+            
+            llm_metadata contains:
+            - finish_reason: str (STOP, MAX_TOKENS, SAFETY, etc.)
+            - is_truncated: bool (True if truncated)
+            - response_length: int
+            - appears_incomplete: bool (heuristic for logging only)
+            - thoughts: Optional[str] (chain of thought if enabled)
+            - retry_attempted: bool (True if retry was needed)
             
         Raises:
             Exception: If generation fails (caught by caller)
         """
+        # Initialize metadata dict to track LLM response details (Issue 1 & 2)
+        llm_metadata = {
+            "finish_reason": "UNKNOWN",
+            "is_truncated": False,
+            "response_length": 0,
+            "appears_incomplete": False,
+            "thoughts": None,
+            "retry_attempted": False
+        }
+        
         try:
-            # First attempt: Use default safety settings (let Gemini use its defaults)
-            # Safety filtering is already done in safety_precheck_node with BLOCK_LOW_AND_ABOVE
+            # Build request with thinking mode if enabled (Issue 2)
+            include_thoughts = getattr(settings, 'enable_thinking_mode', False)
+            
             req = GenerateRequest(
                 prompt=user_prompt,
                 system_instruction=system_prompt,
                 temperature=settings.llm_temperature,
                 top_p=settings.top_p,
                 max_output_tokens=settings.max_output_tokens,
-                model=settings.llm_model
+                model=settings.llm_model,
+                include_thoughts=include_thoughts
             )
             
             self.logger.info("🔮 Calling Gemini...")
             response = _generate_core(req)
             
-            # If response is empty, retry with more permissive settings for medical/pharmacy content
+            # Capture metadata from response (Issue 1: finish_reason, is_truncated)
+            llm_metadata["finish_reason"] = response.finish_reason
+            llm_metadata["is_truncated"] = response.is_truncated
+            llm_metadata["response_length"] = len(response.text or "")
+            llm_metadata["thoughts"] = response.thoughts  # Issue 2
+            # Issue 3: Token usage metrics
+            llm_metadata["prompt_tokens"] = response.prompt_tokens
+            llm_metadata["completion_tokens"] = response.completion_tokens
+            llm_metadata["total_tokens"] = response.total_tokens
+            
+            # Log truncation warning if detected
+            if response.is_truncated:
+                self.logger.warning(
+                    f"⚠️ Response truncated: finish_reason={response.finish_reason}, "
+                    f"length={llm_metadata['response_length']} chars"
+                )
+                # Check if truncated response appears incomplete (for logging only)
+                llm_metadata["appears_incomplete"] = self._response_appears_incomplete(response.text)
+            
+            # RETRY ONLY IF RESPONSE IS COMPLETELY EMPTY (not for truncated responses)
+            # Truncated responses may still be valid/useful, so we don't retry them
             if not response.text or len(response.text.strip()) == 0:
-                self.logger.warning("⚠️ Empty response from Gemini, retrying with adjusted safety thresholds for medical content...")
+                self.logger.warning("⚠️ Empty response from Gemini, retrying with adjusted safety thresholds...")
+                llm_metadata["retry_attempted"] = True
                 
-                # Use BLOCK_ONLY_HIGH for medical/pharmacy domain where terms like "rejected", 
-                # "denied", "dangerous drugs" are legitimate professional terminology
+                # Use BLOCK_ONLY_HIGH for medical/pharmacy domain
                 safety_thresholds = {
                     "HARM_CATEGORY_HATE_SPEECH": "BLOCK_ONLY_HIGH",
                     "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_ONLY_HIGH",
@@ -877,18 +917,55 @@ RESPONSE INSTRUCTIONS:
                     top_p=settings.top_p,
                     max_output_tokens=settings.max_output_tokens,
                     model=settings.llm_model,
-                    safety_thresholds=safety_thresholds
+                    safety_thresholds=safety_thresholds,
+                    include_thoughts=include_thoughts
                 )
                 
-                self.logger.info("� Retrying with BLOCK_ONLY_HIGH thresholds...")
+                self.logger.info("🔄 Retrying with BLOCK_ONLY_HIGH thresholds...")
                 response = _generate_core(req_retry)
+                
+                # Update metadata with retry response
+                llm_metadata["finish_reason"] = response.finish_reason
+                llm_metadata["is_truncated"] = response.is_truncated
+                llm_metadata["response_length"] = len(response.text or "")
+                if response.thoughts:
+                    llm_metadata["thoughts"] = response.thoughts
             
             self.logger.info(f"✅ Response received: {len(response.text)} chars")
-            return response.text
+            return response.text, llm_metadata
             
         except Exception as e:
             self.logger.error(f"🚨 Generation error: {e}")
             raise
+    
+    def _response_appears_incomplete(self, text: str) -> bool:
+        """
+        Check if truncated response appears incomplete (for logging only).
+        
+        NOTE: This is ONLY called when is_truncated=True.
+        It does NOT block responses - only adds metadata for debugging.
+        
+        Args:
+            text: Response text to check
+            
+        Returns:
+            bool: True if response appears incomplete
+        """
+        if not text or len(text.strip()) < 20:
+            return True
+        
+        text = text.rstrip()
+        
+        # Common indicators of mid-sentence truncation
+        incomplete_indicators = [
+            text.endswith(':'),       # Ends with section header
+            text.endswith('['),       # Ends with bracket (masked token cut off)
+            text.endswith('•'),       # Ends with bullet point (kept per user request - for logging only)
+            text.endswith(','),       # Ends with comma (mid-list)
+            text.endswith('('),       # Ends with open parenthesis
+        ]
+        
+        return any(incomplete_indicators)
 
 
 # ============================================================================
@@ -997,7 +1074,48 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Run in executor to avoid blocking (Gemini client is sync)
         # Using get_running_loop() - recommended for Python 3.10+ inside async functions
         loop = asyncio.get_running_loop()
-        response_text = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+        response_text, llm_metadata = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+        
+        # =====================================================================
+        # Issue 1: Log truncation warnings for observability
+        # =====================================================================
+        if llm_metadata.get("is_truncated"):
+            logger.warning(
+                f"⚠️ LLM response truncated: finish_reason={llm_metadata.get('finish_reason')}, "
+                f"length={llm_metadata.get('response_length')} chars, "
+                f"appears_incomplete={llm_metadata.get('appears_incomplete')}"
+            )
+        
+        # =====================================================================
+        # Issue 2: Fire-and-forget thinking log to MongoDB (ZERO LATENCY)
+        # Thoughts logged to MongoDB, NOT stored in state for memory efficiency
+        # =====================================================================
+        thoughts = llm_metadata.get("thoughts")
+        if thoughts and getattr(settings, 'log_thoughts_to_mongo', False):
+            async def _log_thoughts_async():
+                try:
+                    store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await store.log_thinking_process(
+                        session_id=session_id,
+                        request_id=request_id or str(uuid.uuid4()),
+                        user_query=state.get("text", ""),
+                        intent=state.get("intent", "unknown"),
+                        thinking_content=thoughts,
+                        final_response=response_text,
+                        model=settings.llm_model,
+                        user_id=user_id,
+                        metadata={
+                            "is_truncated": llm_metadata.get("is_truncated"),
+                            "finish_reason": llm_metadata.get("finish_reason"),
+                            "needs_clarification": needs_clarification
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Thought logging failed (non-fatal): {e}")
+            
+            # Fire-and-forget: don't await, just schedule
+            asyncio.create_task(_log_thoughts_async())
+            logger.debug("🧠 Thought logging scheduled (async)")
         
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
@@ -1034,7 +1152,9 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                     "response_length": len(response_text),
                     "model": settings.llm_model,
                     "temperature": settings.llm_temperature,
-                    "needs_clarification": needs_clarification
+                    "needs_clarification": needs_clarification,
+                    "finish_reason": llm_metadata.get("finish_reason"),  # Issue 1: Added
+                    "is_truncated": llm_metadata.get("is_truncated")     # Issue 1: Added
                 }
             )
         
@@ -1042,11 +1162,32 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         response_id = str(uuid.uuid4())
         logger.info(f"🆔 Generated response_id: {response_id}")
         
+        # =====================================================================
+        # Create SLIM metadata for state (EXCLUDE large thoughts for memory efficiency)
+        # Thoughts are logged to MongoDB, not stored in AgentState
+        # =====================================================================
+        slim_llm_metadata = {
+            "finish_reason": llm_metadata.get("finish_reason"),
+            "is_truncated": llm_metadata.get("is_truncated"),
+            "response_length": llm_metadata.get("response_length"),
+            "appears_incomplete": llm_metadata.get("appears_incomplete"),
+            "retry_attempted": llm_metadata.get("retry_attempted"),
+            # Issue 3: Token usage (small integers, OK to include in state)
+            "prompt_tokens": llm_metadata.get("prompt_tokens", 0),
+            "completion_tokens": llm_metadata.get("completion_tokens", 0),
+            "total_tokens": llm_metadata.get("total_tokens", 0),
+            # NOTE: thoughts NOT included - logged to MongoDB instead
+        }
+        
         # Build result - always use 'response' field for both modes
         # The 'needs_clarification' flag in state already indicates if this is a question
         result = {
             "response": response_text,
-            "response_id": response_id
+            "response_id": response_id,
+            "metadata": {
+                **state.get("metadata", {}),
+                "llm_metadata": slim_llm_metadata  # Issue 1: Small metadata only
+            }
         }
         
         if needs_clarification:

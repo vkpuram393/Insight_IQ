@@ -14,9 +14,15 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.1
     top_p: float = 0.95
-    max_output_tokens: int = 2048
+    # Gemini 2.5 Flash max=65,536. Set 32,768 (50%) to accommodate internal thinking + response tokens.
+    max_output_tokens: int = 32768
     project_id: str = "pbm-nonprod-myclaims"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
     location: str = "us-central1"  # ⚠️ Overridden by LOCATION env var
+    
+    # LLM Thinking Mode - Gemini thinks internally, these settings make it VISIBLE.
+    # ⚠️ Keep OFF in production (increases latency/cost). Enable only for debugging.
+    enable_thinking_mode: bool = False  # ⚠️ Overridden by ENABLE_THINKING_MODE env var
+    log_thoughts_to_mongo: bool = False # Store thoughts in MongoDB. ⚠️ Overridden by LOG_THOUGHTS_TO_MONGO env var
 
     # LangSmith (optional)
     langsmith_api_key: str | None = None  # Added to avoid ValidationError when env var is present
