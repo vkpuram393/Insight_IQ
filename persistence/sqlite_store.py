@@ -920,6 +920,36 @@ class SQLitePersistenceStore(PersistenceStore):
             logger.error(f"❌ Error retrieving filtered feedback: {e}")
             return []
 
+    # ============================================================================
+    # LLM THINKING PROCESS LOGGING (Issue 2 - stub implementation)
+    # ============================================================================
+
+    async def log_thinking_process(
+        self,
+        session_id: str,
+        request_id: str,
+        user_query: str,
+        intent: str,
+        thinking_content: str,
+        final_response: str,
+        model: str,
+        execution_time_ms: Optional[float] = None,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Log LLM thinking process - SQLite stub (not implemented).
+        
+        Thinking logs are designed for MongoDB (production).
+        SQLite is only used for local development where thinking
+        analysis is not needed.
+        
+        Returns:
+            str: Dummy thought ID
+        """
+        logger.debug("📝 SQLite thinking log not implemented, skipping")
+        return str(uuid.uuid4())
+
     async def close(self) -> None:
         """Close database connection"""
         if self.db:

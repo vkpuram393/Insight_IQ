@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional
 from google import genai
 from google.genai import types
 from config.config import settings
+from core.logger import get_logger
+
+logger = get_logger(__name__)
 
 # ------------------------------------------------------------------
 # Config (env vars or defaults)
@@ -27,18 +30,21 @@ class GenerateRequest(BaseModel):
     temperature: float = settings.llm_temperature
     top_p: float = settings.top_p
     max_output_tokens: int = settings.max_output_tokens
-    thinking_budget: int = 0
-    include_thoughts: bool = False
+    include_thoughts: bool = False  # Enable thinking mode (gemini-2.5-flash supports this)
     safety_thresholds: Optional[Dict[str, str]] = None  # ← v2-friendly
     model: str = Field(default=MODEL_ID, description="e.g., 'gemini-2.5-flash'")
 
 
 class GenerateResponse(BaseModel):
+    """Enhanced response with metadata for truncation detection and debugging"""
     text: str
-    # model: str
-    # usage: Optional[Dict[str, Any]] = None
-    # raw_candidates: Optional[List[Dict[str, Any]]] = None
-    # raw_response: Optional[Dict[str, Any]] = None  # optional, if you want the whole thing
+    finish_reason: str = "UNKNOWN"    # STOP, MAX_TOKENS, SAFETY, RECITATION, OTHER
+    is_truncated: bool = False         # True if MAX_TOKENS detected
+    thoughts: Optional[str] = None     # Chain of thought (Issue 2 - thinking mode)
+    # Token usage metrics (Issue 3)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 # -----------------------------
@@ -55,13 +61,11 @@ def _generate_core(req: GenerateRequest) -> GenerateResponse:
         if req.system_instruction else None
     )
 
-    # Optional thinking config
+    # Optional thinking config (Issue 2: enables chain-of-thought visibility)
+    # Note: google-genai SDK v1.0.0 ThinkingConfig only accepts include_thoughts parameter
     thinking_config = (
-        types.ThinkingConfig(
-            thinking_budget=req.thinking_budget,
-            include_thoughts=req.include_thoughts,
-        )
-        if (req.thinking_budget or req.include_thoughts) else None
+        types.ThinkingConfig(include_thoughts=True)
+        if req.include_thoughts else None
     )
 
     # Optional safety settings
@@ -88,14 +92,75 @@ def _generate_core(req: GenerateRequest) -> GenerateResponse:
         config=gen_config,
     )
 
-    # Return only JSON-friendly content
+    # =========================================================================
+    # CRITICAL FIX (Issue 1): Extract finish_reason and detect truncation
+    # =========================================================================
+    finish_reason = "UNKNOWN"
+    is_truncated = False
+    thoughts_text = None
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    
+    if hasattr(resp, 'candidates') and resp.candidates:
+        candidate = resp.candidates[0]
+        
+        # Extract finish_reason from candidate (Issue 2: Clean format)
+        if hasattr(candidate, 'finish_reason'):
+            fr = candidate.finish_reason
+            # Extract clean enum name: "FinishReason.STOP" -> "STOP"
+            finish_reason = fr.name if hasattr(fr, 'name') else str(fr).split('.')[-1]
+            
+            # Detect truncation (MAX_TOKENS means response was cut off)
+            if finish_reason == 'MAX_TOKENS':
+                is_truncated = True
+                logger.warning(
+                    f"⚠️ RESPONSE TRUNCATED! finish_reason={finish_reason}, "
+                    f"response_length={len(resp.text or '')} chars"
+                )
+            elif finish_reason == 'SAFETY':
+                logger.warning(f"🚫 Response blocked by safety: {finish_reason}")
+            elif finish_reason == 'RECITATION':
+                logger.warning(f"📚 Response blocked by recitation filter: {finish_reason}")
+        
+        # =====================================================================
+        # Issue 2: Extract thoughts if thinking mode is enabled
+        # =====================================================================
+        if req.include_thoughts and hasattr(candidate, 'content') and candidate.content:
+            thought_parts = []
+            parts = candidate.content.parts or []
+            
+            for part in parts:
+                # Check for thought content (robust - multiple attribute names)
+                is_thought = getattr(part, 'thought', False) or getattr(part, 'thinking', False)
+                if is_thought and hasattr(part, 'text') and part.text:
+                    thought_parts.append(part.text)
+            
+            if thought_parts:
+                thoughts_text = "\n".join(thought_parts)
+                logger.info(f"🧠 Captured {len(thoughts_text)} chars of thinking from {len(thought_parts)} parts")
+            else:
+                logger.debug(f"🧠 Thinking mode enabled but no thought parts in response (model: {req.model})")
+    
+    # =========================================================================
+    # Issue 3: Extract token usage from usage_metadata
+    # =========================================================================
+    if hasattr(resp, 'usage_metadata') and resp.usage_metadata:
+        um = resp.usage_metadata
+        prompt_tokens = getattr(um, 'prompt_token_count', 0) or 0
+        completion_tokens = getattr(um, 'candidates_token_count', 0) or 0
+        total_tokens = getattr(um, 'total_token_count', 0) or 0
+        logger.debug(f"📊 Tokens: prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}")
+
+    # Return enhanced response with metadata
     return GenerateResponse(
         text=resp.text or "",
-        # usage=(resp.usage_metadata.model_dump(mode="json")
-        #        if getattr(resp, "usage_metadata", None) else None),
-        # raw_candidates=([c.model_dump(mode="json") for c in resp.candidates]
-        #                 if getattr(resp, "candidates", None) else None),
-        # raw_response=resp.model_dump(mode="json"),
+        finish_reason=finish_reason,
+        is_truncated=is_truncated,
+        thoughts=thoughts_text,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens
     )
 
 

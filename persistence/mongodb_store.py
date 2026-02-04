@@ -860,6 +860,83 @@ class MongoDBPersistenceStore(PersistenceStore):
             logger.error(f"❌ Error retrieving filtered feedback: {e}")
             return []
 
+    # ============================================================================
+    # LLM THINKING PROCESS LOGGING (Issue 2 - for debugging inconsistent responses)
+    # ============================================================================
+
+    async def log_thinking_process(
+        self,
+        session_id: str,
+        request_id: str,
+        user_query: str,
+        intent: str,
+        thinking_content: str,
+        final_response: str,
+        model: str,
+        execution_time_ms: Optional[float] = None,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Log LLM thinking process for analysis.
+        Fire-and-forget, non-blocking.
+        
+        This stores Gemini's chain-of-thought in the llm_thoughts collection
+        for later analysis of why responses vary for the same question.
+        
+        Args:
+            session_id: Session identifier
+            request_id: Request identifier  
+            user_query: Original user question
+            intent: Detected intent
+            thinking_content: Gemini's chain of thought
+            final_response: Final response text
+            model: LLM model used
+            execution_time_ms: Optional execution time
+            user_id: Optional user identifier
+            metadata: Optional additional metadata
+            
+        Returns:
+            str: Thought log ID
+        """
+        try:
+            db = await self._get_connection()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get MongoDB connection for thought log: {str(e)}")
+            # Return a dummy ID to allow application to continue (fire-and-forget pattern)
+            return str(uuid.uuid4())
+
+        if db is None:
+            logger.warning("⚠️ MongoDB database is None, skipping thought log")
+            return str(uuid.uuid4())
+
+        thought_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+
+        document = {
+            "_id": thought_id,
+            "session_id": session_id,
+            "request_id": request_id,
+            "user_id": user_id,
+            "user_query": user_query,
+            "intent": intent,
+            "thinking_content": thinking_content,
+            "final_response": final_response,
+            "model": model,
+            "execution_time_ms": execution_time_ms,
+            "metadata": metadata or {},
+            "timestamp": now,
+            "created_at": now
+        }
+
+        try:
+            await db.llm_thoughts.insert_one(document)
+            logger.debug(f"🧠 Thought logged: {thought_id}")
+            return thought_id
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to insert thought (non-fatal): {str(e)}")
+            return thought_id  # Return ID even if insert failed
+
     async def close(self) -> None:
         """Close MongoDB connection"""
         if self.client:
