@@ -21,13 +21,13 @@ appData:
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
   #dockerImageTag: a3d11e738d93d6b7d8f0a3a93aaf8c60657b7595  # This will be overridden by the deployment workflow with git SHA tag.
-  dockerImageTag: 9c6e3e30df616d3e7d22fc09a925c0629515499b
+  dockerImageTag: 9419e95b6a05f271651bad80b5fc31aabb66e1c5
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 3
-  minReplicas: 3
-  maxReplicas: 4
+  minAvailable: 1
+  minReplicas: 1
+  maxReplicas: 1
   averageUtilization: 80
 
 # Pod resource requests and limits
