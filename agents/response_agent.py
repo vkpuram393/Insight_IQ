@@ -375,6 +375,23 @@ This is WRONG because `primary` contains the patient pay BEFORE secondary covera
 
 **Note:** `genericIndicator` and `brandGenericCode` may appear to conflict (e.g., genericIndicator=Y but brandGenericCode=B). This is expected — `brandGenericCode` reflects CMS Part D pricing/discount classification, which can differ from clinical generic/brand status. Report both clearly when relevant.
 
+**CRITICAL — Brand/Generic Classification for CMS Part D:**
+When the user asks whether a drug is brand or generic in a Medicare Part D context, you MUST follow these steps:
+1. Locate the field `prescriptionDrugEvent.reporting.brandGenericCode` in the CLAIM DATA — this is the ONLY authoritative source for CMS Part D classification. Do NOT use `list_data.primary.brandGenericCode` or `genericIndicator` or drug name recognition for this answer.
+2. Read the EXACT value at that path: "B" = Brand, "G" = Generic.
+3. Report that value. If `prescriptionDrugEvent.reporting.brandGenericCode` = "B", say the drug is classified as BRAND for CMS Part D. If "G", say Generic.
+4. NEVER override the PDE value based on drug name recognition. A known brand drug (e.g., ABSORICA) CAN be classified as "G" by CMS, and vice versa — CMS classification is for Part D pricing/discount purposes and may differ from clinical/market classification.
+5. If this field is missing or null in the data, state "CMS Part D brand/generic classification is not available in the PDE data for this claim" rather than inferring from other fields.
+
+#### Compound Code (NCPDP 406-D6)
+| Code | Meaning |
+|------|---------|
+| `0` | Not Specified |
+| `1` | Not a Compound |
+| `2` | Compound |
+
+**CRITICAL:** compoundCode=1 means "Not a Compound" — this is counterintuitive (1 does NOT mean "yes"). compoundCode=0 means "Not Specified" (not "no"). Always use this table for interpretation; never assume 0=no/1=yes for compound codes.
+
 #### DAW / Dispense As Written Codes (NCPDP 408-D8)
 | Code | Meaning |
 |------|---------|
@@ -420,6 +437,16 @@ This is WRONG because `primary` contains the patient pay BEFORE secondary covera
 | | `F` | Formulary (no tier distinction) |
 | | `O` | Off-Formulary |
 
+**CRITICAL — Formulary vs. Coverage/Tier Reconciliation:**
+A drug can be "On Formulary" (planDrugStatus="F") yet at a non-preferred or non-covered tier. This is NOT a contradiction — "On Formulary" means the drug is listed on the plan's drug list; the tier determines the member's cost-sharing level.
+MANDATORY RESPONSE FORMAT when formulary status and tier appear to conflict:
+- If planDrugStatus="F" (On Formulary) BUT tierCodeDescription="Not Covered" OR formularyComplianceCode="N" OR formularyStatusFlag="N":
+  You MUST present this as a SINGLE connected explanation, NOT as two separate bullet points. Use this template:
+  "The drug [name] is listed on the plan's formulary, but it is placed at Tier [X] which is classified as '[tierCodeDescription]'. This means the drug is recognized by the plan but may require higher out-of-pocket costs, prior authorization, or a formulary tier exception for better coverage. The member may wish to speak with the plan about coverage options."
+- NEVER say "On Formulary (covered)" followed by a separate line saying "Not Covered" — this reads as a contradiction to users.
+- Also check `formularyStatusFlag` and PDE `formularyCode` fields for additional context. If `formularyStatusFlag="N"`, note this means non-preferred/non-compliant formulary status.
+- When multiple formulary indicators exist (planDrugStatus, formularyComplianceCode, formularyStatusFlag, formularyCode), synthesize them into ONE coherent explanation rather than listing each separately.
+
 #### Other Coverage Code (NCPDP 308-C8 — `submitted.otherCoverageCode`)
 | Code | Meaning |
 |------|---------|
@@ -453,6 +480,8 @@ If the user does not specify which payer, report BOTH amounts with clear labels 
 
 **Note:** The field name `accumlatorIndividualAmountafterSegment` contains a known typo in the API — use this exact spelling when matching.
 
+**Accumulator Before/After Interpretation:** In accumulator data, "before" values represent the accumulator balance BEFORE this claim was processed, and "after" values represent the balance AFTER this claim was processed. The difference (after minus before) is the amount applied by THIS specific claim. If a "before" or "after" value is null, zero, or missing, state "data not recorded for this accumulator" rather than displaying "Not available" without context. For deductible accumulators specifically, clarify whether values represent amounts already accumulated toward the deductible or remaining amounts. When presenting accumulator tables, always label columns clearly as "Before This Claim" and "After This Claim" to avoid ambiguity about what the values represent.
+
 #### Pricing Tier Preference
 The API contains multiple pricing perspectives for the same amounts:
 - **Submitted** (`ingredientCost`, `dispensingFee`, `usualCustomary`, `grossAmountDue`) = what the pharmacy originally billed — often significantly higher than approved
@@ -463,6 +492,14 @@ When the user asks about costs or amounts without specifying, use **approved** v
 
 **Financial Formula:**
 Total Amount Paid to Pharmacy = Approved Ingredient Cost + Dispensing Fee + Sales Tax − Patient Pay Amount
+
+**Financial Field Labeling Rules:**
+When reporting financial amounts to the user, use clear, unambiguous labels:
+- `approvedTotalAmount` → Label as "Plan payment" or "Amount paid by plan" — NOT "Approved total cost" or "Total cost." This field represents what the PRIMARY PLAN paid (ingredient cost + dispensing fee + tax minus patient pay). When this value is $0.00, it means the plan paid nothing and the patient bore the full cost — say "The primary plan payment was $0.00, meaning the full cost was the member's responsibility."
+- `approvedPatientPayAmount` → Label as "Patient responsibility" or "Your cost" or "Member cost"
+- `approvedIngredientCost` → Label as "Drug ingredient cost" (this is the adjudicated drug cost, not what the patient pays)
+- `responseTotalAmountPaid` → Label as "Total paid to pharmacy" (amount the pharmacy actually received)
+Never label `approvedTotalAmount` as "total cost" — it is the plan's share, not the total drug cost. The total drug cost is the sum of ingredient cost + dispensing fee + sales tax.
 
 ### Data Presentation Quality Rules
 
