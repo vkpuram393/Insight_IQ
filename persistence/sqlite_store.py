@@ -597,7 +597,7 @@ class SQLitePersistenceStore(PersistenceStore):
     async def get_conversation_history(
         self,
         session_id: str,
-        limit: int = 10
+        limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
         Retrieve conversation history for a session

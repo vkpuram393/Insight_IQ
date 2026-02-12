@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
-    conversation_history_limit: int = 50  # Number of past conversations to include in response generation
+    conversation_history_limit: int = 100  # Number of past messages (50 turns) to include in response generation and entity extraction
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
 
     # Safety

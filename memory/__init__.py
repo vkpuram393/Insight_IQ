@@ -48,7 +48,7 @@ class MemoryStore(ABC):
         session_id: str,
         role: str,
         content: str,
-        max_messages: int = 10
+        max_messages: int = 50
     ) -> bool:
         """Append message to session history, keeping only recent N messages"""
         pass

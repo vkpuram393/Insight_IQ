@@ -55,7 +55,7 @@ class GCPMemoryStore(MemoryStore):
         session_id: str,
         role: str,
         content: str,
-        max_messages: int = 10
+        max_messages: int = 50
     ) -> bool:
         """TODO: Implement via GCP Memorystore"""
         raise NotImplementedError()
