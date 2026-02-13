@@ -37,7 +37,7 @@ def _load_config() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         return {
-            "conversation_history_window": 5
+            "conversation_history_window": 50
         }
 
 def _extract_slots_from_history(history: List[Dict[str, str]], current_slots: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,7 +81,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
 
         # Load config
         config = _load_config()
-        history_window = config.get("conversation_history_window", 5)
+        history_window = config.get("conversation_history_window", 50)
         
         session_id = state["session_id"]
 

@@ -649,9 +649,9 @@ class MongoDBPersistenceStore(PersistenceStore):
     async def get_conversation_history(
         self,
         session_id: str,
-        limit: int = 50
+        limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Get conversation history for a session"""
+        """Get conversation history for a session (default: 100 messages = 50 turns)"""
         db = await self._get_connection()
 
         cursor = db.conversation_history.find(
