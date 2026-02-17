@@ -34,6 +34,12 @@ RUN pip install --upgrade uv pip
 # Correct install command with -r
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
+# Install spacy model required by Presidio AnalyzerEngine
+# This prevents runtime downloads that cause pod restarts
+# Presidio requires en-core-web-lg for PII detection
+# The download command automatically selects a compatible version for spacy 3.7.2
+RUN python -m spacy download en-core-web-lg
+
 # Copy application code
 COPY . .
 
