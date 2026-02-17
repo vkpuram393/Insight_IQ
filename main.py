@@ -92,6 +92,20 @@ async def startup_event():
             
             print("[STARTUP] Embedding classifier ready (MongoDB populated, embeddings loaded)")
         
+        # Pre-initialize PII protection service to catch errors early
+        # This ensures spacy model is available and Presidio is properly initialized
+        # If initialization fails, pod won't start (fail fast)
+        print("[STARTUP] Pre-initializing PII protection service...")
+        try:
+            from services.pii_protection import get_pii_service
+            pii_service = get_pii_service()  # This triggers Presidio initialization
+            print("[STARTUP] ✅ PII Protection Service initialized")
+        except Exception as e:
+            import traceback
+            print(f"[STARTUP] ❌ PII Protection Service initialization failed: {e}")
+            traceback.print_exc()
+            raise  # Fail fast - don't start if PII service can't initialize
+        
         # Start background tasks for memory management
         asyncio.create_task(_periodic_cleanup_task())
         print("[STARTUP] Background cleanup tasks started")
