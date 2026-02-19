@@ -14,8 +14,10 @@ Architecture:
 """
 
 import asyncio
+import json
+import re
 import traceback
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from langchain_core.prompts import ChatPromptTemplate
 from state.schema import AgentState
 from config.config import settings
@@ -254,7 +256,7 @@ When asked "Who are you?", "What can you do?", "How can you help me?", or simila
 **WHEN DATA IS UNAVAILABLE:**
 - Never say: "I cannot help as context is insufficient"
 - Never ask for a claim ID if the user already provided one
-- If user provided claim ID but no data found: "The claims system did not return any information for claim [ID they provided] at this time. This may be a temporary issue — please try again shortly. If the problem persists, please double-check that the claim number and sequence are valid."
+- If user provided claim ID but no data found: "The system did not return any information for claim [ID they provided] at this time. This may be a temporary issue — please try again shortly. If the problem persists, please double-check that the claim number and sequence are valid."
 - If user didn't provide any claim ID: "Could you please provide the claim number so I can look that up for you?"
 
 
@@ -1066,6 +1068,290 @@ RESPONSE INSTRUCTIONS:
         
         return "\n".join(formatted) if formatted else "(No entities extracted)"
     
+    # ========================================================================
+    # RECOMMENDATION CHIPS METHODS
+    # ========================================================================
+
+    def _get_recommendation_instruction(self, intent: str) -> str:
+        """
+        Get the recommendation generation instruction to append to system prompt.
+        
+        This instructs the LLM to generate contextual recommendations along with
+        the main response in a structured JSON format.
+        
+        Args:
+            intent: Current detected intent for context-aware recommendations
+            
+        Returns:
+            str: Recommendation instruction to append to system prompt
+        """
+        max_recs = settings.max_recommendations
+        return f"""
+
+## IMPORTANT: Structured Output with Recommendations
+
+You MUST respond with a valid JSON object containing both your response and exactly {max_recs} recommendation chips.
+
+**OUTPUT FORMAT (STRICT JSON - NO MARKDOWN FENCING):**
+{{
+    "response": "Your complete response text here...",
+    "recommendations": [
+        {{"text": "Short actionable suggestion 1", "action": "intent_name_1"}},
+        {{"text": "Short actionable suggestion 2", "action": "intent_name_2"}}
+    ]
+}}
+
+**RECOMMENDATION GUIDELINES:**
+1. Generate exactly {max_recs} recommendations
+2. Each recommendation should be a SHORT, actionable phrase (3-7 words)
+3. Recommendations should be contextually relevant to the current conversation
+4. The "action" field should be a valid intent (e.g., claim_status, claim_details, claim_list, pricing_info, appeal_info, help, benefits_info, find_pharmacy, rx_details, deductible_info)
+5. Do NOT recommend asking about the same thing the user just asked
+
+6. **CRITICAL — AVOID DUPLICATE TOPIC AREAS (NOT JUST EXACT TEXT):**
+   Before generating recommendations, you MUST review the CONVERSATION HISTORY above and identify which INFORMATION CATEGORIES have already been covered for this claim. Then NEVER recommend anything in those categories again.
+
+   **Step-by-step reasoning you MUST follow:**
+   a) List every topic/category the user has already asked about for THIS claim (e.g., deductible, pricing, patient cost, benefits, claim details, OOP max, accumulations, etc.)
+   b) For each recommendation you want to generate, check: "Does this fall into ANY category already explored?" If YES → discard it and pick a different one.
+   c) Each recommendation MUST point to a genuinely NEW, UNEXPLORED information area.
+
+   **THESE ARE ALL DUPLICATES — DO NOT DO THIS:**
+   - User asked "Check my deductible status" → "Check deductible status" is a DUPLICATE (same topic, minor wording change)
+   - User asked "Check my deductible status" → "View deductible info" is a DUPLICATE (same topic)
+   - User asked "Check my deductible status" → "What is my deductible?" is a DUPLICATE (same topic)
+   - User asked "What was the patient's cost?" → "Check patient cost" is a DUPLICATE (same topic)
+   - User asked "What was the patient's cost?" → "What did I pay?" is a DUPLICATE (same topic)
+   - User asked "View full claim details" → "See claim details" is a DUPLICATE (same topic)
+   - User asked about pricing → ANYTHING about pricing, cost, amount paid, copay, patient pay is a DUPLICATE
+
+7. Recommendations should guide the user to the NEXT logical, UNEXPLORED area of their claim journey
+
+8. **CLAIM CONTEXT: If the user has switched to a DIFFERENT claim (different claim number or sequence number), you MAY recommend questions that were asked for the PREVIOUS claim, as the user hasn't explored those aspects of the new claim yet.**
+
+**GOOD RECOMMENDATION PROGRESSION (each turn opens a NEW area):**
+- After claim summary → suggest: pricing details, member benefits (NEW areas)
+- After pricing → suggest: deductible status, claim details (NEW areas)
+- After deductible → suggest: out-of-pocket max, prescription details (NEW areas)
+- After OOP max → suggest: other claims, prescription details (NEW areas — NOT deductible again!)
+
+**CURRENT INTENT:** {intent}
+
+**CRITICAL:** Output ONLY the JSON object. Do NOT wrap in markdown code blocks. Do NOT include any text before or after the JSON."""
+
+    def _parse_response_with_recommendations(
+        self, 
+        llm_output: str, 
+        intent: str
+    ) -> Tuple[str, List[Dict[str, str]]]:
+        """
+        Parse LLM output to extract response text and recommendations.
+        
+        Handles both structured JSON output (when recommendations enabled) and
+        plain text output (fallback or when recommendations disabled).
+        
+        Args:
+            llm_output: Raw output from LLM
+            intent: Current intent for fallback recommendations
+            
+        Returns:
+            Tuple of (response_text, recommendations_list)
+        """
+        recommendations = []
+        response_text = llm_output
+        
+        if not llm_output:
+            self.logger.warning("⚠️ Empty LLM output, returning empty response")
+            return "", []
+        
+        # Try to parse as JSON first
+        try:
+            # Clean up potential markdown code block wrappers
+            cleaned_output = llm_output.strip()
+            
+            # Remove markdown JSON code blocks if present
+            if cleaned_output.startswith("```json"):
+                cleaned_output = cleaned_output[7:]
+            elif cleaned_output.startswith("```"):
+                cleaned_output = cleaned_output[3:]
+            if cleaned_output.endswith("```"):
+                cleaned_output = cleaned_output[:-3]
+            cleaned_output = cleaned_output.strip()
+            
+            # Attempt JSON parse
+            parsed = json.loads(cleaned_output)
+            
+            if isinstance(parsed, dict):
+                # Extract response text
+                response_text = parsed.get("response", "")
+                if not response_text:
+                    self.logger.warning("⚠️ JSON parsed but 'response' field empty, using full output")
+                    response_text = llm_output
+                
+                # Extract recommendations
+                raw_recommendations = parsed.get("recommendations", [])
+                if isinstance(raw_recommendations, list):
+                    for rec in raw_recommendations[:settings.max_recommendations]:
+                        if isinstance(rec, dict) and rec.get("text"):
+                            recommendations.append({
+                                "text": str(rec.get("text", "")).strip(),
+                                "action": str(rec.get("action", "")).strip() or None
+                            })
+                    
+                    self.logger.info(f"✅ Parsed {len(recommendations)} recommendations from JSON response")
+                else:
+                    self.logger.warning(f"⚠️ 'recommendations' field is not a list: {type(raw_recommendations)}")
+            else:
+                self.logger.warning(f"⚠️ Parsed JSON is not a dict: {type(parsed)}")
+                response_text = llm_output
+                
+        except json.JSONDecodeError as e:
+            # Not valid JSON - likely plain text response
+            self.logger.debug(f"📝 LLM output is not JSON (expected when recommendations disabled): {str(e)[:50]}")
+            response_text = llm_output
+            
+            # Try to extract JSON from within the text (LLM sometimes adds extra text)
+            json_match = re.search(r'\{[\s\S]*"response"[\s\S]*"recommendations"[\s\S]*\}', llm_output)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group())
+                    response_text = parsed.get("response", llm_output)
+                    raw_recommendations = parsed.get("recommendations", [])
+                    if isinstance(raw_recommendations, list):
+                        for rec in raw_recommendations[:settings.max_recommendations]:
+                            if isinstance(rec, dict) and rec.get("text"):
+                                recommendations.append({
+                                    "text": str(rec.get("text", "")).strip(),
+                                    "action": str(rec.get("action", "")).strip() or None
+                                })
+                        self.logger.info(f"✅ Extracted {len(recommendations)} recommendations from embedded JSON")
+                except json.JSONDecodeError:
+                    self.logger.debug("📝 Could not extract embedded JSON, using plain text response")
+        
+        # Generate fallback recommendations if none were parsed and feature is enabled
+        if not recommendations and settings.enable_recommendations:
+            recommendations = self._generate_fallback_recommendations(intent)
+            self.logger.info(f"📋 Using {len(recommendations)} fallback recommendations for intent: {intent}")
+        
+        return response_text.strip(), recommendations
+
+    def _generate_fallback_recommendations(
+        self, 
+        intent: str, 
+        asked_for_claim: List[str] = None
+    ) -> List[Dict[str, str]]:
+        """
+        Generate fallback recommendations based on intent when LLM doesn't provide them.
+        
+        This ensures users always get recommendations even if JSON parsing fails.
+        Filters out questions already asked for the current claim (claim-aware).
+        
+        Args:
+            intent: Current detected intent
+            asked_for_claim: List of questions already asked for the current claim key
+            
+        Returns:
+            List of recommendation dicts with 'text' and 'action' keys
+        """
+        # Intent-specific fallback recommendations
+        fallback_map = {
+            "claim_status": [
+                {"text": "View full claim details", "action": "claim_details"},
+                {"text": "Check my other claims", "action": "claim_list"}
+            ],
+            "claim_details": [
+                {"text": "See pricing breakdown", "action": "pricing_info"},
+                {"text": "Check my other claims", "action": "claim_list"}
+            ],
+            "claim_rejection_reason": [
+                {"text": "How do I appeal?", "action": "appeal_info"},
+                {"text": "Find alternative pharmacy", "action": "find_pharmacy"}
+            ],
+            "rejection_reasons": [
+                {"text": "How do I appeal?", "action": "appeal_info"},
+                {"text": "Check drug coverage", "action": "benefits_info"}
+            ],
+            "pricing_info": [
+                {"text": "View full claim details", "action": "claim_details"},
+                {"text": "Check my deductible", "action": "benefits_info"}
+            ],
+            "claim_list": [
+                {"text": "Check a specific claim", "action": "claim_status"},
+                {"text": "View claim details", "action": "claim_details"}
+            ],
+            "greeting": [
+                {"text": "Check my claim status", "action": "claim_status"},
+                {"text": "View my recent claims", "action": "claim_list"}
+            ],
+            "help": [
+                {"text": "Check a claim status", "action": "claim_status"},
+                {"text": "View my claims", "action": "claim_list"}
+            ],
+            "appeal_info": [
+                {"text": "Check claim status", "action": "claim_status"},
+                {"text": "View rejection details", "action": "claim_rejection_reason"}
+            ],
+            "benefits_info": [
+                {"text": "Check a claim", "action": "claim_status"},
+                {"text": "View my claims", "action": "claim_list"}
+            ],
+            "out_of_scope": [
+                {"text": "Check my claim status", "action": "claim_status"},
+                {"text": "What can you help with?", "action": "help"}
+            ],
+        }
+        
+        # Get intent-specific recommendations or use default
+        recommendations = fallback_map.get(intent, [
+            {"text": "Check my claim status", "action": "claim_status"},
+            {"text": "View my claims", "action": "claim_list"}
+        ])
+        
+        # Filter out recommendations matching questions already asked for this claim
+        if asked_for_claim:
+            asked_lower = [q.lower().strip() for q in asked_for_claim]
+            recommendations = [
+                r for r in recommendations
+                if not any(r["text"].lower() in a or a in r["text"].lower() for a in asked_lower)
+            ]
+        
+        return recommendations[:settings.max_recommendations]
+
+    def _filter_already_asked(
+        self,
+        recommendations: List[Dict[str, str]],
+        asked_for_claim: List[str]
+    ) -> List[Dict[str, str]]:
+        """
+        Filter out recommendations matching questions already asked for the current claim.
+        
+        This is a programmatic deduplication layer (zero latency, in-memory).
+        Only filters against questions asked for the SAME claim key — if the user
+        switches to a different claim, recommendations reset (edge case b).
+        
+        Args:
+            recommendations: List of recommendation dicts from LLM or fallback
+            asked_for_claim: List of question texts already asked for this claim key
+            
+        Returns:
+            Filtered list of recommendations
+        """
+        if not asked_for_claim or not recommendations:
+            return recommendations
+        
+        asked_lower = [q.lower().strip() for q in asked_for_claim]
+        filtered = []
+        for rec in recommendations:
+            rec_text = rec["text"].lower().strip()
+            is_duplicate = any(
+                rec_text in asked or asked in rec_text
+                for asked in asked_lower
+            )
+            if not is_duplicate:
+                filtered.append(rec)
+        
+        return filtered
+
     def generate_response(
         self,
         system_prompt: str,
@@ -1299,9 +1585,18 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         if needs_clarification:
             system_prompt = agent._get_followup_system_prompt()
             logger.info("📝 Using follow-up question system prompt")
+            recommendations_enabled = False  # Never generate recommendations during clarification
         else:
             system_prompt = agent._get_system_prompt()
             logger.info("📝 Using standard response system prompt")
+            
+            # Add recommendation instruction if enabled
+            recommendations_enabled = settings.enable_recommendations
+            if recommendations_enabled:
+                intent = state.get("intent", "unknown")
+                recommendation_instruction = agent._get_recommendation_instruction(intent)
+                system_prompt += recommendation_instruction
+                logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
         
         logger.debug(f"📋 System prompt: {len(system_prompt)} characters")
         
@@ -1362,9 +1657,17 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             asyncio.create_task(_log_thoughts_async())
             logger.debug("🧠 Thought logging scheduled (async)")
         
+        # =====================================================================
+        # Parse recommendations from response (if enabled)
+        # =====================================================================
+        recommendations = []
+        if recommendations_enabled and not needs_clarification:
+            intent = state.get("intent", "unknown")
+            response_text, recommendations = agent._parse_response_with_recommendations(response_text, intent)
+            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response")
+        
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
-        import re
         remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
         if remaining_tokens:
             logger.warning(f"⚠️ Response contains {len(remaining_tokens)} token-like patterns: {remaining_tokens[:3]}...")
@@ -1424,21 +1727,64 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             # NOTE: thoughts NOT included - logged to MongoDB instead
         }
         
+        # =====================================================================
+        # Claim-aware dedup: filter recommendations already asked for THIS claim
+        # =====================================================================
+        if recommendations_enabled and not needs_clarification and recommendations:
+            # Build claim key for dedup tracking
+            entities = state.get("entities", {}) or {}
+            extracted_slots = state.get("extracted_slots", {}) or {}
+            merged_entities = {**normalize_entities(extracted_slots), **normalize_entities(entities)}
+            claim_num = merged_entities.get("claimNumber", "")
+            seq_num = merged_entities.get("claimSequence", "")
+            claim_key = f"{claim_num}_{seq_num}" if claim_num else "no_claim"
+            
+            # Programmatic dedup: filter recommendations matching already-asked questions for THIS claim
+            prev_asked = state.get("asked_questions_by_claim", {}) or {}
+            asked_for_claim = prev_asked.get(claim_key, [])
+            
+            if asked_for_claim:
+                before_count = len(recommendations)
+                recommendations = agent._filter_already_asked(recommendations, asked_for_claim)
+                logger.info(f"🔍 Dedup filter: {before_count} → {len(recommendations)} recommendations (claim_key={claim_key})")
+            
+            # If all filtered out, generate claim-aware fallbacks
+            if not recommendations:
+                intent = state.get("intent", "unknown")
+                recommendations = agent._generate_fallback_recommendations(intent, asked_for_claim)
+                logger.info(f"📋 All recs filtered, using {len(recommendations)} claim-aware fallbacks")
+        else:
+            claim_key = "no_claim"
+        
+        # Track asked questions per claim for dedup across turns
+        updated_asked_questions = state.get("asked_questions_by_claim", {}) or {}
+        if recommendations_enabled and not needs_clarification:
+            current_question = state.get("text", "").lower().strip()
+            if current_question and claim_key != "no_claim":  # Only track real claim questions
+                updated_asked_questions = {
+                    **updated_asked_questions,
+                    claim_key: [*updated_asked_questions.get(claim_key, []), current_question]
+                }
+        
         # Build result - always use 'response' field for both modes
         # The 'needs_clarification' flag in state already indicates if this is a question
         result = {
             "response": response_text,
             "response_id": response_id,
+            "recommendations": recommendations if recommendations_enabled else [],
+            "asked_questions_by_claim": updated_asked_questions,  # Dedup tracking persisted via state
             "metadata": {
                 **state.get("metadata", {}),
-                "llm_metadata": slim_llm_metadata  # Issue 1: Small metadata only
+                "llm_metadata": slim_llm_metadata,  # Issue 1: Small metadata only
+                "recommendations_enabled": recommendations_enabled,
+                "recommendations_count": len(recommendations) if recommendations else 0
             }
         }
         
         if needs_clarification:
-            logger.info("📝 Set 'response' field with clarification question")
+            logger.info("📝 Set 'response' field with clarification question (no recommendations)")
         else:
-            logger.info("📝 Set 'response' field with normal answer")
+            logger.info(f"📝 Set 'response' field with normal answer + {len(recommendations)} recommendations")
         
         await log_state_snapshot(state, node_name, result)
         return result
@@ -1489,6 +1835,7 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             "error": error.user_message,
             "response": error.user_message,
             "response_id": error_response_id,
+            "recommendations": [],  # Empty recommendations on error
             "metadata": {
                 **state.get("metadata", {}),
                 "error_occurred": True,
@@ -1502,6 +1849,45 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
 # ============================================================================
 # MOCK LLM (for development only)
 # ============================================================================
+
+def _get_mock_recommendations(intent: str) -> List[Dict[str, str]]:
+    """
+    Get mock recommendations for development mode.
+    
+    Args:
+        intent: Current detected intent
+        
+    Returns:
+        List of mock recommendation dicts
+    """
+    if not settings.enable_recommendations:
+        return []
+    
+    # Intent-specific mock recommendations
+    mock_recs = {
+        "claim_status": [
+            {"text": "View claim details", "action": "claim_details"},
+            {"text": "Check my other claims", "action": "claim_list"}
+        ],
+        "claim_details": [
+            {"text": "See pricing breakdown", "action": "pricing_info"},
+            {"text": "View my other claims", "action": "claim_list"}
+        ],
+        "greeting": [
+            {"text": "Check claim status", "action": "claim_status"},
+            {"text": "View my claims", "action": "claim_list"}
+        ],
+        "help": [
+            {"text": "Check a claim", "action": "claim_status"},
+            {"text": "What can you do?", "action": "help"}
+        ],
+    }
+    
+    return mock_recs.get(intent, [
+        {"text": "Check my claim status", "action": "claim_status"},
+        {"text": "View my claims", "action": "claim_list"}
+    ])[:settings.max_recommendations]
+
 
 async def _mock_response(state: AgentState) -> Dict[str, Any]:
     """
@@ -1563,8 +1949,16 @@ PHARMACY: {prescription.get('pharmacyName', 'N/A')}
 
 The real implementation will provide detailed, formatted responses based on claim data."""
     
+    # Generate mock recommendations (only if enabled and not in clarification mode)
+    needs_clarification = state.get("needs_clarification", False)
+    recommendations = []
+    if settings.enable_recommendations and not needs_clarification:
+        recommendations = _get_mock_recommendations(intent)
+        logger.info(f"💡 Mock mode: Generated {len(recommendations)} recommendations for intent: {intent}")
+    
     logger.info("⚙️ Returned mock response")
     return {
         "response": response,
-        "response_id": response_id
+        "response_id": response_id,
+        "recommendations": recommendations  # ✅ Include recommendations in mock
     }

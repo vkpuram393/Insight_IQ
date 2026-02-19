@@ -174,6 +174,21 @@ class Settings(BaseSettings):
         "response_agent"         # Final response generation
     ]
 
+    # =========================================================================
+    # RECOMMENDATION CHIPS CONFIGURATION
+    # =========================================================================
+    # Generates contextual follow-up suggestions with each response.
+    # Recommendations help guide users to logical next steps in their inquiry.
+    # When enabled, response_agent returns both response text and recommendation chips.
+
+    # Master switch for recommendation chips feature
+    # Set ENABLE_RECOMMENDATIONS=false in .env or environment to disable
+    enable_recommendations: bool = True  # ⚠️ Overridden by ENABLE_RECOMMENDATIONS env var
+
+    # Number of recommendation chips to generate per response (1-5)
+    # Higher values may increase response latency and token usage
+    max_recommendations: int = 2  # ⚠️ Overridden by MAX_RECOMMENDATIONS env var
+
     class Config:
         """
         Configuration loading priority (Pydantic Settings):
