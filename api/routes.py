@@ -5,7 +5,7 @@ API Routes - HTTP endpoints
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, AsyncIterator
+from typing import Optional, Dict, Any, AsyncIterator, List
 import uuid
 from datetime import datetime, timezone
 import traceback
@@ -26,6 +26,20 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     user_info: Optional[Dict[str, Any]] = None
 
+class RecommendationChip(BaseModel):
+    """
+    Recommendation chip for follow-up actions.
+    
+    These are contextual suggestions shown to users after each response,
+    helping guide them to logical next steps in their inquiry.
+    
+    Attributes:
+        text: Display text for the chip (e.g., "View claim details")
+        action: Optional intent/action to trigger when clicked (e.g., "claim_details")
+    """
+    text: str                         # Display text for the chip
+    action: Optional[str] = None      # Intent/action to trigger when clicked
+
 class ChatResponse(BaseModel):
     response: str
     session_id: str
@@ -33,6 +47,7 @@ class ChatResponse(BaseModel):
     intent: Optional[str] = None
     confidence: Optional[float] = None
     entities: Optional[Dict[str, Any]] = None  # ✅ Extracted entities
+    recommendations: Optional[List[RecommendationChip]] = None  # ✅ Recommendation chips
     needs_clarification: bool = False
     clarifying_question: Optional[str] = None  # DEPRECATED: Use 'response' field instead. Kept for backward compatibility and internal tracing only.
     metadata: Optional[Dict[str, Any]] = None
@@ -97,6 +112,17 @@ async def chat(request: ChatRequest, http_request: Request):
             metadata=metadata
         )
 
+        # Extract recommendations and convert to RecommendationChip objects
+        raw_recommendations = final_state.get("recommendations", [])
+        recommendations = None
+        if raw_recommendations:
+            recommendations = [
+                RecommendationChip(
+                    text=rec.get("text", ""),
+                    action=rec.get("action")
+                ) for rec in raw_recommendations if rec.get("text")
+            ]
+
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
@@ -104,6 +130,7 @@ async def chat(request: ChatRequest, http_request: Request):
             intent=intent,
             confidence=confidence,
             entities=final_state.get("entities"),  # ✅ Include extracted entities
+            recommendations=recommendations,  # ✅ Include recommendation chips
             needs_clarification=final_state.get("needs_clarification", False),  # ✅ If True, 'response' contains a question
             clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
             metadata=metadata,
