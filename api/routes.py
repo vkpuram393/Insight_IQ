@@ -25,6 +25,8 @@ class ChatRequest(BaseModel):
     text: str
     session_id: Optional[str] = None
     user_info: Optional[Dict[str, Any]] = None
+    claim_id: Optional[str] = None          # UI claim context (first query of session only)
+    claim_sequence: Optional[str] = None    # UI sequence context (first query of session only)
 
 class RecommendationChip(BaseModel):
     """
@@ -70,6 +72,13 @@ async def chat(request: ChatRequest, http_request: Request):
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
+
+    # Inject UI claim context into user_info for orchestrator entity enrichment
+    # Frontend sends claim_id/claim_sequence in payload only for first query of a session
+    if request.claim_id:
+        user_info["claim_id"] = request.claim_id
+    if request.claim_sequence:
+        user_info["claim_sequence"] = request.claim_sequence
 
     # Log incoming request
     await log_event(
@@ -209,6 +218,13 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
+
+    # Inject UI claim context into user_info for orchestrator entity enrichment
+    # Frontend sends claim_id/claim_sequence in payload only for first query of a session
+    if request.claim_id:
+        user_info["claim_id"] = request.claim_id
+    if request.claim_sequence:
+        user_info["claim_sequence"] = request.claim_sequence
 
     # Log incoming request (follows existing pattern)
     await log_event(
