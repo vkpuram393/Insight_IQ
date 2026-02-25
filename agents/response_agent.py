@@ -32,6 +32,16 @@ import uuid
 logger = get_logger(__name__)
 
 # ============================================================================
+# BLOCKED RECOMMENDATION ACTIONS
+# ============================================================================
+# Actions that must NEVER appear in recommendation chips.
+# claim_list is blocked because:
+# 1. The chatbot reuses older entities from history instead of asking for new ones
+# 2. There is no member-level API to search for other claims for a member
+# 3. Leads to confusing UX when entities from previous claims are reused
+BLOCKED_RECOMMENDATION_ACTIONS = frozenset({"claim_list"})
+
+# ============================================================================
 # RESPONSE AGENT CLASS
 # ============================================================================
 
@@ -1105,10 +1115,15 @@ You MUST respond with a valid JSON object containing both your response and exac
 1. Generate exactly {max_recs} recommendations
 2. Each recommendation should be a SHORT, actionable phrase (3-7 words)
 3. Recommendations should be contextually relevant to the current conversation
-4. The "action" field should be a valid intent (e.g., claim_status, claim_details, claim_list, pricing_info, appeal_info, help, benefits_info, find_pharmacy, rx_details, deductible_info)
+4. The "action" field should be a valid intent (e.g., claim_status, claim_details, pricing_info, appeal_info, help, benefits_info, find_pharmacy, rx_details, deductible_info, drug_info)
 5. Do NOT recommend asking about the same thing the user just asked
 
-6. **CRITICAL — AVOID DUPLICATE TOPIC AREAS (NOT JUST EXACT TEXT):**
+6. **CRITICAL — NO PERSONAL IDENTIFIERS IN RECOMMENDATIONS:**
+   Recommendation text must be GENERIC and must NEVER contain any person names, member names,
+   member IDs, claim IDs, specific identifiers, alphanumeric codes, or bracketed tokens.
+   Keep recommendations as short, universal action phrases.
+
+7. **CRITICAL — AVOID DUPLICATE TOPIC AREAS (NOT JUST EXACT TEXT):**
    Before generating recommendations, you MUST review the CONVERSATION HISTORY above and identify which INFORMATION CATEGORIES have already been covered for this claim. Then NEVER recommend anything in those categories again.
 
    **Step-by-step reasoning you MUST follow:**
@@ -1125,15 +1140,17 @@ You MUST respond with a valid JSON object containing both your response and exac
    - User asked "View full claim details" → "See claim details" is a DUPLICATE (same topic)
    - User asked about pricing → ANYTHING about pricing, cost, amount paid, copay, patient pay is a DUPLICATE
 
-7. Recommendations should guide the user to the NEXT logical, UNEXPLORED area of their claim journey
+8. Recommendations should guide the user to the NEXT logical, UNEXPLORED area of their claim journey
 
-8. **CLAIM CONTEXT: If the user has switched to a DIFFERENT claim (different claim number or sequence number), you MAY recommend questions that were asked for the PREVIOUS claim, as the user hasn't explored those aspects of the new claim yet.**
+9. **CLAIM CONTEXT: If the user has switched to a DIFFERENT claim (different claim number or sequence number), you MAY recommend questions that were asked for the PREVIOUS claim, as the user hasn't explored those aspects of the new claim yet.**
+
+10. **CRITICAL — NEVER recommend "view other claims", "check other claims", "view other claims for this member", or any variation that suggests viewing a list of other claims.** Only recommend actions related to the CURRENT claim being discussed or general help topics.
 
 **GOOD RECOMMENDATION PROGRESSION (each turn opens a NEW area):**
 - After claim summary → suggest: pricing details, member benefits (NEW areas)
-- After pricing → suggest: deductible status, claim details (NEW areas)
+- After pricing → suggest: deductible status, drug details (NEW areas)
 - After deductible → suggest: out-of-pocket max, prescription details (NEW areas)
-- After OOP max → suggest: other claims, prescription details (NEW areas — NOT deductible again!)
+- After OOP max → suggest: pharmacy info, drug coverage (NEW areas — NOT deductible again!)
 
 **CURRENT INTENT:** {intent}
 
@@ -1254,14 +1271,15 @@ You MUST respond with a valid JSON object containing both your response and exac
             List of recommendation dicts with 'text' and 'action' keys
         """
         # Intent-specific fallback recommendations
+        # NOTE: claim_list action is blocked — replaced with contextually relevant alternatives
         fallback_map = {
             "claim_status": [
                 {"text": "View full claim details", "action": "claim_details"},
-                {"text": "Check my other claims", "action": "claim_list"}
+                {"text": "Check my benefits", "action": "benefits_info"}
             ],
             "claim_details": [
                 {"text": "See pricing breakdown", "action": "pricing_info"},
-                {"text": "Check my other claims", "action": "claim_list"}
+                {"text": "Check my benefits", "action": "benefits_info"}
             ],
             "claim_rejection_reason": [
                 {"text": "How do I appeal?", "action": "appeal_info"},
@@ -1281,11 +1299,11 @@ You MUST respond with a valid JSON object containing both your response and exac
             ],
             "greeting": [
                 {"text": "Check my claim status", "action": "claim_status"},
-                {"text": "View my recent claims", "action": "claim_list"}
+                {"text": "What can you help with?", "action": "help"}
             ],
             "help": [
-                {"text": "Check a claim status", "action": "claim_status"},
-                {"text": "View my claims", "action": "claim_list"}
+                {"text": "Check a claim", "action": "claim_status"},
+                {"text": "Check drug information", "action": "drug_info"}
             ],
             "appeal_info": [
                 {"text": "Check claim status", "action": "claim_status"},
@@ -1293,7 +1311,7 @@ You MUST respond with a valid JSON object containing both your response and exac
             ],
             "benefits_info": [
                 {"text": "Check a claim", "action": "claim_status"},
-                {"text": "View my claims", "action": "claim_list"}
+                {"text": "Check drug details", "action": "drug_info"}
             ],
             "out_of_scope": [
                 {"text": "Check my claim status", "action": "claim_status"},
@@ -1304,7 +1322,7 @@ You MUST respond with a valid JSON object containing both your response and exac
         # Get intent-specific recommendations or use default
         recommendations = fallback_map.get(intent, [
             {"text": "Check my claim status", "action": "claim_status"},
-            {"text": "View my claims", "action": "claim_list"}
+            {"text": "Need help?", "action": "help"}
         ])
         
         # Filter out recommendations matching questions already asked for this claim
@@ -1350,6 +1368,29 @@ You MUST respond with a valid JSON object containing both your response and exac
             if not is_duplicate:
                 filtered.append(rec)
         
+        return filtered
+
+    def _filter_blocked_actions(self, recommendations: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Filter out recommendations with blocked actions (e.g., claim_list).
+        
+        This is a programmatic safety net that removes recommendations whose
+        action is in BLOCKED_RECOMMENDATION_ACTIONS, regardless of how they
+        were generated (LLM, fallback, or mock).
+        
+        Args:
+            recommendations: List of recommendation dicts with 'text' and 'action' keys
+            
+        Returns:
+            Filtered list of recommendations with blocked actions removed
+        """
+        if not recommendations:
+            return recommendations
+        
+        filtered = [r for r in recommendations if r.get("action") not in BLOCKED_RECOMMENDATION_ACTIONS]
+        removed = len(recommendations) - len(filtered)
+        if removed:
+            self.logger.info(f"🚫 Filtered {removed} recommendation(s) with blocked actions (claim_list)")
         return filtered
 
     def generate_response(
@@ -1728,10 +1769,14 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         }
         
         # =====================================================================
-        # Claim-aware dedup: filter recommendations already asked for THIS claim
+        # Filter blocked actions + Claim-aware dedup + Ensure max_recommendations
         # =====================================================================
-        if recommendations_enabled and not needs_clarification and recommendations:
-            # Build claim key for dedup tracking
+        if recommendations_enabled and not needs_clarification:
+            # Step 1: Filter blocked actions (e.g., claim_list)
+            if recommendations:
+                recommendations = agent._filter_blocked_actions(recommendations)
+            
+            # Step 2: Build claim key for dedup tracking
             entities = state.get("entities", {}) or {}
             extracted_slots = state.get("extracted_slots", {}) or {}
             merged_entities = {**normalize_entities(extracted_slots), **normalize_entities(entities)}
@@ -1739,20 +1784,28 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             seq_num = merged_entities.get("claimSequence", "")
             claim_key = f"{claim_num}_{seq_num}" if claim_num else "no_claim"
             
-            # Programmatic dedup: filter recommendations matching already-asked questions for THIS claim
+            # Step 3: Programmatic dedup against already-asked questions for THIS claim
             prev_asked = state.get("asked_questions_by_claim", {}) or {}
             asked_for_claim = prev_asked.get(claim_key, [])
             
-            if asked_for_claim:
+            if asked_for_claim and recommendations:
                 before_count = len(recommendations)
                 recommendations = agent._filter_already_asked(recommendations, asked_for_claim)
                 logger.info(f"🔍 Dedup filter: {before_count} → {len(recommendations)} recommendations (claim_key={claim_key})")
             
-            # If all filtered out, generate claim-aware fallbacks
-            if not recommendations:
+            # Step 4: Ensure max_recommendations are always met after filtering/dedup
+            if len(recommendations) < settings.max_recommendations:
                 intent = state.get("intent", "unknown")
-                recommendations = agent._generate_fallback_recommendations(intent, asked_for_claim)
-                logger.info(f"📋 All recs filtered, using {len(recommendations)} claim-aware fallbacks")
+                supplemental = agent._generate_fallback_recommendations(intent, asked_for_claim)
+                # Defense-in-depth: filter blocked actions from fallbacks too
+                supplemental = agent._filter_blocked_actions(supplemental)
+                for rec in supplemental:
+                    if len(recommendations) >= settings.max_recommendations:
+                        break
+                    # Avoid duplicates with existing recommendations
+                    if not any(r["text"].lower() == rec["text"].lower() for r in recommendations):
+                        recommendations.append(rec)
+                logger.info(f"📋 Supplemented to {len(recommendations)} recommendations (max: {settings.max_recommendations})")
         else:
             claim_key = "no_claim"
         
@@ -1864,28 +1917,29 @@ def _get_mock_recommendations(intent: str) -> List[Dict[str, str]]:
         return []
     
     # Intent-specific mock recommendations
+    # NOTE: claim_list action is blocked — replaced with contextually relevant alternatives
     mock_recs = {
         "claim_status": [
             {"text": "View claim details", "action": "claim_details"},
-            {"text": "Check my other claims", "action": "claim_list"}
+            {"text": "Check my benefits", "action": "benefits_info"}
         ],
         "claim_details": [
             {"text": "See pricing breakdown", "action": "pricing_info"},
-            {"text": "View my other claims", "action": "claim_list"}
+            {"text": "Check my benefits", "action": "benefits_info"}
         ],
         "greeting": [
             {"text": "Check claim status", "action": "claim_status"},
-            {"text": "View my claims", "action": "claim_list"}
+            {"text": "What can you help with?", "action": "help"}
         ],
         "help": [
             {"text": "Check a claim", "action": "claim_status"},
-            {"text": "What can you do?", "action": "help"}
+            {"text": "Check drug information", "action": "drug_info"}
         ],
     }
     
     return mock_recs.get(intent, [
         {"text": "Check my claim status", "action": "claim_status"},
-        {"text": "View my claims", "action": "claim_list"}
+        {"text": "Need help?", "action": "help"}
     ])[:settings.max_recommendations]
 
 

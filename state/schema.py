@@ -126,8 +126,9 @@ class AgentState(TypedDict):
     # recommendations structure:
     # [
     #     {"text": "View claim details", "action": "claim_details"},
-    #     {"text": "Check my other claims", "action": "claim_list"}
+    #     {"text": "Check my benefits", "action": "benefits_info"}
     # ]
+    # NOTE: claim_list action is blocked — see BLOCKED_RECOMMENDATION_ACTIONS in response_agent.py
 
     # === RECOMMENDATION DEDUP TRACKING ===
     asked_questions_by_claim: Optional[Dict[str, List[str]]]  # Tracks questions asked per claim key
