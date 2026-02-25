@@ -617,7 +617,11 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
             "metadata": {
                 **original_metadata,
                 "orchestrator_metadata": to_dict(result),  # Use serialization helper for consistency
-                "original_text": original_text,  # Preserve for logging/display
+                "original_text": original_text,  # Preserve raw text for logging/display
+                # Store enriched text separately for memory storage so entities are available
+                # in conversation history for extraction by ConversationContextService in subsequent queries.
+                # Only present when enrichment was actually applied (first query with UI entities).
+                **({"enriched_text": normalized} if enrichment_metadata.get("entity_enrichment_applied") else {}),
                 **({"enrichment_metadata": enrichment_metadata} if enrichment_metadata else {})
             }
         }
