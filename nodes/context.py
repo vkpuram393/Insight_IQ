@@ -235,11 +235,17 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             user_id = "anonymous"  # Default user_id for requests without user info
         
         # Extract data from state
-        # Prefer enriched_text (if entity enrichment was applied by orchestrator) for memory storage,
-        # so entities are available for extraction from conversation history in subsequent queries.
-        # Falls back to original_text (unmasked raw text) or current state text.
         metadata = state.get("metadata", {})
-        user_message = metadata.get("enriched_text") or metadata.get("original_text") or state.get("text", "")
+        # CRITICAL FIX (defense-in-depth): Use enriched_text ONLY when entity enrichment
+        # was genuinely applied for THIS specific request, verified via enrichment_metadata flag.
+        # orchestrator_node now resets enrichment_metadata to None each request, so the flag
+        # is True only when enrichment actually occurred in the current request.
+        # This prevents stale enriched_text from checkpoint metadata from corrupting history.
+        enrichment_meta = metadata.get("enrichment_metadata") or {}
+        if enrichment_meta.get("entity_enrichment_applied"):
+            user_message = metadata.get("enriched_text") or metadata.get("original_text") or state.get("text", "")
+        else:
+            user_message = metadata.get("original_text") or state.get("text", "")
         agent_response = state.get("response", "")
         intent = state.get("intent")
         tools_used = state.get("tools_used", [])

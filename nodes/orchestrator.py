@@ -172,12 +172,10 @@ def _enrich_first_query_entities(
     ONLY appends entities that are:
     1. Missing from the user's text (detected via _detect_entities_in_text)
     2. Available and valid in the UI payload
-    3. Not conflicting (won't append UI sequence for a user-specified different claim)
     
     Safety guarantees:
     - Never raises exceptions (returns original text on any error)
     - Never modifies text if UI payload is absent/invalid
-    - Never appends UI sequence if user mentioned a different claim ID
     - Logs all enrichment decisions for observability
     
     Args:
@@ -237,21 +235,8 @@ def _enrich_first_query_entities(
         
         # Append sequence if user didn't provide one
         if not has_sequence and ui_claim_sequence:
-            # SAFETY CHECK: If user mentioned a DIFFERENT claim ID than the UI's,
-            # don't append UI sequence (it belongs to the UI claim, not the user's claim)
-            user_mentions_different_claim = False
-            if has_claim_id and ui_claim_id:
-                user_mentions_different_claim = ui_claim_id not in detection['detected_claim_ids']
-            
-            if user_mentions_different_claim:
-                logger.info(
-                    f"🔍 Orchestrator enrichment: User mentioned different claim ID than UI "
-                    f"- skipping UI sequence append | session={log_ctx.get('session_id', 'N/A')}"
-                )
-                enrichment_meta["skipped_sequence_reason"] = "different_claim_id"
-            else:
-                append_parts.append(f"sequence {ui_claim_sequence}")
-                enrichment_meta["appended_sequence"] = ui_claim_sequence
+            append_parts.append(f"sequence {ui_claim_sequence}")
+            enrichment_meta["appended_sequence"] = ui_claim_sequence
         
         # Apply enrichment if there are missing entities to append
         if append_parts:
@@ -466,7 +451,10 @@ async def _handle_normalization_error(
         "metadata": {
             **original_metadata,
             "orchestrator_metadata": to_dict(result),
-            "original_text": fallback_text
+            "original_text": fallback_text,
+            # Reset stale enrichment checkpoint data (consistent with success path fix)
+            "enriched_text": None,
+            "enrichment_metadata": None
         }
     }
     await log_state_snapshot(state, "orchestrator", result_dict)
@@ -530,6 +518,16 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
     # Extract current state values
     raw_text = state.get("text", "")
     original_metadata = state.get("metadata", {})
+    
+    # CRITICAL FIX: Clear stale enrichment data from checkpoint-persisted metadata.
+    # When LangGraph checkpoints state between requests (same session_id/thread_id),
+    # merge_metadata reducer preserves ALL keys from previous requests' checkpoints.
+    # Without this reset, enriched_text from the first request's UI entity enrichment
+    # persists indefinitely via **original_metadata spread, causing update_memory_node
+    # to save the wrong (stale first-request) user message for every subsequent request.
+    # Popping here ensures both success and error paths benefit from cleanup.
+    original_metadata.pop("enriched_text", None)
+    original_metadata.pop("enrichment_metadata", None)
     
     try:
         # ============================================================
@@ -618,11 +616,13 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
                 **original_metadata,
                 "orchestrator_metadata": to_dict(result),  # Use serialization helper for consistency
                 "original_text": original_text,  # Preserve raw text for logging/display
-                # Store enriched text separately for memory storage so entities are available
-                # in conversation history for extraction by ConversationContextService in subsequent queries.
-                # Only present when enrichment was actually applied (first query with UI entities).
-                **({"enriched_text": normalized} if enrichment_metadata.get("entity_enrichment_applied") else {}),
-                **({"enrichment_metadata": enrichment_metadata} if enrichment_metadata else {})
+                # CRITICAL FIX: Always set enriched_text and enrichment_metadata explicitly.
+                # When enrichment IS applied (first query with UI entities): store enriched text
+                # so entities are available in conversation history for subsequent extraction.
+                # When enrichment is NOT applied: set to None to ensure merge_metadata reducer
+                # overwrites any stale checkpoint values, preventing corrupted session history.
+                "enriched_text": normalized if enrichment_metadata.get("entity_enrichment_applied") else None,
+                "enrichment_metadata": enrichment_metadata if enrichment_metadata else None
             }
         }
         
