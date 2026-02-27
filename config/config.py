@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     
     # LLM Thinking Mode - Gemini thinks internally, these settings make it VISIBLE.
     # ⚠️ Keep OFF in production (increases latency/cost). Enable only for debugging.
-    enable_thinking_mode: bool = True  # ⚠️ Overridden by ENABLE_THINKING_MODE env var
-    log_thoughts_to_mongo: bool = True # Store thoughts in MongoDB. ⚠️ Overridden by LOG_THOUGHTS_TO_MONGO env var
+    enable_thinking_mode: bool = False  # ⚠️ Overridden by ENABLE_THINKING_MODE env var
+    log_thoughts_to_mongo: bool = False # Store thoughts in MongoDB. ⚠️ Overridden by LOG_THOUGHTS_TO_MONGO env var
 
     # LangSmith (optional)
     langsmith_api_key: str | None = None  # Added to avoid ValidationError when env var is present
