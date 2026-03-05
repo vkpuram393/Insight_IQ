@@ -160,9 +160,9 @@ class PersistenceStore(ABC):
     async def get_conversation_history(
         self,
         session_id: str,
-        limit: int = 50
+        limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Get conversation history for a session"""
+        """Get conversation history for a session (default: 100 messages = 50 turns)"""
         pass
 
     @abstractmethod
@@ -188,6 +188,43 @@ class PersistenceStore(ABC):
         session_id: str
     ) -> bool:
         """Delete all conversations for a session"""
+        pass
+
+    @abstractmethod
+    async def log_thinking_process(
+        self,
+        session_id: str,
+        request_id: str,
+        user_query: str,
+        intent: str,
+        thinking_content: str,
+        final_response: str,
+        model: str,
+        execution_time_ms: Optional[float] = None,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Log LLM thinking process for analysis (Issue 2).
+        
+        Fire-and-forget, non-blocking. Logs Gemini's chain-of-thought
+        to MongoDB for debugging inconsistent responses.
+        
+        Args:
+            session_id: Session identifier
+            request_id: Request identifier
+            user_query: Original user question
+            intent: Detected intent
+            thinking_content: Gemini's chain of thought
+            final_response: Final response text
+            model: LLM model used
+            execution_time_ms: Optional execution time
+            user_id: Optional user identifier
+            metadata: Optional additional metadata
+            
+        Returns:
+            str: Thought log ID
+        """
         pass
 
     @abstractmethod

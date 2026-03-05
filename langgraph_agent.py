@@ -519,6 +519,7 @@ async def run_graph_stream(
                 "confidence": current_state.get("confidence"),
                 "needs_clarification": current_state.get("needs_clarification", False),
                 "clarifying_question": current_state.get("clarifying_question"),
+                "recommendations": current_state.get("recommendations", []),  # ✅ Include recommendation chips
                 "metadata": current_state.get("metadata", {})
             },
             "metadata": {

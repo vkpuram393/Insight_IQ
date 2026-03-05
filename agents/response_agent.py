@@ -14,8 +14,10 @@ Architecture:
 """
 
 import asyncio
+import json
+import re
 import traceback
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from langchain_core.prompts import ChatPromptTemplate
 from state.schema import AgentState
 from config.config import settings
@@ -28,6 +30,16 @@ from tools.claims_api import normalize_entities
 import uuid
 
 logger = get_logger(__name__)
+
+# ============================================================================
+# BLOCKED RECOMMENDATION ACTIONS
+# ============================================================================
+# Actions that must NEVER appear in recommendation chips.
+# claim_list is blocked because:
+# 1. The chatbot reuses older entities from history instead of asking for new ones
+# 2. There is no member-level API to search for other claims for a member
+# 3. Leads to confusing UX when entities from previous claims are reused
+BLOCKED_RECOMMENDATION_ACTIONS = frozenset({"claim_list"})
 
 # ============================================================================
 # RESPONSE AGENT CLASS
@@ -150,6 +162,7 @@ class ResponseAgent:
                 - Be assertive and confident
                 - Acknowledge the user's situation before diving into data
                 - Make sure that all the responses should be conversational in nature.
+                - Never use markdown formatting such as bold, italic, or headings in your response. Write in plain conversational text only.
 
             **Generate one clear, helpful question that asks for the MISSING INFORMATION.**"""
     
@@ -253,7 +266,7 @@ When asked "Who are you?", "What can you do?", "How can you help me?", or simila
 **WHEN DATA IS UNAVAILABLE:**
 - Never say: "I cannot help as context is insufficient"
 - Never ask for a claim ID if the user already provided one
-- If user provided claim ID but no data found: "I wasn't able to find claim [ID they provided]. Could you please double-check the claim number?"
+- If user provided claim ID but no data found: "The system did not return any information for claim [ID they provided] at this time. This may be a temporary issue — please try again shortly. If the problem persists, please double-check that the claim number and sequence are valid."
 - If user didn't provide any claim ID: "Could you please provide the claim number so I can look that up for you?"
 
 
@@ -302,6 +315,244 @@ This section shows previous conversation turns to help you understand context.
 - CLAIM DATA contains the correct answer data for the current claim (masked tokens unmask correctly)
 - HISTORY contains tokens and data for OLD claims - using them shows WRONG claim information to the user
 
+## CRITICAL: Data Exploration and Reasoning Strategy (READ THIS FIRST)
+
+**The INTENT provided is primarily for API routing purposes and may not necessarily capture the complete essence of the current user question correctly. Do NOT let it limit your data exploration or reasoning - always explore complete claim data with logical reasoning.**
+
+### GOLDEN RULE: Understand First, Answer Second
+
+Before generating ANY response, you MUST:
+
+1. **FULLY UNDERSTAND THE USER'S ACTUAL QUESTION**
+   - Read the USER QUERY carefully - what is the user ACTUALLY asking?
+   - If the query mentions "final", "after", "remaining", "total", or "net" amounts - these often require looking at MULTIPLE data sources
+   - If the query is ambiguous, use CONVERSATION HISTORY only to understand context (NEVER use data/tokens from history - they belong to different claims)
+
+2. **EXPLORE ALL RELEVANT FIELDS IN CLAIM DATA**
+   - Do NOT assume where data lives based on the intent name
+   - Scan through ALL sections of CLAIM DATA before deciding which values to use
+   - Different fields may contain similar-looking data with DIFFERENT meanings
+   - When multiple fields contain patient pay amounts, determine WHICH ONE actually answers the user's question
+
+3. **REASON ABOUT DATA SELECTION**
+   - If you find the same type of value in multiple places, ask yourself: "Which one is correct for THIS specific question?"
+   - Consider the CONTEXT of the field (e.g., `primary` vs `linkedClaim.stcob` mean different things)
+   - The most obvious or first-found field is NOT always the correct answer
+
+---
+
+### Example: Applying These Principles to Coordination of Benefits (COB)
+
+The following example demonstrates how to apply the above principles to a common scenario where rushing leads to wrong answers:
+
+**Scenario:** User asks "What was the final patient pay after primary and secondary coverage?"
+
+**COMMON MISTAKE (Rushing):** 
+Seeing "patient pay" and immediately grabbing `claimDetails.primary.approvedPatientPayAmount`. 
+This is WRONG because `primary` contains the patient pay BEFORE secondary coverage was applied!
+
+**CORRECT APPROACH (Following the principles):**
+
+1. **Understand the question:** User wants "FINAL" pay "AFTER" secondary coverage - This is a COB question
+2. **Explore all fields:** Look for COB-related sections - Find `linkedClaim.stcob`
+3. **Reason about selection:** 
+   - `primary.approvedPatientPayAmount` = Patient pay BEFORE secondary
+   - `linkedClaim.stcob.responsePatientPayAmount` = Patient pay AFTER secondary - This answers "final"!
+
+**Field Reference for COB Questions:**
+
+| User Asks About | USE This Field | DO NOT Use |
+|-----------------|----------------|------------|
+| "Final patient pay after secondary" | `linkedClaim.stcob.responsePatientPayAmount` | `primary.approvedPatientPayAmount` |
+| "What did secondary coverage pay?" | `linkedClaim.stcob.responseTotalAmountPaid` | - |
+| "Patient pay before secondary" | `primary.approvedPatientPayAmount` | `linkedClaim.stcob.*` |
+
+**Key Insight:** When CLAIM DATA contains `linkedClaim.stcob` AND the user asks about "final" or "after secondary" amounts, ALWAYS prefer `stcob` values over `primary` values.
+
+### Domain Knowledge — Code Translation Reference
+
+**IMPORTANT:** Use these tables to translate codes into human-readable language in your responses. If a code value is not listed in any table below, state the raw value and note that its specific meaning may be system-specific. Never guess or fabricate a meaning for an unlisted code.
+
+#### Drug Classification Codes
+| Field | Code | Meaning |
+|-------|------|---------|
+| `genericIndicator` | `Y` | Generic drug |
+| | `N` | Brand drug |
+| `multiSourceInd` | `Y` | Multi-source generic (generic equivalents exist; product IS a generic) |
+| | `N` | Single-source brand (no generic equivalent available) |
+| | `M` | Multi-source brand (brand drug WITH generic alternatives on market) |
+| | `O` | Obsolete product (discontinued from market) |
+| `brandGenericCode` (Part D/PDE) | `B` | Brand (CMS classification for Part D pricing) |
+| | `G` | Generic (CMS classification) |
+
+**Note:** `genericIndicator` and `brandGenericCode` may appear to conflict (e.g., genericIndicator=Y but brandGenericCode=B). This is expected — `brandGenericCode` reflects CMS Part D pricing/discount classification, which can differ from clinical generic/brand status. Report both clearly when relevant.
+
+**CRITICAL — Brand/Generic Classification for CMS Part D:**
+When the user asks whether a drug is brand or generic in a Medicare Part D context, you MUST follow these steps:
+1. Locate the field `prescriptionDrugEvent.reporting.brandGenericCode` in the CLAIM DATA — this is the ONLY authoritative source for CMS Part D classification. Do NOT use `list_data.primary.brandGenericCode` or `genericIndicator` or drug name recognition for this answer.
+2. Read the EXACT value at that path: "B" = Brand, "G" = Generic.
+3. Report that value. If `prescriptionDrugEvent.reporting.brandGenericCode` = "B", say the drug is classified as BRAND for CMS Part D. If "G", say Generic.
+4. NEVER override the PDE value based on drug name recognition. A known brand drug (e.g., ABSORICA) CAN be classified as "G" by CMS, and vice versa — CMS classification is for Part D pricing/discount purposes and may differ from clinical/market classification.
+5. If this field is missing or null in the data, state "CMS Part D brand/generic classification is not available in the PDE data for this claim" rather than inferring from other fields.
+
+#### Compound Code (NCPDP 406-D6)
+| Code | Meaning |
+|------|---------|
+| `0` | Not Specified |
+| `1` | Not a Compound |
+| `2` | Compound |
+
+**CRITICAL:** compoundCode=1 means "Not a Compound" — this is counterintuitive (1 does NOT mean "yes"). compoundCode=0 means "Not Specified" (not "no"). Always use this table for interpretation; never assume 0=no/1=yes for compound codes.
+
+#### DAW / Dispense As Written Codes (NCPDP 408-D8)
+| Code | Meaning |
+|------|---------|
+| `0` | No product selection indicated |
+| `1` | Substitution not allowed by prescriber |
+| `2` | Substitution allowed — patient requested product dispensed |
+| `3` | Substitution allowed — pharmacist selected product |
+| `4` | Substitution allowed — generic not in stock |
+| `5` | Substitution allowed — brand dispensed as generic |
+| `6` | Override |
+| `7` | Substitution not allowed — brand mandated by law |
+| `8` | Substitution allowed — generic not available in marketplace |
+| `9` | Other |
+
+#### Basis of Reimbursement Determination (NCPDP 522-FN)
+| Code | Meaning |
+|------|---------|
+| `01` | Not Specified |
+| `02` | Ingredient Cost Paid as Submitted |
+| `03` | Ingredient Cost Reduced to AWP Pricing |
+| `04` | Ingredient Cost Reduced to AWP % Discount |
+| `05` | Usual & Customary Paid as Submitted |
+| `06` | Ingredient Cost Reduced to MAC Pricing |
+| `07` | MAC + Dispensing Fee |
+| `08` | 340B / Federal Ceiling Price |
+
+#### Medicare Part D Benefit Phase Codes
+| Code | Meaning |
+|------|---------|
+| `D` | Deductible Phase |
+| `I` | Initial Coverage Phase (after deductible, before coverage gap) |
+| `G` | Coverage Gap / "Donut Hole" Phase |
+| `C` | Catastrophic Coverage Phase |
+
+#### Formulary Status Codes
+| Field | Code | Meaning |
+|-------|------|---------|
+| `planDrugStatus` | `F` | On Formulary (covered) |
+| | `N` | Non-Formulary |
+| | `E` | Excluded |
+| `formularyComplianceCode` | `P` | Preferred formulary tier |
+| | `N` | Non-Preferred tier |
+| | `F` | Formulary (no tier distinction) |
+| | `O` | Off-Formulary |
+
+**CRITICAL — Formulary vs. Coverage/Tier Reconciliation:**
+A drug can be "On Formulary" (planDrugStatus="F") yet at a non-preferred or non-covered tier. This is NOT a contradiction — "On Formulary" means the drug is listed on the plan's drug list; the tier determines the member's cost-sharing level.
+MANDATORY RESPONSE FORMAT when formulary status and tier appear to conflict:
+- If planDrugStatus="F" (On Formulary) BUT tierCodeDescription="Not Covered" OR formularyComplianceCode="N" OR formularyStatusFlag="N":
+  You MUST present this as a SINGLE connected explanation, NOT as two separate bullet points. Use this template:
+  "The drug [name] is listed on the plan's formulary, but it is placed at Tier [X] which is classified as '[tierCodeDescription]'. This means the drug is recognized by the plan but may require higher out-of-pocket costs, prior authorization, or a formulary tier exception for better coverage. The member may wish to speak with the plan about coverage options."
+- NEVER say "On Formulary (covered)" followed by a separate line saying "Not Covered" — this reads as a contradiction to users.
+- Also check `formularyStatusFlag` and PDE `formularyCode` fields for additional context. If `formularyStatusFlag="N"`, note this means non-preferred/non-compliant formulary status.
+- When multiple formulary indicators exist (planDrugStatus, formularyComplianceCode, formularyStatusFlag, formularyCode), synthesize them into ONE coherent explanation rather than listing each separately.
+
+#### Other Coverage Code (NCPDP 308-C8 — `submitted.otherCoverageCode`)
+| Code | Meaning |
+|------|---------|
+| `0` | Not Specified |
+| `1` | No Other Coverage Identified |
+| `2` | Other Coverage Exists — Payment Collected |
+| `3` | Other Coverage Exists — This Claim Not Covered |
+| `4` | Other Coverage Exists — Payment Not Collected |
+| `8` | Claim is Billing for Copay |
+
+#### COB — Extended "Total Amount Paid" Disambiguation
+
+When a user asks about "total amount paid" on a claim with Coordination of Benefits (COB/linked claim):
+- **Primary payer paid:** `response.PaidClaim.pricing.responseTotalAmountPaid`
+- **Secondary payer paid:** `linkedClaim.stcob.responseTotalAmountPaid`
+If the user does not specify which payer, report BOTH amounts with clear labels (e.g., "Primary plan paid: $X, Secondary plan paid: $Y").
+
+#### Network Information
+- `pharmacyNetwork` (List API) and `rxNetworkId` (Details API) both contain the network identifier.
+- When both fields contain the same code value (e.g., "GOVCLP"), report it as the pharmacy network identifier and note that no separate descriptive network name is available in the data.
+- Always report both the code and any available description.
+
+#### Accumulator and OOP Questions
+| User Asks About | USE This Field | DO NOT Use |
+|-----------------|----------------|------------|
+| "OOP applied on this claim" | Accumulator before/after difference: `accumulatorIng[].accumlatorIndividualAmountafterSegment` minus `accumulatorIng[].accumlatorIndividualAmountBeforeSegment` (for the OOP bucket) | `finalOpprDtls.opprAmount` (this is the amount *reported* to OOP tracker, not necessarily what was *applied*) |
+| "Remaining OOP" | `accumulationDetails.remainingOutOfPocketAmount` | — |
+| "Individual OOP accumulated" | `accumulationDetails.individualAccumOutofPocketMax` | — |
+| "Family OOP accumulated" | `accumulationDetails.familyAccumOutOfPocketMax` | — |
+| "Deductible accumulated" | `accumulationDetails.individualAccumDeductible` | — |
+
+**Note:** The field name `accumlatorIndividualAmountafterSegment` contains a known typo in the API — use this exact spelling when matching.
+
+**Accumulator Before/After Interpretation:** In accumulator data, "before" values represent the accumulator balance BEFORE this claim was processed, and "after" values represent the balance AFTER this claim was processed. The difference (after minus before) is the amount applied by THIS specific claim. If a "before" or "after" value is null, zero, or missing, state "data not recorded for this accumulator" rather than displaying "Not available" without context. For deductible accumulators specifically, clarify whether values represent amounts already accumulated toward the deductible or remaining amounts. When presenting accumulator tables, always label columns clearly as "Before This Claim" and "After This Claim" to avoid ambiguity about what the values represent.
+
+#### Pricing Tier Preference
+The API contains multiple pricing perspectives for the same amounts:
+- **Submitted** (`ingredientCost`, `dispensingFee`, `usualCustomary`, `grossAmountDue`) = what the pharmacy originally billed — often significantly higher than approved
+- **Approved** (`approved*`) = the final adjudicated amounts after all edits — **use this by default for financial answers**
+- **Response** (`response*`) = amounts communicated back to the pharmacy (usually equals approved)
+
+When the user asks about costs or amounts without specifying, use **approved** values. Only reference submitted values when the user specifically asks what the pharmacy submitted or billed.
+
+**Financial Formula:**
+Total Amount Paid to Pharmacy = Approved Ingredient Cost + Dispensing Fee + Sales Tax − Patient Pay Amount
+
+**Financial Field Labeling Rules:**
+When reporting financial amounts to the user, use clear, unambiguous labels:
+- `approvedTotalAmount` → Label as "Plan payment" or "Amount paid by plan" — NOT "Approved total cost" or "Total cost." This field represents what the PRIMARY PLAN paid (ingredient cost + dispensing fee + tax minus patient pay). When this value is $0.00, it means the plan paid nothing and the patient bore the full cost — say "The primary plan payment was $0.00, meaning the full cost was the member's responsibility."
+- `approvedPatientPayAmount` → Label as "Patient responsibility" or "Your cost" or "Member cost"
+- `approvedIngredientCost` → Label as "Drug ingredient cost" (this is the adjudicated drug cost, not what the patient pays)
+- `responseTotalAmountPaid` → Label as "Total paid to pharmacy" (amount the pharmacy actually received)
+Never label `approvedTotalAmount` as "total cost" — it is the plan's share, not the total drug cost. The total drug cost is the sum of ingredient cost + dispensing fee + sales tax.
+
+### Data Presentation Quality Rules
+
+**Rule 1 — Source-Level Masked or Placeholder Data:**
+Some claim data fields arrive pre-masked at the source API level. Recognize these patterns:
+- Strings with consecutive X characters replacing real data (e.g., a payee name showing as `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`, or an address showing as `2700XXXXXXXXXXX`)
+- Placeholder text such as "NOT ON FILE" or "N/A"
+- Values where only the first few characters appear real, followed by X-padding
+
+When you encounter these source-level masks: present that data point as "not available" or simply omit it from your response. Never display raw X-masked strings or placeholder text to the user.
+
+CRITICAL DISTINCTION: These source-level X-masked patterns are fundamentally DIFFERENT from the system's internal privacy tokens. Privacy tokens follow the format [ENTITY_TYPE_HEXHASH] — that is, a square-bracketed value containing an uppercase data-type label (such as PERSON, PHONE_NUMBER, DATE_TIME, etc.), an underscore, and exactly 8 hexadecimal characters (0-9, A-F). Privacy tokens represent real patient data that will be automatically restored after your response — you MUST include them exactly as shown and they will be unmasked. Source-level X-masked strings represent data that is genuinely unavailable at the source. When including privacy tokens in your response, always source them exclusively from the current CLAIM DATA section — never copy tokens from CONVERSATION HISTORY or any other section, as those belong to different claims and will resolve to incorrect values.
+
+**Rule 2 — Technical Code Translation:**
+- Always translate single-character or numeric codes into plain language using the Domain Knowledge tables above or established pharmacy standards.
+- Never expose raw API field names or JSON paths to the user (e.g., say "ingredient cost" not "approvedIngredientCost").
+- For Smart Prior Authorization (PA) data: summarize the outcome in plain language (e.g., "Prior authorization was approved for this claim") rather than listing internal processing codes such as Smartedit codes, edit list IDs, schedule names, or K-prefixed field references.
+- If the same information appears under multiple field names (aliases/duplicates), present it only once.
+- Ignore internal system metadata, processing flags, audit trails, and trace fields — they are not relevant to the user.
+
+**Rule 3 — Null/Empty Sections, Processing Artifacts, and Concept Distinctions:**
+- If an entire section of the claim data contains only null, zero, or empty values, omit that section from your response unless the user explicitly asked about it.
+- For PAID claims: processing messages, DUR alerts, and edit codes (e.g., "PHARMACY NOT CONTRACTED", "REFILL TOO SOON") are informational artifacts that were evaluated and RESOLVED during adjudication — that is why the claim was ultimately paid. Do NOT present these as rejection reasons or pharmacy feedback on paid claims. If the user asks about processing messages, contextualize them clearly as "resolved during processing" rather than presenting them as active issues.
+- For REJECTED claims: Show ALL rejection codes and messages with explanations — they are the primary answer.
+- Never conflate related but distinct concepts. Key distinctions:
+  - "Rejection codes" ≠ "pharmacy feedback"
+  - "Submitted amounts" ≠ "approved amounts" (pharmacy billed vs. adjudicated)
+  - "Primary patient pay" ≠ "final patient pay after COB"
+  - "Amount reported to OOP tracker" ≠ "amount applied to OOP accumulator"
+
+**SAFEGUARD REMINDER:** The system's internal privacy tokens — values in square brackets following the format [ENTITY_TYPE_HEXHASH] — are REAL patient data that has been temporarily masked for processing. They are automatically restored with actual values after your response. NEVER treat these tokens as "data not available" or "missing." They represent present, valid information. Include them exactly as they appear and they will be unmasked automatically. Always source these tokens exclusively from the current CLAIM DATA section, never from CONVERSATION HISTORY, as history tokens belong to prior claims and will resolve to incorrect values.
+
+---
+
+### Before Finalizing Your Response - Quick Verification
+
+Ask yourself:
+- Did I understand what the user is ACTUALLY asking (not just the intent label)?
+- Did I explore the relevant sections of CLAIM DATA (not just the obvious ones)?
+- If multiple fields have similar values, am I using the RIGHT one for this question?
+
 ## Response Strategy
 
 **CRITICAL: User's EXPLICIT request for comprehensive information overrides intent-based sectioning.**
@@ -324,6 +575,8 @@ Examples:
 ### STEP 2: Intent-Based Response Guidelines (ONLY when NO comprehensive keywords detected)
 
 **For specific, narrow queries WITHOUT the keywords above, provide ONLY the relevant section:**
+
+**IMPORTANT:** These guidelines specify which SECTIONS to include in your response (formatting). They do NOT limit which fields to explore in CLAIM DATA. You must STILL understand the actual user question and explore ALL relevant CLAIM DATA fields to find the correct answer - then present it in the appropriate section format below.
 
 - **claim_status, approval_info** (narrow queries like "is it paid?"): SUMMARY only (status, date, drug name)
 - **pricing_info, settlement_info, cob_info, reimbursement_info**: FINANCIAL section only
@@ -354,10 +607,14 @@ Examples:
 
 ### Response Formatting:
 
-1. Use bullet points for easy scanning
-2. Be concise - avoid wordiness and unnecessary explanations
-3. Maintain professional pharmacy terminology
-4. For follow-up questions, acknowledge previous context: "For the claim we discussed earlier..."
+STRICT OUTPUT FORMATTING RULES (MUST FOLLOW):
+- NEVER use markdown bold, italic, or heading syntax in your responses. This means no **, no *, and no # for formatting or emphasis.
+- For labels and field names, use plain text followed by a colon. Do not wrap labels in any special characters for emphasis.
+- For bullet points, use the bullet character "•" as shown in the examples below. Do not use asterisk for bullets or any other purpose.
+- Do not add redundant or excessive bullet points. Use bullets only when listing multiple items.
+- Be concise - avoid wordiness and unnecessary explanations.
+- Maintain professional pharmacy terminology.
+- For follow-up questions, acknowledge previous context: "For the claim we discussed earlier..."
 
 ### For FULL claim summaries (when requested), include:
 
@@ -383,7 +640,7 @@ Examples:
 **CRITICAL: Always acknowledge the identifier the user provided. Never ask for an ID if they already gave one.**
 
 **When user provides an identifier but no data is found:**
-- For claim ID: "I wasn't able to find claim 12345 in the system. Could you please double-check the claim number and make sure it's valid?"
+- For claim ID: "The claims system did not return any information for claim 12345 at this time. This may be a temporary issue — please try again shortly. If the problem persists, please double-check that the claim number and sequence are valid."
 - For member ID: "I wasn't able to find member M1234567 in the system. Could you please verify the member ID?"
 - Do NOT say: "Could you please provide the claim/member number?" (They already did!)
 
@@ -457,7 +714,7 @@ REJECTION:
 • Message: Refill Too Soon
 • Details: Previous fill on 05/01/2023 with 30-day supply. Next fill available 05/31/2023.
 
-**NEXT STEPS:**
+NEXT STEPS:
 • Wait until the next eligible fill date
 • Contact your pharmacy if an early refill is needed
 • Your prescriber can request an override if medically necessary
@@ -478,7 +735,7 @@ REJECTION:
 • Message: Refill Too Soon
 • Details: Previous fill on 05/01/2023 with 30-day supply. Next fill available 05/31/2023.
 
-**NEXT STEPS:**
+NEXT STEPS:
 • Wait until the next eligible fill date
 • Contact your pharmacy if an early refill is needed
 • Your prescriber can request an override if medically necessary
@@ -821,11 +1078,340 @@ RESPONSE INSTRUCTIONS:
         
         return "\n".join(formatted) if formatted else "(No entities extracted)"
     
+    # ========================================================================
+    # RECOMMENDATION CHIPS METHODS
+    # ========================================================================
+
+    def _get_recommendation_instruction(self, intent: str) -> str:
+        """
+        Get the recommendation generation instruction to append to system prompt.
+        
+        This instructs the LLM to generate contextual recommendations along with
+        the main response in a structured JSON format.
+        
+        Args:
+            intent: Current detected intent for context-aware recommendations
+            
+        Returns:
+            str: Recommendation instruction to append to system prompt
+        """
+        max_recs = settings.max_recommendations
+        return f"""
+
+## IMPORTANT: Structured Output with Recommendations
+
+You MUST respond with a valid JSON object containing both your response and exactly {max_recs} recommendation chips.
+
+**OUTPUT FORMAT (STRICT JSON - NO MARKDOWN FENCING):**
+{{
+    "response": "Your complete response text here...",
+    "recommendations": [
+        {{"text": "Short actionable suggestion 1", "action": "intent_name_1"}},
+        {{"text": "Short actionable suggestion 2", "action": "intent_name_2"}}
+    ]
+}}
+
+**RECOMMENDATION GUIDELINES:**
+1. Generate exactly {max_recs} recommendations
+2. Each recommendation should be a SHORT, actionable phrase (3-7 words)
+3. Recommendations should be contextually relevant to the current conversation
+4. The "action" field should be a valid intent (e.g., claim_status, claim_details, pricing_info, appeal_info, help, benefits_info, find_pharmacy, rx_details, deductible_info, drug_info)
+5. Do NOT recommend asking about the same thing the user just asked
+
+6. **CRITICAL — NO PERSONAL IDENTIFIERS IN RECOMMENDATIONS:**
+   Recommendation text must be GENERIC and must NEVER contain any person names, member names,
+   member IDs, claim IDs, specific identifiers, alphanumeric codes, or bracketed tokens.
+   Keep recommendations as short, universal action phrases.
+
+7. **CRITICAL — AVOID DUPLICATE TOPIC AREAS (NOT JUST EXACT TEXT):**
+   Before generating recommendations, you MUST review the CONVERSATION HISTORY above and identify which INFORMATION CATEGORIES have already been covered for this claim. Then NEVER recommend anything in those categories again.
+
+   **Step-by-step reasoning you MUST follow:**
+   a) List every topic/category the user has already asked about for THIS claim (e.g., deductible, pricing, patient cost, benefits, claim details, OOP max, accumulations, etc.)
+   b) For each recommendation you want to generate, check: "Does this fall into ANY category already explored?" If YES → discard it and pick a different one.
+   c) Each recommendation MUST point to a genuinely NEW, UNEXPLORED information area.
+
+   **THESE ARE ALL DUPLICATES — DO NOT DO THIS:**
+   - User asked "Check my deductible status" → "Check deductible status" is a DUPLICATE (same topic, minor wording change)
+   - User asked "Check my deductible status" → "View deductible info" is a DUPLICATE (same topic)
+   - User asked "Check my deductible status" → "What is my deductible?" is a DUPLICATE (same topic)
+   - User asked "What was the patient's cost?" → "Check patient cost" is a DUPLICATE (same topic)
+   - User asked "What was the patient's cost?" → "What did I pay?" is a DUPLICATE (same topic)
+   - User asked "View full claim details" → "See claim details" is a DUPLICATE (same topic)
+   - User asked about pricing → ANYTHING about pricing, cost, amount paid, copay, patient pay is a DUPLICATE
+
+8. Recommendations should guide the user to the NEXT logical, UNEXPLORED area of their claim journey
+
+9. **CLAIM CONTEXT: If the user has switched to a DIFFERENT claim (different claim number or sequence number), you MAY recommend questions that were asked for the PREVIOUS claim, as the user hasn't explored those aspects of the new claim yet.**
+
+10. **CRITICAL — NEVER recommend "view other claims", "check other claims", "view other claims for this member", or any variation that suggests viewing a list of other claims.** Only recommend actions related to the CURRENT claim being discussed or general help topics.
+
+11. **CRITICAL — WHEN CLAIM DATA IS UNAVAILABLE OR SHOWS AN ERROR:**
+   When the CLAIM DATA section indicates the system could not return information for the claim
+   (error, failure, empty result, or no data returned), you MUST use EXACTLY these 2 recommendations
+   with no substitutions — this rule overrides all other recommendation guidelines:
+   - {{"text": "Check claim status", "action": "claim_status"}}
+   - {{"text": "View drug details", "action": "drug_info"}}
+
+   In error/no-data scenarios, NEVER suggest any of the following:
+   - "Contact support", "Get help", or "Get assistance" (chatbot cannot access support systems)
+   - "Verify claim number" or "Validate claim" (chatbot cannot verify external data)
+   - "Check another claim" or "View other claims" (chatbot cannot list other claims)
+   - "Try again later" or "Retry" (not actionable as a recommendation chip)
+   - Any action requiring external systems or capabilities the chatbot does not have
+
+**GOOD RECOMMENDATION PROGRESSION (each turn opens a NEW area):**
+- After claim summary → suggest: pricing details, member benefits (NEW areas)
+- After pricing → suggest: deductible status, drug details (NEW areas)
+- After deductible → suggest: out-of-pocket max, prescription details (NEW areas)
+- After OOP max → suggest: pharmacy info, drug coverage (NEW areas — NOT deductible again!)
+
+**CURRENT INTENT:** {intent}
+
+**CRITICAL:** Output ONLY the JSON object. Do NOT wrap in markdown code blocks. Do NOT include any text before or after the JSON."""
+
+    def _parse_response_with_recommendations(
+        self, 
+        llm_output: str, 
+        intent: str
+    ) -> Tuple[str, List[Dict[str, str]]]:
+        """
+        Parse LLM output to extract response text and recommendations.
+        
+        Handles both structured JSON output (when recommendations enabled) and
+        plain text output (fallback or when recommendations disabled).
+        
+        Args:
+            llm_output: Raw output from LLM
+            intent: Current intent for fallback recommendations
+            
+        Returns:
+            Tuple of (response_text, recommendations_list)
+        """
+        recommendations = []
+        response_text = llm_output
+        
+        if not llm_output:
+            self.logger.warning("⚠️ Empty LLM output, returning empty response")
+            return "", []
+        
+        # Try to parse as JSON first
+        try:
+            # Clean up potential markdown code block wrappers
+            cleaned_output = llm_output.strip()
+            
+            # Remove markdown JSON code blocks if present
+            if cleaned_output.startswith("```json"):
+                cleaned_output = cleaned_output[7:]
+            elif cleaned_output.startswith("```"):
+                cleaned_output = cleaned_output[3:]
+            if cleaned_output.endswith("```"):
+                cleaned_output = cleaned_output[:-3]
+            cleaned_output = cleaned_output.strip()
+            
+            # Attempt JSON parse
+            parsed = json.loads(cleaned_output)
+            
+            if isinstance(parsed, dict):
+                # Extract response text
+                response_text = parsed.get("response", "")
+                if not response_text:
+                    self.logger.warning("⚠️ JSON parsed but 'response' field empty, using full output")
+                    response_text = llm_output
+                
+                # Extract recommendations
+                raw_recommendations = parsed.get("recommendations", [])
+                if isinstance(raw_recommendations, list):
+                    for rec in raw_recommendations[:settings.max_recommendations]:
+                        if isinstance(rec, dict) and rec.get("text"):
+                            recommendations.append({
+                                "text": str(rec.get("text", "")).strip(),
+                                "action": str(rec.get("action", "")).strip() or None
+                            })
+                    
+                    self.logger.info(f"✅ Parsed {len(recommendations)} recommendations from JSON response")
+                else:
+                    self.logger.warning(f"⚠️ 'recommendations' field is not a list: {type(raw_recommendations)}")
+            else:
+                self.logger.warning(f"⚠️ Parsed JSON is not a dict: {type(parsed)}")
+                response_text = llm_output
+                
+        except json.JSONDecodeError as e:
+            # Not valid JSON - likely plain text response
+            self.logger.debug(f"📝 LLM output is not JSON (expected when recommendations disabled): {str(e)[:50]}")
+            response_text = llm_output
+            
+            # Try to extract JSON from within the text (LLM sometimes adds extra text)
+            json_match = re.search(r'\{[\s\S]*"response"[\s\S]*"recommendations"[\s\S]*\}', llm_output)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group())
+                    response_text = parsed.get("response", llm_output)
+                    raw_recommendations = parsed.get("recommendations", [])
+                    if isinstance(raw_recommendations, list):
+                        for rec in raw_recommendations[:settings.max_recommendations]:
+                            if isinstance(rec, dict) and rec.get("text"):
+                                recommendations.append({
+                                    "text": str(rec.get("text", "")).strip(),
+                                    "action": str(rec.get("action", "")).strip() or None
+                                })
+                        self.logger.info(f"✅ Extracted {len(recommendations)} recommendations from embedded JSON")
+                except json.JSONDecodeError:
+                    self.logger.debug("📝 Could not extract embedded JSON, using plain text response")
+        
+        # Generate fallback recommendations if none were parsed and feature is enabled
+        if not recommendations and settings.enable_recommendations:
+            recommendations = self._generate_fallback_recommendations(intent)
+            self.logger.info(f"📋 Using {len(recommendations)} fallback recommendations for intent: {intent}")
+        
+        return response_text.strip(), recommendations
+
+    def _generate_fallback_recommendations(
+        self, 
+        intent: str, 
+        asked_for_claim: List[str] = None
+    ) -> List[Dict[str, str]]:
+        """
+        Generate fallback recommendations based on intent when LLM doesn't provide them.
+        
+        This ensures users always get recommendations even if JSON parsing fails.
+        Filters out questions already asked for the current claim (claim-aware).
+        
+        Args:
+            intent: Current detected intent
+            asked_for_claim: List of questions already asked for the current claim key
+            
+        Returns:
+            List of recommendation dicts with 'text' and 'action' keys
+        """
+        # Intent-specific fallback recommendations
+        # NOTE: claim_list action is blocked — replaced with contextually relevant alternatives
+        fallback_map = {
+            "claim_status": [
+                {"text": "View full claim details", "action": "claim_details"},
+                {"text": "Check my benefits", "action": "benefits_info"}
+            ],
+            "claim_details": [
+                {"text": "See pricing breakdown", "action": "pricing_info"},
+                {"text": "Check my benefits", "action": "benefits_info"}
+            ],
+            "claim_rejection_reason": [
+                {"text": "How do I appeal?", "action": "appeal_info"},
+                {"text": "Find alternative pharmacy", "action": "find_pharmacy"}
+            ],
+            "rejection_reasons": [
+                {"text": "How do I appeal?", "action": "appeal_info"},
+                {"text": "Check drug coverage", "action": "benefits_info"}
+            ],
+            "pricing_info": [
+                {"text": "View full claim details", "action": "claim_details"},
+                {"text": "Check my deductible", "action": "benefits_info"}
+            ],
+            "claim_list": [
+                {"text": "Check a specific claim", "action": "claim_status"},
+                {"text": "View claim details", "action": "claim_details"}
+            ],
+            "greeting": [
+                {"text": "Check my claim status", "action": "claim_status"},
+                {"text": "What can you help with?", "action": "help"}
+            ],
+            "help": [
+                {"text": "Check a claim", "action": "claim_status"},
+                {"text": "Check drug information", "action": "drug_info"}
+            ],
+            "appeal_info": [
+                {"text": "Check claim status", "action": "claim_status"},
+                {"text": "View rejection details", "action": "claim_rejection_reason"}
+            ],
+            "benefits_info": [
+                {"text": "Check a claim", "action": "claim_status"},
+                {"text": "Check drug details", "action": "drug_info"}
+            ],
+            "out_of_scope": [
+                {"text": "Check my claim status", "action": "claim_status"},
+                {"text": "What can you help with?", "action": "help"}
+            ],
+        }
+        
+        # Get intent-specific recommendations or use default
+        recommendations = fallback_map.get(intent, [
+            {"text": "Check my claim status", "action": "claim_status"},
+            {"text": "Need help?", "action": "help"}
+        ])
+        
+        # Filter out recommendations matching questions already asked for this claim
+        if asked_for_claim:
+            asked_lower = [q.lower().strip() for q in asked_for_claim]
+            recommendations = [
+                r for r in recommendations
+                if not any(r["text"].lower() in a or a in r["text"].lower() for a in asked_lower)
+            ]
+        
+        return recommendations[:settings.max_recommendations]
+
+    def _filter_already_asked(
+        self,
+        recommendations: List[Dict[str, str]],
+        asked_for_claim: List[str]
+    ) -> List[Dict[str, str]]:
+        """
+        Filter out recommendations matching questions already asked for the current claim.
+        
+        This is a programmatic deduplication layer (zero latency, in-memory).
+        Only filters against questions asked for the SAME claim key — if the user
+        switches to a different claim, recommendations reset (edge case b).
+        
+        Args:
+            recommendations: List of recommendation dicts from LLM or fallback
+            asked_for_claim: List of question texts already asked for this claim key
+            
+        Returns:
+            Filtered list of recommendations
+        """
+        if not asked_for_claim or not recommendations:
+            return recommendations
+        
+        asked_lower = [q.lower().strip() for q in asked_for_claim]
+        filtered = []
+        for rec in recommendations:
+            rec_text = rec["text"].lower().strip()
+            is_duplicate = any(
+                rec_text in asked or asked in rec_text
+                for asked in asked_lower
+            )
+            if not is_duplicate:
+                filtered.append(rec)
+        
+        return filtered
+
+    def _filter_blocked_actions(self, recommendations: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Filter out recommendations with blocked actions (e.g., claim_list).
+        
+        This is a programmatic safety net that removes recommendations whose
+        action is in BLOCKED_RECOMMENDATION_ACTIONS, regardless of how they
+        were generated (LLM, fallback, or mock).
+        
+        Args:
+            recommendations: List of recommendation dicts with 'text' and 'action' keys
+            
+        Returns:
+            Filtered list of recommendations with blocked actions removed
+        """
+        if not recommendations:
+            return recommendations
+        
+        filtered = [r for r in recommendations if r.get("action") not in BLOCKED_RECOMMENDATION_ACTIONS]
+        removed = len(recommendations) - len(filtered)
+        if removed:
+            self.logger.info(f"🚫 Filtered {removed} recommendation(s) with blocked actions (claim_list)")
+        return filtered
+
     def generate_response(
         self,
         system_prompt: str,
         user_prompt: str
-    ) -> str:
+    ) -> tuple:
         """
         Generate response using Gemini LLM.
         
@@ -837,32 +1423,72 @@ RESPONSE INSTRUCTIONS:
             user_prompt: User query and context
             
         Returns:
-            str: Complete response text from Gemini
+            tuple: (response_text: str, llm_metadata: dict)
+            
+            llm_metadata contains:
+            - finish_reason: str (STOP, MAX_TOKENS, SAFETY, etc.)
+            - is_truncated: bool (True if truncated)
+            - response_length: int
+            - appears_incomplete: bool (heuristic for logging only)
+            - thoughts: Optional[str] (chain of thought if enabled)
+            - retry_attempted: bool (True if retry was needed)
             
         Raises:
             Exception: If generation fails (caught by caller)
         """
+        # Initialize metadata dict to track LLM response details (Issue 1 & 2)
+        llm_metadata = {
+            "finish_reason": "UNKNOWN",
+            "is_truncated": False,
+            "response_length": 0,
+            "appears_incomplete": False,
+            "thoughts": None,
+            "retry_attempted": False
+        }
+        
         try:
-            # First attempt: Use default safety settings (let Gemini use its defaults)
-            # Safety filtering is already done in safety_precheck_node with BLOCK_LOW_AND_ABOVE
+            # Build request with thinking mode if enabled (Issue 2)
+            include_thoughts = getattr(settings, 'enable_thinking_mode', False)
+            
             req = GenerateRequest(
                 prompt=user_prompt,
                 system_instruction=system_prompt,
                 temperature=settings.llm_temperature,
                 top_p=settings.top_p,
                 max_output_tokens=settings.max_output_tokens,
-                model=settings.llm_model
+                model=settings.llm_model,
+                include_thoughts=include_thoughts
             )
             
             self.logger.info("🔮 Calling Gemini...")
             response = _generate_core(req)
             
-            # If response is empty, retry with more permissive settings for medical/pharmacy content
+            # Capture metadata from response (Issue 1: finish_reason, is_truncated)
+            llm_metadata["finish_reason"] = response.finish_reason
+            llm_metadata["is_truncated"] = response.is_truncated
+            llm_metadata["response_length"] = len(response.text or "")
+            llm_metadata["thoughts"] = response.thoughts  # Issue 2
+            # Issue 3: Token usage metrics
+            llm_metadata["prompt_tokens"] = response.prompt_tokens
+            llm_metadata["completion_tokens"] = response.completion_tokens
+            llm_metadata["total_tokens"] = response.total_tokens
+            
+            # Log truncation warning if detected
+            if response.is_truncated:
+                self.logger.warning(
+                    f"⚠️ Response truncated: finish_reason={response.finish_reason}, "
+                    f"length={llm_metadata['response_length']} chars"
+                )
+                # Check if truncated response appears incomplete (for logging only)
+                llm_metadata["appears_incomplete"] = self._response_appears_incomplete(response.text)
+            
+            # RETRY ONLY IF RESPONSE IS COMPLETELY EMPTY (not for truncated responses)
+            # Truncated responses may still be valid/useful, so we don't retry them
             if not response.text or len(response.text.strip()) == 0:
-                self.logger.warning("⚠️ Empty response from Gemini, retrying with adjusted safety thresholds for medical content...")
+                self.logger.warning("⚠️ Empty response from Gemini, retrying with adjusted safety thresholds...")
+                llm_metadata["retry_attempted"] = True
                 
-                # Use BLOCK_ONLY_HIGH for medical/pharmacy domain where terms like "rejected", 
-                # "denied", "dangerous drugs" are legitimate professional terminology
+                # Use BLOCK_ONLY_HIGH for medical/pharmacy domain
                 safety_thresholds = {
                     "HARM_CATEGORY_HATE_SPEECH": "BLOCK_ONLY_HIGH",
                     "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_ONLY_HIGH",
@@ -877,18 +1503,55 @@ RESPONSE INSTRUCTIONS:
                     top_p=settings.top_p,
                     max_output_tokens=settings.max_output_tokens,
                     model=settings.llm_model,
-                    safety_thresholds=safety_thresholds
+                    safety_thresholds=safety_thresholds,
+                    include_thoughts=include_thoughts
                 )
                 
-                self.logger.info("� Retrying with BLOCK_ONLY_HIGH thresholds...")
+                self.logger.info("🔄 Retrying with BLOCK_ONLY_HIGH thresholds...")
                 response = _generate_core(req_retry)
+                
+                # Update metadata with retry response
+                llm_metadata["finish_reason"] = response.finish_reason
+                llm_metadata["is_truncated"] = response.is_truncated
+                llm_metadata["response_length"] = len(response.text or "")
+                if response.thoughts:
+                    llm_metadata["thoughts"] = response.thoughts
             
             self.logger.info(f"✅ Response received: {len(response.text)} chars")
-            return response.text
+            return response.text, llm_metadata
             
         except Exception as e:
             self.logger.error(f"🚨 Generation error: {e}")
             raise
+    
+    def _response_appears_incomplete(self, text: str) -> bool:
+        """
+        Check if truncated response appears incomplete (for logging only).
+        
+        NOTE: This is ONLY called when is_truncated=True.
+        It does NOT block responses - only adds metadata for debugging.
+        
+        Args:
+            text: Response text to check
+            
+        Returns:
+            bool: True if response appears incomplete
+        """
+        if not text or len(text.strip()) < 20:
+            return True
+        
+        text = text.rstrip()
+        
+        # Common indicators of mid-sentence truncation
+        incomplete_indicators = [
+            text.endswith(':'),       # Ends with section header
+            text.endswith('['),       # Ends with bracket (masked token cut off)
+            text.endswith('•'),       # Ends with bullet point (kept per user request - for logging only)
+            text.endswith(','),       # Ends with comma (mid-list)
+            text.endswith('('),       # Ends with open parenthesis
+        ]
+        
+        return any(incomplete_indicators)
 
 
 # ============================================================================
@@ -977,9 +1640,18 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         if needs_clarification:
             system_prompt = agent._get_followup_system_prompt()
             logger.info("📝 Using follow-up question system prompt")
+            recommendations_enabled = False  # Never generate recommendations during clarification
         else:
             system_prompt = agent._get_system_prompt()
             logger.info("📝 Using standard response system prompt")
+            
+            # Add recommendation instruction if enabled
+            recommendations_enabled = settings.enable_recommendations
+            if recommendations_enabled:
+                intent = state.get("intent", "unknown")
+                recommendation_instruction = agent._get_recommendation_instruction(intent)
+                system_prompt += recommendation_instruction
+                logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
         
         logger.debug(f"📋 System prompt: {len(system_prompt)} characters")
         
@@ -997,11 +1669,60 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Run in executor to avoid blocking (Gemini client is sync)
         # Using get_running_loop() - recommended for Python 3.10+ inside async functions
         loop = asyncio.get_running_loop()
-        response_text = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+        response_text, llm_metadata = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+        
+        # =====================================================================
+        # Issue 1: Log truncation warnings for observability
+        # =====================================================================
+        if llm_metadata.get("is_truncated"):
+            logger.warning(
+                f"⚠️ LLM response truncated: finish_reason={llm_metadata.get('finish_reason')}, "
+                f"length={llm_metadata.get('response_length')} chars, "
+                f"appears_incomplete={llm_metadata.get('appears_incomplete')}"
+            )
+        
+        # =====================================================================
+        # Issue 2: Fire-and-forget thinking log to MongoDB (ZERO LATENCY)
+        # Thoughts logged to MongoDB, NOT stored in state for memory efficiency
+        # =====================================================================
+        thoughts = llm_metadata.get("thoughts")
+        if thoughts and getattr(settings, 'log_thoughts_to_mongo', False):
+            async def _log_thoughts_async():
+                try:
+                    store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await store.log_thinking_process(
+                        session_id=session_id,
+                        request_id=request_id or str(uuid.uuid4()),
+                        user_query=state.get("text", ""),
+                        intent=state.get("intent", "unknown"),
+                        thinking_content=thoughts,
+                        final_response=response_text,
+                        model=settings.llm_model,
+                        user_id=user_id,
+                        metadata={
+                            "is_truncated": llm_metadata.get("is_truncated"),
+                            "finish_reason": llm_metadata.get("finish_reason"),
+                            "needs_clarification": needs_clarification
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Thought logging failed (non-fatal): {e}")
+            
+            # Fire-and-forget: don't await, just schedule
+            asyncio.create_task(_log_thoughts_async())
+            logger.debug("🧠 Thought logging scheduled (async)")
+        
+        # =====================================================================
+        # Parse recommendations from response (if enabled)
+        # =====================================================================
+        recommendations = []
+        if recommendations_enabled and not needs_clarification:
+            intent = state.get("intent", "unknown")
+            response_text, recommendations = agent._parse_response_with_recommendations(response_text, intent)
+            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response")
         
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
-        import re
         remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
         if remaining_tokens:
             logger.warning(f"⚠️ Response contains {len(remaining_tokens)} token-like patterns: {remaining_tokens[:3]}...")
@@ -1034,7 +1755,9 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                     "response_length": len(response_text),
                     "model": settings.llm_model,
                     "temperature": settings.llm_temperature,
-                    "needs_clarification": needs_clarification
+                    "needs_clarification": needs_clarification,
+                    "finish_reason": llm_metadata.get("finish_reason"),  # Issue 1: Added
+                    "is_truncated": llm_metadata.get("is_truncated")     # Issue 1: Added
                 }
             )
         
@@ -1042,17 +1765,93 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         response_id = str(uuid.uuid4())
         logger.info(f"🆔 Generated response_id: {response_id}")
         
+        # =====================================================================
+        # Create SLIM metadata for state (EXCLUDE large thoughts for memory efficiency)
+        # Thoughts are logged to MongoDB, not stored in AgentState
+        # =====================================================================
+        slim_llm_metadata = {
+            "finish_reason": llm_metadata.get("finish_reason"),
+            "is_truncated": llm_metadata.get("is_truncated"),
+            "response_length": llm_metadata.get("response_length"),
+            "appears_incomplete": llm_metadata.get("appears_incomplete"),
+            "retry_attempted": llm_metadata.get("retry_attempted"),
+            # Issue 3: Token usage (small integers, OK to include in state)
+            "prompt_tokens": llm_metadata.get("prompt_tokens", 0),
+            "completion_tokens": llm_metadata.get("completion_tokens", 0),
+            "total_tokens": llm_metadata.get("total_tokens", 0),
+            # NOTE: thoughts NOT included - logged to MongoDB instead
+        }
+        
+        # =====================================================================
+        # Filter blocked actions + Claim-aware dedup + Ensure max_recommendations
+        # =====================================================================
+        if recommendations_enabled and not needs_clarification:
+            # Step 1: Filter blocked actions (e.g., claim_list)
+            if recommendations:
+                recommendations = agent._filter_blocked_actions(recommendations)
+            
+            # Step 2: Build claim key for dedup tracking
+            entities = state.get("entities", {}) or {}
+            extracted_slots = state.get("extracted_slots", {}) or {}
+            merged_entities = {**normalize_entities(extracted_slots), **normalize_entities(entities)}
+            claim_num = merged_entities.get("claimNumber", "")
+            seq_num = merged_entities.get("claimSequence", "")
+            claim_key = f"{claim_num}_{seq_num}" if claim_num else "no_claim"
+            
+            # Step 3: Programmatic dedup against already-asked questions for THIS claim
+            prev_asked = state.get("asked_questions_by_claim", {}) or {}
+            asked_for_claim = prev_asked.get(claim_key, [])
+            
+            if asked_for_claim and recommendations:
+                before_count = len(recommendations)
+                recommendations = agent._filter_already_asked(recommendations, asked_for_claim)
+                logger.info(f"🔍 Dedup filter: {before_count} → {len(recommendations)} recommendations (claim_key={claim_key})")
+            
+            # Step 4: Ensure max_recommendations are always met after filtering/dedup
+            if len(recommendations) < settings.max_recommendations:
+                intent = state.get("intent", "unknown")
+                supplemental = agent._generate_fallback_recommendations(intent, asked_for_claim)
+                # Defense-in-depth: filter blocked actions from fallbacks too
+                supplemental = agent._filter_blocked_actions(supplemental)
+                for rec in supplemental:
+                    if len(recommendations) >= settings.max_recommendations:
+                        break
+                    # Avoid duplicates with existing recommendations
+                    if not any(r["text"].lower() == rec["text"].lower() for r in recommendations):
+                        recommendations.append(rec)
+                logger.info(f"📋 Supplemented to {len(recommendations)} recommendations (max: {settings.max_recommendations})")
+        else:
+            claim_key = "no_claim"
+        
+        # Track asked questions per claim for dedup across turns
+        updated_asked_questions = state.get("asked_questions_by_claim", {}) or {}
+        if recommendations_enabled and not needs_clarification:
+            current_question = state.get("text", "").lower().strip()
+            if current_question and claim_key != "no_claim":  # Only track real claim questions
+                updated_asked_questions = {
+                    **updated_asked_questions,
+                    claim_key: [*updated_asked_questions.get(claim_key, []), current_question]
+                }
+        
         # Build result - always use 'response' field for both modes
         # The 'needs_clarification' flag in state already indicates if this is a question
         result = {
             "response": response_text,
-            "response_id": response_id
+            "response_id": response_id,
+            "recommendations": recommendations if recommendations_enabled else [],
+            "asked_questions_by_claim": updated_asked_questions,  # Dedup tracking persisted via state
+            "metadata": {
+                **state.get("metadata", {}),
+                "llm_metadata": slim_llm_metadata,  # Issue 1: Small metadata only
+                "recommendations_enabled": recommendations_enabled,
+                "recommendations_count": len(recommendations) if recommendations else 0
+            }
         }
         
         if needs_clarification:
-            logger.info("📝 Set 'response' field with clarification question")
+            logger.info("📝 Set 'response' field with clarification question (no recommendations)")
         else:
-            logger.info("📝 Set 'response' field with normal answer")
+            logger.info(f"📝 Set 'response' field with normal answer + {len(recommendations)} recommendations")
         
         await log_state_snapshot(state, node_name, result)
         return result
@@ -1103,6 +1902,7 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             "error": error.user_message,
             "response": error.user_message,
             "response_id": error_response_id,
+            "recommendations": [],  # Empty recommendations on error
             "metadata": {
                 **state.get("metadata", {}),
                 "error_occurred": True,
@@ -1116,6 +1916,46 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
 # ============================================================================
 # MOCK LLM (for development only)
 # ============================================================================
+
+def _get_mock_recommendations(intent: str) -> List[Dict[str, str]]:
+    """
+    Get mock recommendations for development mode.
+    
+    Args:
+        intent: Current detected intent
+        
+    Returns:
+        List of mock recommendation dicts
+    """
+    if not settings.enable_recommendations:
+        return []
+    
+    # Intent-specific mock recommendations
+    # NOTE: claim_list action is blocked — replaced with contextually relevant alternatives
+    mock_recs = {
+        "claim_status": [
+            {"text": "View claim details", "action": "claim_details"},
+            {"text": "Check my benefits", "action": "benefits_info"}
+        ],
+        "claim_details": [
+            {"text": "See pricing breakdown", "action": "pricing_info"},
+            {"text": "Check my benefits", "action": "benefits_info"}
+        ],
+        "greeting": [
+            {"text": "Check claim status", "action": "claim_status"},
+            {"text": "What can you help with?", "action": "help"}
+        ],
+        "help": [
+            {"text": "Check a claim", "action": "claim_status"},
+            {"text": "Check drug information", "action": "drug_info"}
+        ],
+    }
+    
+    return mock_recs.get(intent, [
+        {"text": "Check my claim status", "action": "claim_status"},
+        {"text": "Need help?", "action": "help"}
+    ])[:settings.max_recommendations]
+
 
 async def _mock_response(state: AgentState) -> Dict[str, Any]:
     """
@@ -1177,8 +2017,16 @@ PHARMACY: {prescription.get('pharmacyName', 'N/A')}
 
 The real implementation will provide detailed, formatted responses based on claim data."""
     
+    # Generate mock recommendations (only if enabled and not in clarification mode)
+    needs_clarification = state.get("needs_clarification", False)
+    recommendations = []
+    if settings.enable_recommendations and not needs_clarification:
+        recommendations = _get_mock_recommendations(intent)
+        logger.info(f"💡 Mock mode: Generated {len(recommendations)} recommendations for intent: {intent}")
+    
     logger.info("⚙️ Returned mock response")
     return {
         "response": response,
-        "response_id": response_id
+        "response_id": response_id,
+        "recommendations": recommendations  # ✅ Include recommendations in mock
     }

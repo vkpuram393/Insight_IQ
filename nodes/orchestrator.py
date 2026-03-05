@@ -22,7 +22,7 @@ import unicodedata
 import time
 import traceback
 import uuid
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 from state.schema import AgentState
 from config.config import settings
@@ -106,6 +106,163 @@ def _normalize_text(raw_text: str) -> Tuple[str, List[str]]:
     logger.debug(f"📝 Normalization: After final strip → {len(normalized)} chars")
     
     return normalized, steps
+
+
+# ============================================================================
+# ENTITY ENRICHMENT HELPERS (UI Context for First Query of Session)
+# ============================================================================
+
+def _detect_entities_in_text(normalized_text: str) -> Dict[str, Any]:
+    """
+    Detect if user's normalized text already contains a claim ID and/or sequence number.
+    
+    Uses patterns CONSISTENT with downstream EntityExtractor to ensure:
+    - If we detect it here, EntityExtractor will also find it (no false negatives downstream)
+    - If we miss it here, EntityExtractor also misses it (enrichment rescues the case)
+    
+    Detection Methods for Sequence:
+    - Method 1: Keyword-preceded (sequence/seq/line + optional space + 3 digits)
+      Consistent with EntityExtractor context_pattern: r'(?:sequence|seq|line)\\s*(\\d{3})\\b'
+    - Method 2: Adjacent to claim ID (15 digits + whitespace + 3 digits)
+      Handles "201250305894000 027" pattern without explicit keyword
+    
+    Args:
+        normalized_text: Text after normalization pipeline
+    
+    Returns:
+        Dict with 'has_claim_id' (bool), 'has_sequence' (bool), 'detected_claim_ids' (list)
+    """
+    # Claim ID: exactly 15 digits, word-bounded
+    # Consistent with EntityExtractor pattern: r'\\b(CLM\\d{3,10}|\\d{15})\\b'
+    claim_id_matches = re.findall(r'\b(\d{15})\b', normalized_text)
+    has_claim_id = len(claim_id_matches) > 0
+    
+    # Sequence detection (two methods, matching EntityExtractor patterns):
+    # Method 1: Keyword-preceded (sequence/seq/line + optional space + 3 digits)
+    has_keyword_sequence = bool(re.search(
+        r'(?:sequence|seq|line)\s*\d{3}\b', normalized_text
+    ))
+    # Method 2: Adjacent to claim ID (15 digits + whitespace + 3 digits)
+    has_adjacent_sequence = bool(re.search(
+        r'\b\d{15}\s+\d{3}\b', normalized_text
+    ))
+    has_sequence = has_keyword_sequence or has_adjacent_sequence
+    
+    return {
+        'has_claim_id': has_claim_id,
+        'has_sequence': has_sequence,
+        'detected_claim_ids': claim_id_matches
+    }
+
+
+def _enrich_first_query_entities(
+    normalized_text: str,
+    ui_claim_id: Optional[str],
+    ui_claim_sequence: Optional[str],
+    log_ctx: Dict[str, Any]
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Enrich the first query of a session with missing entities from the UI payload.
+    
+    When a user clicks "Ask AI" from the myClaims UI, the frontend sends the claim_id
+    and claim_sequence from the UI screen in the request payload (first query only).
+    If the user's text is missing those entities, we append them so that downstream
+    entity extraction handles everything automatically.
+    
+    ONLY appends entities that are:
+    1. Missing from the user's text (detected via _detect_entities_in_text)
+    2. Available and valid in the UI payload
+    
+    Safety guarantees:
+    - Never raises exceptions (returns original text on any error)
+    - Never modifies text if UI payload is absent/invalid
+    - Logs all enrichment decisions for observability
+    
+    Args:
+        normalized_text: Text after normalization pipeline
+        ui_claim_id: Claim ID from UI payload (or None)
+        ui_claim_sequence: Claim sequence from UI payload (or None)
+        log_ctx: Logging context (session_id, user_id, request_id)
+        
+    Returns:
+        Tuple of (enriched_text, enrichment_metadata_dict)
+    """
+    enrichment_meta = {
+        "entity_enrichment_applied": False,
+        "ui_claim_id_available": bool(ui_claim_id),
+        "ui_claim_sequence_available": bool(ui_claim_sequence),
+    }
+    
+    try:
+        # Validate UI claim_id format (defense-in-depth against malformed UI data)
+        if ui_claim_id and not re.match(r'^\d{15}$', ui_claim_id):
+            logger.warning(
+                f"⚠️ Orchestrator enrichment: Invalid UI claim_id format: '{ui_claim_id}' "
+                f"- skipping enrichment for claim_id | session={log_ctx.get('session_id', 'N/A')}"
+            )
+            ui_claim_id = None
+        
+        # Validate and normalize UI claim_sequence format (ensure 3-digit zero-padded)
+        if ui_claim_sequence:
+            ui_claim_sequence = ui_claim_sequence.strip().zfill(3)
+            if not re.match(r'^\d{3}$', ui_claim_sequence):
+                logger.warning(
+                    f"⚠️ Orchestrator enrichment: Invalid UI claim_sequence format: '{ui_claim_sequence}' "
+                    f"- skipping enrichment for sequence | session={log_ctx.get('session_id', 'N/A')}"
+                )
+                ui_claim_sequence = None
+        
+        # If no valid UI entities remain after validation, skip enrichment
+        if not ui_claim_id and not ui_claim_sequence:
+            logger.debug(f"🔍 Orchestrator enrichment: No valid UI entities to enrich with")
+            return normalized_text, enrichment_meta
+        
+        # Detect what the user already provided in their text
+        detection = _detect_entities_in_text(normalized_text)
+        has_claim_id = detection['has_claim_id']
+        has_sequence = detection['has_sequence']
+        
+        enrichment_meta["user_has_claim_id"] = has_claim_id
+        enrichment_meta["user_has_sequence"] = has_sequence
+        
+        # Build list of missing entities to append
+        append_parts = []
+        
+        # Append claim ID if user didn't provide one
+        if not has_claim_id and ui_claim_id:
+            append_parts.append(f"claim {ui_claim_id}")
+            enrichment_meta["appended_claim_id"] = ui_claim_id
+        
+        # Append sequence if user didn't provide one
+        if not has_sequence and ui_claim_sequence:
+            append_parts.append(f"sequence {ui_claim_sequence}")
+            enrichment_meta["appended_sequence"] = ui_claim_sequence
+        
+        # Apply enrichment if there are missing entities to append
+        if append_parts:
+            enriched_text = f"{normalized_text} for {' and '.join(append_parts)}"
+            enrichment_meta["entity_enrichment_applied"] = True
+            enrichment_meta["appended_text"] = f" for {' and '.join(append_parts)}"
+            logger.info(
+                f"✅ Orchestrator enrichment: Appended [{', '.join(append_parts)}] to first query "
+                f"| session={log_ctx.get('session_id', 'N/A')}"
+            )
+            return enriched_text, enrichment_meta
+        else:
+            logger.debug(
+                f"🔍 Orchestrator enrichment: No enrichment needed - user provided all entities "
+                f"| session={log_ctx.get('session_id', 'N/A')}"
+            )
+            return normalized_text, enrichment_meta
+    
+    except Exception as e:
+        # Safety net: enrichment failure should NEVER break the flow
+        logger.warning(
+            f"⚠️ Orchestrator enrichment: Unexpected error during enrichment: {str(e)} "
+            f"- continuing with original text | session={log_ctx.get('session_id', 'N/A')}"
+        )
+        enrichment_meta["enrichment_error"] = str(e)
+        return normalized_text, enrichment_meta
 
 
 async def _handle_empty_input(
@@ -294,7 +451,10 @@ async def _handle_normalization_error(
         "metadata": {
             **original_metadata,
             "orchestrator_metadata": to_dict(result),
-            "original_text": fallback_text
+            "original_text": fallback_text,
+            # Reset stale enrichment checkpoint data (consistent with success path fix)
+            "enriched_text": None,
+            "enrichment_metadata": None
         }
     }
     await log_state_snapshot(state, "orchestrator", result_dict)
@@ -359,6 +519,16 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
     raw_text = state.get("text", "")
     original_metadata = state.get("metadata", {})
     
+    # CRITICAL FIX: Clear stale enrichment data from checkpoint-persisted metadata.
+    # When LangGraph checkpoints state between requests (same session_id/thread_id),
+    # merge_metadata reducer preserves ALL keys from previous requests' checkpoints.
+    # Without this reset, enriched_text from the first request's UI entity enrichment
+    # persists indefinitely via **original_metadata spread, causing update_memory_node
+    # to save the wrong (stale first-request) user message for every subsequent request.
+    # Popping here ensures both success and error paths benefit from cleanup.
+    original_metadata.pop("enriched_text", None)
+    original_metadata.pop("enrichment_metadata", None)
+    
     try:
         # ============================================================
         # INPUT VALIDATION
@@ -382,18 +552,44 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
         
         normalized, normalization_steps = _normalize_text(raw_text)
         
+        # Track normalization-only stats before enrichment
+        post_normalization_length = len(normalized)
+        chars_removed = original_length - post_normalization_length
+        
+        # ============================================================
+        # ENTITY ENRICHMENT (first query of session only)
+        # ============================================================
+        # If UI sends claim_id/claim_sequence in payload and user's
+        # text is missing those entities, append them so downstream
+        # entity extraction handles everything automatically.
+        # This block is naturally scoped to first query only because
+        # the frontend sends these fields only for the first query.
+        # ============================================================
+        
+        enrichment_metadata = {}
+        ui_claim_id = (state.get("user_info") or {}).get("claim_id")
+        ui_claim_sequence = (state.get("user_info") or {}).get("claim_sequence")
+        
+        if ui_claim_id or ui_claim_sequence:
+            normalized, enrichment_metadata = _enrich_first_query_entities(
+                normalized, ui_claim_id, ui_claim_sequence, log_ctx
+            )
+            if enrichment_metadata.get("entity_enrichment_applied"):
+                normalization_steps.append("entity_enrichment")
+        
         normalized_length = len(normalized)
-        chars_removed = original_length - normalized_length
         
         # Calculate processing time
         processing_time_ms = (time.perf_counter() - start_time) * 1000
         
         logger.info(f"✅ Orchestrator: Input normalized successfully")
-        logger.info(f"📊 Orchestrator: Original {original_length} → Normalized {normalized_length} chars ({chars_removed} removed)")
+        logger.info(f"📊 Orchestrator: Original {original_length} → Normalized {post_normalization_length} chars ({chars_removed} removed)")
+        if enrichment_metadata.get("entity_enrichment_applied"):
+            logger.info(f"📊 Orchestrator: After enrichment → {normalized_length} chars (+{normalized_length - post_normalization_length} added)")
         logger.info(f"⏱️ Orchestrator: Processing time: {processing_time_ms:.2f}ms")
         
-        if chars_removed > 0:
-            logger.debug(f"🔍 Orchestrator: Normalized text preview: '{normalized[:50]}...'")
+        if chars_removed > 0 or enrichment_metadata.get("entity_enrichment_applied"):
+            logger.debug(f"🔍 Orchestrator: Final text preview: '{normalized[:80]}...'")
         
         # ============================================================
         # RETURN STATE UPDATE - SUCCESS PATH
@@ -419,7 +615,14 @@ async def orchestrator_node(state: AgentState) -> Dict[str, Any]:
             "metadata": {
                 **original_metadata,
                 "orchestrator_metadata": to_dict(result),  # Use serialization helper for consistency
-                "original_text": original_text  # Preserve for logging/display
+                "original_text": original_text,  # Preserve raw text for logging/display
+                # CRITICAL FIX: Always set enriched_text and enrichment_metadata explicitly.
+                # When enrichment IS applied (first query with UI entities): store enriched text
+                # so entities are available in conversation history for subsequent extraction.
+                # When enrichment is NOT applied: set to None to ensure merge_metadata reducer
+                # overwrites any stale checkpoint values, preventing corrupted session history.
+                "enriched_text": normalized if enrichment_metadata.get("entity_enrichment_applied") else None,
+                "enrichment_metadata": enrichment_metadata if enrichment_metadata else None
             }
         }
         

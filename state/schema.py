@@ -122,6 +122,19 @@ class AgentState(TypedDict):
     # === OUTPUT (to user) ===
     response: str                                # Final answer
     response_id: Optional[str]                   # UUID for the response (for feedback tracking)
+    recommendations: Optional[List[Dict[str, str]]]  # Recommendation chips for follow-up actions
+    # recommendations structure:
+    # [
+    #     {"text": "View claim details", "action": "claim_details"},
+    #     {"text": "Check my benefits", "action": "benefits_info"}
+    # ]
+    # NOTE: claim_list action is blocked — see BLOCKED_RECOMMENDATION_ACTIONS in response_agent.py
+
+    # === RECOMMENDATION DEDUP TRACKING ===
+    asked_questions_by_claim: Optional[Dict[str, List[str]]]  # Tracks questions asked per claim key
+    # Structure: {"claimNumber_sequenceNumber": ["question1 text", "question2 text"]}
+    # Used by response_agent to avoid recommending questions already asked for the SAME claim.
+    # Different claim key = fresh tracking, so same question CAN be recommended for a new claim.
 
     # === METADATA ===
     metadata: Annotated[Dict[str, Any], merge_metadata]  # Tracking info (merged across nodes)
@@ -180,6 +193,8 @@ def create_initial_state(
         context_tokens=None,
         response="",
         response_id=None,
+        recommendations=[],              # Initialize empty recommendations list
+        asked_questions_by_claim={},      # Initialize empty dedup tracking
         metadata={},
         cache_hit=False,
         error=None,

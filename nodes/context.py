@@ -37,7 +37,7 @@ def _load_config() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         return {
-            "conversation_history_window": 5
+            "conversation_history_window": 50
         }
 
 def _extract_slots_from_history(history: List[Dict[str, str]], current_slots: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,7 +81,7 @@ async def build_context_node(state: AgentState) -> Dict[str, Any]:
 
         # Load config
         config = _load_config()
-        history_window = config.get("conversation_history_window", 5)
+        history_window = config.get("conversation_history_window", 50)
         
         session_id = state["session_id"]
 
@@ -235,9 +235,17 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             user_id = "anonymous"  # Default user_id for requests without user info
         
         # Extract data from state
-        # Use original_text from metadata if available (unmasked), otherwise use text
         metadata = state.get("metadata", {})
-        user_message = metadata.get("original_text") or state.get("text", "")
+        # CRITICAL FIX (defense-in-depth): Use enriched_text ONLY when entity enrichment
+        # was genuinely applied for THIS specific request, verified via enrichment_metadata flag.
+        # orchestrator_node now resets enrichment_metadata to None each request, so the flag
+        # is True only when enrichment actually occurred in the current request.
+        # This prevents stale enriched_text from checkpoint metadata from corrupting history.
+        enrichment_meta = metadata.get("enrichment_metadata") or {}
+        if enrichment_meta.get("entity_enrichment_applied"):
+            user_message = metadata.get("enriched_text") or metadata.get("original_text") or state.get("text", "")
+        else:
+            user_message = metadata.get("original_text") or state.get("text", "")
         agent_response = state.get("response", "")
         intent = state.get("intent")
         tools_used = state.get("tools_used", [])

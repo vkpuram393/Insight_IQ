@@ -1050,6 +1050,11 @@ class PIIProtectionService:
             # Transaction codes
             'B1', 'B2', 'B3', 'P1', 'P2', 'PA', 'QTY', 'DIN', 'DUR', 'MR',
             
+            # PBM / pharmacy claim acronyms (prevent false PERSON matches)
+            'BIN', 'PCN', 'GPI', 'NDC', 'NPI', 'DAW', 'COB', 'OOP',
+            'BIN PCN', 'BIN, PCN', 'PCN, BIN', 'PCN BIN',
+            'EOB', 'MAC', 'AWP', 'WAC', 'ASP', 'TrOOP',
+            
             # Pharmacy chain names
             'CVS', 'WALGREENS', 'WALMART', 'RITE AID', 'KROGER', 'PUBLIX',
             'COSTCO', 'TARGET', 'SAFEWAY', 'ALBERTSONS', 'WEGMANS', 'MEIJER',
@@ -1195,6 +1200,16 @@ class PIIProtectionService:
                     has_numbers = any(c.isdigit() for c in text_stripped)
                     if has_letters and has_numbers:
                         continue
+                
+                # Skip PERSON entities where all words are known PBM acronyms
+                pbm_acronyms = {
+                    'BIN', 'PCN', 'GPI', 'NDC', 'NPI', 'DAW',
+                    'COB', 'OOP', 'DUR', 'EOB', 'MAC', 'AWP',
+                    'WAC', 'ASP', 'PDE', 'HRA', 'TROOP'
+                }
+                words = re.findall(r'[A-Za-z]+', text_stripped)
+                if words and all(w.upper() in pbm_acronyms for w in words):
+                    continue
             
             elif entity_type == "PHONE_NUMBER":
                 # Decimal numbers (prices)

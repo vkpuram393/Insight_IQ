@@ -528,21 +528,21 @@ Extracts `data` field and formats as JSON for LLM consumption.
 
 **Configurable history limit** to balance context and prompt size:
 
-- **Configurable limit**: Set via `conversation_history_limit` in config (default: 5)
+- **Configurable limit**: Set via `conversation_history_limit` in config (default: 100 messages = 50 turns)
 - **Why limit?**: Prevents prompt bloat and keeps focus on recent context
 - **Format**: Messages formatted with role labels (USER/ASSISTANT)
 - **Flexibility**: Handles both dict and string message formats
 
 **Configuration:**
 ```python
-# In core/config.py or .env
-conversation_history_limit: int = 5  # Default
+# In config/config.py or .env
+conversation_history_limit: int = 100  # Default: 100 messages (50 turns)
 
 # To include more history:
-CONVERSATION_HISTORY_LIMIT=10  # Include last 10 messages
+CONVERSATION_HISTORY_LIMIT=150  # Include last 150 messages
 
 # To include less (faster, cheaper):
-CONVERSATION_HISTORY_LIMIT=3  # Only last 3 messages
+CONVERSATION_HISTORY_LIMIT=50  # Only last 50 messages (25 turns)
 ```
 
 **How it works:**
@@ -551,16 +551,16 @@ CONVERSATION_HISTORY_LIMIT=3  # Only last 3 messages
 history_to_include = conversation_history[-settings.conversation_history_limit:]
 ```
 
-**Example:** With 12 messages in history and limit=5:
-- ✅ Includes: Messages 8, 9, 10, 11, 12 (most recent)
-- ❌ Excludes: Messages 1-7 (older context)
+**Example:** With 120 messages in history and limit=100:
+- ✅ Includes: Messages 21-120 (most recent 100 messages = 50 turns)
+- ❌ Excludes: Messages 1-20 (older context)
 
 **Trade-offs:**
 | Limit | Pros | Cons |
 |-------|------|------|
-| 3 | Fast, cheap, focused | May miss important context |
-| 5 | ✅ **Balanced** (recommended) | Good balance of context and speed |
-| 10 | Rich context, better continuity | Slower, more expensive, may overwhelm LLM |
+| 50 | Fast, cheaper, focused | May miss important context from earlier turns |
+| 100 | ✅ **Balanced** (recommended — 50 turns) | Good balance of context and speed |
+| 150 | Rich context, better continuity | Slower, more expensive, may overwhelm LLM |
 
 ### 6. Empty Response Validation
 
@@ -701,7 +701,7 @@ class Settings(BaseSettings):
     location: str = "us-central1"
     
     # Agent Configuration
-    conversation_history_limit: int = 5  # Number of past conversations to include
+    conversation_history_limit: int = 100  # Number of past messages (50 turns) to include
     
     # Telemetry
     enable_telemetry: bool = True
@@ -728,7 +728,7 @@ PROJECT_ID=pbm-poc-coderev-genai-poc
 LOCATION=us-central1
 
 # Agent Settings
-CONVERSATION_HISTORY_LIMIT=5  # Number of past messages to include (default: 5)
+CONVERSATION_HISTORY_LIMIT=100  # Number of past messages to include (default: 100 = 50 turns)
 
 # Telemetry
 ENABLE_TELEMETRY=true

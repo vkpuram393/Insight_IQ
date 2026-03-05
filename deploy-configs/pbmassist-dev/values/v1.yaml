@@ -3,7 +3,7 @@ envName: pbmassist-dev
 skipSecurityContext: true
 projectId: pbm-nonprod-myclaims   # top-level projectId
 
-#Workload Identity configuration.
+#Workload Identity configuration
 workloadIdentity:
   enabled: true
   # ksaName: sa-myclaims-ai-dev
@@ -20,8 +20,7 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  #dockerImageTag: 9419e95b6a05f271651bad80b5fc31aabb66e1c5  # This will be overridden by the deployment workflow with git SHA tag.
-  dockerImageTag: 6fda7b0881b829aafb7df30c9d1f20257a5ca1a6
+  #dockerImageTag:  # This will be overridden by the deployment workflow with git SHA tag.`r`n  dockerImageTag: 6fda7b0881b829aafb7df30c9d1f20257a5ca1a6
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 

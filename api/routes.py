@@ -5,7 +5,7 @@ API Routes - HTTP endpoints
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, AsyncIterator
+from typing import Optional, Dict, Any, AsyncIterator, List
 import uuid
 from datetime import datetime, timezone
 import traceback
@@ -25,6 +25,22 @@ class ChatRequest(BaseModel):
     text: str
     session_id: Optional[str] = None
     user_info: Optional[Dict[str, Any]] = None
+    claim_id: Optional[str] = None          # UI claim context (first query of session only)
+    claim_sequence: Optional[str] = None    # UI sequence context (first query of session only)
+
+class RecommendationChip(BaseModel):
+    """
+    Recommendation chip for follow-up actions.
+    
+    These are contextual suggestions shown to users after each response,
+    helping guide them to logical next steps in their inquiry.
+    
+    Attributes:
+        text: Display text for the chip (e.g., "View claim details")
+        action: Optional intent/action to trigger when clicked (e.g., "claim_details")
+    """
+    text: str                         # Display text for the chip
+    action: Optional[str] = None      # Intent/action to trigger when clicked
 
 class ChatResponse(BaseModel):
     response: str
@@ -33,6 +49,7 @@ class ChatResponse(BaseModel):
     intent: Optional[str] = None
     confidence: Optional[float] = None
     entities: Optional[Dict[str, Any]] = None  # ✅ Extracted entities
+    recommendations: Optional[List[RecommendationChip]] = None  # ✅ Recommendation chips
     needs_clarification: bool = False
     clarifying_question: Optional[str] = None  # DEPRECATED: Use 'response' field instead. Kept for backward compatibility and internal tracing only.
     metadata: Optional[Dict[str, Any]] = None
@@ -55,6 +72,13 @@ async def chat(request: ChatRequest, http_request: Request):
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
+
+    # Inject UI claim context into user_info for orchestrator entity enrichment
+    # Frontend sends claim_id/claim_sequence in payload only for first query of a session
+    if request.claim_id:
+        user_info["claim_id"] = request.claim_id
+    if request.claim_sequence:
+        user_info["claim_sequence"] = request.claim_sequence
 
     # Log incoming request
     await log_event(
@@ -97,6 +121,17 @@ async def chat(request: ChatRequest, http_request: Request):
             metadata=metadata
         )
 
+        # Extract recommendations and convert to RecommendationChip objects
+        raw_recommendations = final_state.get("recommendations", [])
+        recommendations = None
+        if raw_recommendations:
+            recommendations = [
+                RecommendationChip(
+                    text=rec.get("text", ""),
+                    action=rec.get("action")
+                ) for rec in raw_recommendations if rec.get("text")
+            ]
+
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
@@ -104,6 +139,7 @@ async def chat(request: ChatRequest, http_request: Request):
             intent=intent,
             confidence=confidence,
             entities=final_state.get("entities"),  # ✅ Include extracted entities
+            recommendations=recommendations,  # ✅ Include recommendation chips
             needs_clarification=final_state.get("needs_clarification", False),  # ✅ If True, 'response' contains a question
             clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
             metadata=metadata,
@@ -182,6 +218,13 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
+
+    # Inject UI claim context into user_info for orchestrator entity enrichment
+    # Frontend sends claim_id/claim_sequence in payload only for first query of a session
+    if request.claim_id:
+        user_info["claim_id"] = request.claim_id
+    if request.claim_sequence:
+        user_info["claim_sequence"] = request.claim_sequence
 
     # Log incoming request (follows existing pattern)
     await log_event(

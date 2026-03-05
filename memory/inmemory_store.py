@@ -90,7 +90,7 @@ class InMemoryStore(MemoryStore):
         session_id: str,
         role: str,
         content: str,
-        max_messages: int = 10
+        max_messages: int = 50
     ) -> bool:
         """Append message to session history"""
         async with self._lock:

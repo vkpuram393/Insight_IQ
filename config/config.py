@@ -14,9 +14,15 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.1
     top_p: float = 0.95
-    max_output_tokens: int = 2048
+    # Gemini 2.5 Flash max=65,536. Set 32,768 (50%) to accommodate internal thinking + response tokens.
+    max_output_tokens: int = 32768
     project_id: str = "pbm-nonprod-myclaims"  # ⚠️ Overridden by PROJECT_ID env var (using old project - you don't have access to pbm-nonprod-myclaims yet)
     location: str = "us-central1"  # ⚠️ Overridden by LOCATION env var
+    
+    # LLM Thinking Mode - Gemini thinks internally, these settings make it VISIBLE.
+    # ⚠️ Keep OFF in production (increases latency/cost). Enable only for debugging.
+    enable_thinking_mode: bool = False  # ⚠️ Overridden by ENABLE_THINKING_MODE env var
+    log_thoughts_to_mongo: bool = False # Store thoughts in MongoDB. ⚠️ Overridden by LOG_THOUGHTS_TO_MONGO env var
 
     # LangSmith (optional)
     langsmith_api_key: str | None = None  # Added to avoid ValidationError when env var is present
@@ -47,7 +53,7 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
-    conversation_history_limit: int = 50  # Number of past conversations to include in response generation
+    conversation_history_limit: int = 100  # Number of past messages (50 turns) to include in response generation and entity extraction
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
 
     # Safety
@@ -167,6 +173,21 @@ class Settings(BaseSettings):
         "call_claims_tool",      # Data retrieval (most important to users)
         "response_agent"         # Final response generation
     ]
+
+    # =========================================================================
+    # RECOMMENDATION CHIPS CONFIGURATION
+    # =========================================================================
+    # Generates contextual follow-up suggestions with each response.
+    # Recommendations help guide users to logical next steps in their inquiry.
+    # When enabled, response_agent returns both response text and recommendation chips.
+
+    # Master switch for recommendation chips feature
+    # Set ENABLE_RECOMMENDATIONS=false in .env or environment to disable
+    enable_recommendations: bool = True  # ⚠️ Overridden by ENABLE_RECOMMENDATIONS env var
+
+    # Number of recommendation chips to generate per response (1-5)
+    # Higher values may increase response latency and token usage
+    max_recommendations: int = 2  # ⚠️ Overridden by MAX_RECOMMENDATIONS env var
 
     class Config:
         """
