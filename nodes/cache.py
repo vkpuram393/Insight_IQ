@@ -95,7 +95,7 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in cache check: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "cache_hit": False,
             "metadata": {
@@ -104,6 +104,9 @@ async def check_cache_node(state: AgentState) -> Dict[str, Any]:
                 "error_code": error.error_code.value
             }
         }
+        # Log state snapshot for debugging (matches other nodes' except patterns)
+        await log_state_snapshot(state, node_name, result)
+        return result
 
 async def cache_response_node(state: AgentState) -> Dict[str, Any]:
     """Store response in cache for future"""
@@ -156,7 +159,7 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in cache response: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "metadata": {
                 **state.get("metadata", {}),
@@ -165,3 +168,6 @@ async def cache_response_node(state: AgentState) -> Dict[str, Any]:
                 "cached": False
             }
         }
+        # Log state snapshot for debugging (matches other nodes' except patterns)
+        await log_state_snapshot(state, node_name, result)
+        return result
