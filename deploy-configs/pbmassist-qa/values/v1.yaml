@@ -3,7 +3,7 @@ envName: pbmassist-qa
 skipSecurityContext: true
 projectId: pbm-nonprod-myclaims   # top-level projectId
 
-#Workload Identity configuration.
+#Workload Identity configuration..
 workloadIdentity:
   enabled: true
   # ksaName: sa-myclaims-ai-dev
