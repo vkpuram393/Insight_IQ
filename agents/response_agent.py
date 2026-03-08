@@ -1181,6 +1181,10 @@ You MUST respond with a valid JSON object containing both your response and exac
         Handles both structured JSON output (when recommendations enabled) and
         plain text output (fallback or when recommendations disabled).
         
+        Uses json.JSONDecoder().raw_decode() as the fallback parser instead of
+        greedy regex to correctly handle cases where the LLM prepends plain text
+        before the JSON object.
+        
         Args:
             llm_output: Raw output from LLM
             intent: Current intent for fallback recommendations
@@ -1195,12 +1199,12 @@ You MUST respond with a valid JSON object containing both your response and exac
             self.logger.warning("⚠️ Empty LLM output, returning empty response")
             return "", []
         
-        # Try to parse as JSON first
+        # ── ATTEMPT 1: Try to read the entire output as JSON ──
+        # This works when the LLM returns ONLY the JSON envelope (the normal/happy case).
         try:
-            # Clean up potential markdown code block wrappers
+            # Clean up markdown code block wrappers that LLMs sometimes add
             cleaned_output = llm_output.strip()
             
-            # Remove markdown JSON code blocks if present
             if cleaned_output.startswith("```json"):
                 cleaned_output = cleaned_output[7:]
             elif cleaned_output.startswith("```"):
@@ -1209,17 +1213,17 @@ You MUST respond with a valid JSON object containing both your response and exac
                 cleaned_output = cleaned_output[:-3]
             cleaned_output = cleaned_output.strip()
             
-            # Attempt JSON parse
+            # Try reading it as JSON
             parsed = json.loads(cleaned_output)
             
             if isinstance(parsed, dict):
-                # Extract response text
+                # Pull out the "response" text from the JSON envelope
                 response_text = parsed.get("response", "")
                 if not response_text:
                     self.logger.warning("⚠️ JSON parsed but 'response' field empty, using full output")
                     response_text = llm_output
                 
-                # Extract recommendations
+                # Pull out the recommendation chips from the JSON envelope
                 raw_recommendations = parsed.get("recommendations", [])
                 if isinstance(raw_recommendations, list):
                     for rec in raw_recommendations[:settings.max_recommendations]:
@@ -1237,29 +1241,90 @@ You MUST respond with a valid JSON object containing both your response and exac
                 response_text = llm_output
                 
         except json.JSONDecodeError as e:
-            # Not valid JSON - likely plain text response
-            self.logger.debug(f"📝 LLM output is not JSON (expected when recommendations disabled): {str(e)[:50]}")
+            # ── ATTEMPT 2: The string is not pure JSON ──
+            # This means the LLM wrote plain text BEFORE the JSON envelope.
+            # We use raw_decode() to find and read the JSON object inside the text.
+            # raw_decode() is a proper JSON reader — unlike regex, it correctly
+            # handles special characters, nested brackets, and escaped quotes.
+            self.logger.debug(f"📝 LLM output is not pure JSON, attempting embedded JSON extraction: {str(e)[:50]}")
             response_text = llm_output
             
-            # Try to extract JSON from within the text (LLM sometimes adds extra text)
-            json_match = re.search(r'\{[\s\S]*"response"[\s\S]*"recommendations"[\s\S]*\}', llm_output)
-            if json_match:
+            decoder = json.JSONDecoder()
+            extracted = False
+            
+            # Walk through the string, looking for each '{' character.
+            # At each '{', try to read a complete JSON object starting there.
+            search_str = llm_output
+            scan_start = 0
+            while scan_start < len(search_str):
+                # Find the next '{' character
+                brace_pos = search_str.find('{', scan_start)
+                if brace_pos == -1:
+                    break  # No more '{' characters left — stop looking
+                
                 try:
-                    parsed = json.loads(json_match.group())
-                    response_text = parsed.get("response", llm_output)
-                    raw_recommendations = parsed.get("recommendations", [])
-                    if isinstance(raw_recommendations, list):
-                        for rec in raw_recommendations[:settings.max_recommendations]:
-                            if isinstance(rec, dict) and rec.get("text"):
-                                recommendations.append({
-                                    "text": str(rec.get("text", "")).strip(),
-                                    "action": str(rec.get("action", "")).strip() or None
-                                })
-                        self.logger.info(f"✅ Extracted {len(recommendations)} recommendations from embedded JSON")
-                except json.JSONDecodeError:
-                    self.logger.debug("📝 Could not extract embedded JSON, using plain text response")
+                    # Try to read a valid JSON object starting at this '{'
+                    parsed, end_idx = decoder.raw_decode(search_str, brace_pos)
+                    
+                    # Check: is this the JSON envelope we're looking for?
+                    # (it must be a dict/object AND have a "response" key)
+                    if isinstance(parsed, dict) and "response" in parsed:
+                        # Found it! Pull out the clean response text
+                        response_text = parsed.get("response", "")
+                        if not response_text:
+                            self.logger.warning("⚠️ Embedded JSON 'response' field empty, using full output")
+                            response_text = llm_output
+                            break
+                        
+                        # Pull out the recommendation chips
+                        raw_recommendations = parsed.get("recommendations", [])
+                        if isinstance(raw_recommendations, list):
+                            for rec in raw_recommendations[:settings.max_recommendations]:
+                                if isinstance(rec, dict) and rec.get("text"):
+                                    recommendations.append({
+                                        "text": str(rec.get("text", "")).strip(),
+                                        "action": str(rec.get("action", "")).strip() or None
+                                    })
+                            self.logger.info(
+                                f"✅ Extracted {len(recommendations)} recommendations "
+                                f"via raw_decode from position {brace_pos}"
+                            )
+                        
+                        extracted = True
+                        break  # Done — we found and read the JSON successfully
+                    else:
+                        # This '{' was some other JSON object (not our envelope) — skip it
+                        scan_start = brace_pos + 1
+                        
+                except (json.JSONDecodeError, ValueError):
+                    # This '{' wasn't the start of valid JSON — skip it, try the next one
+                    scan_start = brace_pos + 1
+            
+            if not extracted:
+                # Could not find any JSON envelope in the text at all.
+                # Just return the full LLM text as-is (plain text response).
+                self.logger.debug("📝 No embedded JSON with 'response' field found, using plain text")
+                response_text = llm_output
         
-        # Generate fallback recommendations if none were parsed and feature is enabled
+        # ── SAFETY NET: Strip any leftover JSON fragments from the response text ──
+        # In rare cases, the LLM might have echoed a JSON snippet INSIDE the "response"
+        # value itself. If we detect a trailing {"response": ... pattern, we cut it off.
+        # This only runs when we successfully extracted from JSON (not on plain text fallback),
+        # so it won't accidentally cut legitimate user-facing text.
+        if response_text and response_text != llm_output:
+            trailing_json_match = re.search(
+                r'\n\s*\{[^{}]*"response"\s*:', response_text
+            )
+            if trailing_json_match:
+                cleaned = response_text[:trailing_json_match.start()].strip()
+                if cleaned:
+                    self.logger.warning(
+                        f"⚠️ Stripped trailing JSON fragment from response text "
+                        f"(removed {len(response_text) - len(cleaned)} chars)"
+                    )
+                    response_text = cleaned
+        
+        # If we couldn't get recommendation chips from the LLM, use generic defaults
         if not recommendations and settings.enable_recommendations:
             recommendations = self._generate_fallback_recommendations(intent)
             self.logger.info(f"📋 Using {len(recommendations)} fallback recommendations for intent: {intent}")
