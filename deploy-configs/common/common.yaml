@@ -9,18 +9,28 @@ app:
 livenessProbeDetails:
   probePath: "/health"
   initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 3
+  successThreshold: 1
 
 #readinessProbe details
 readinessProbeDetails:
   probePath: "/health"
-  initialDelaySeconds: 30
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 10
+  failureThreshold: 1
+  successThreshold: 1
 
 #startupProbe details
 startupProbeDetails:
   probePath: "/health"
-  initialDelaySeconds: 300
-  periodSeconds: 100
-  failureThreshold: 40
+  initialDelaySeconds: 100
+  periodSeconds: 50
+  timeoutSeconds: 15
+  failureThreshold: 20
+  successThreshold: 1
   
 istioHttpRoutes:
   routes:
