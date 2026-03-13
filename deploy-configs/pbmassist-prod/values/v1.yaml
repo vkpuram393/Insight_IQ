@@ -25,7 +25,7 @@ appData:
 hpaSettings: 
   minAvailable: 1
   minReplicas: 1
-  maxReplicas: 1
+  maxReplicas: 3
   averageUtilization: 80
 
 # Pod resource requests and limits
