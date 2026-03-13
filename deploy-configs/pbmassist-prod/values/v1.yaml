@@ -23,8 +23,8 @@ appData:
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 1
-  minReplicas: 1
+  minAvailable: 3
+  minReplicas: 3
   maxReplicas: 3
   averageUtilization: 80
 
@@ -64,7 +64,7 @@ envVars: |
   - name: APP_VERSION
     value: "1.0.2.0"
   - name: LOG_LEVEL
-    value: INFO
+    value: DEBUG
   - name: USE_MOCK_LLM
     value: "false"
   - name: LLM_MODEL
