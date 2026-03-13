@@ -26,12 +26,12 @@ readinessProbeDetails:
 #startupProbe details
 startupProbeDetails:
   probePath: "/health"
-  initialDelaySeconds: 100
-  periodSeconds: 50
+  initialDelaySeconds: 30
+  periodSeconds: 10
   timeoutSeconds: 15
   failureThreshold: 20
   successThreshold: 1
-  
+ 
 istioHttpRoutes:
   routes:
     - route: "/pss-myclaims-ai-agent/"
