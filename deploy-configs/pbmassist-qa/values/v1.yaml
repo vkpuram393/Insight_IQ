@@ -25,9 +25,9 @@ appData:
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 1
-  minReplicas: 1
-  maxReplicas: 1
+  minAvailable: 3
+  minReplicas: 3
+  maxReplicas: 3
   averageUtilization: 80
 
 # Pod resource requests and limits
