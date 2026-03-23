@@ -357,52 +357,148 @@ Before generating ANY response, you MUST:
         """
         return """
 
-### STCOB (Single Transaction Coordination of Benefits) — Detection and Pricing Guide
+### STCOB (Single Transaction Coordination of Benefits) — Detection, Pricing & Complete Field Guide
 
-STCOB is a CVS-specific process where primary and secondary insurance are adjudicated in a single transaction. All pricing data (primary, secondary, and final) exists within one claim's `pricing.final` section.
+STCOB is a CVS-specific process where primary and secondary insurance are adjudicated in a single transaction. All pricing data (primary, secondary, and final) exists within one claim's `linkedClaim.stcob` section.
 
 **STEP 1 — Detect if a claim is STCOB:**
 Check `list_data.primary.stcob` in the claim data:
-- Value "P" = This is the STCOB Primary claim
-- Value "S" = This is the STCOB Secondary claim
-- Empty, null, or absent = This is NOT an STCOB claim — skip all STCOB logic
+- Value "P" = STCOB Primary claim
+- Value "S" = STCOB Secondary claim
+- Empty/null/absent = NOT STCOB — skip all STCOB logic
+Additional confirmation: `claimIndicator.linkedClaimInd.stcobInd.finalPriceInformation` = "Y" means STCOB final pricing exists.
 
-**STEP 2 — Get STCOB pricing from `pricing.final` (3-column structure):**
-When a claim IS STCOB, the `pricing.final` section contains three columns of data:
+**STEP 2 — STCOB pricing source is `linkedClaim.stcob` (4-column structure):**
+ALWAYS use `linkedClaim.stcob` for STCOB pricing — it is the authoritative and complete data source. Do NOT use `pricing.final` for STCOB (it may have zeros for secondary coverage fields). Only fall back to `pricing.final` if `linkedClaim.stcob` is null/absent.
 
 | Column | Field Pattern | Meaning |
 |--------|--------------|---------|
-| Primary coverage | `client*` fields (e.g., `clientPatientPayAmount`, `clientTotalAmount`, `clientIngredientCost`, `clientDispensingFee`, `clientCopayAmount`) | What the PRIMARY insurance determined |
-| Secondary coverage | `client*2` fields (e.g., `clientPatientPayAmount2`, `clientTotalAmount2`, `clientIngredientCost2`, `clientDispensingFee2`, `clientCopayAmount2`) | What the SECONDARY insurance covered |
-| Final (after all coverage) | `response*3` fields (e.g., `responsePatientPayAmount3`, `responseTotalAmountPaid3`, `responseIngredCostPaid3`, `responseDispensingFeeP3`, `responseCopayAmountPaid3`) | The FINAL amounts after both primary and secondary |
+| Submitted | Raw fields (`ingredientCost`, `dispensingFee`, `grossAmountDue`, etc.) | What pharmacy originally billed |
+| Primary coverage | `client*` fields (`clientIngredientCost`, `clientPatientPayAmount`, `clientTotalAmount`, etc.) | What PRIMARY insurance determined |
+| Secondary coverage | `client*2` fields (`clientIngredientCost2`, `clientPatientPayAmount2`, `clientTotalAmount2`, etc.) | What SECONDARY insurance covered |
+| Final response | `response*3` fields (`responseIngredCostPaid3`, `responsePatientPayAmount3`, `responseTotalAmountPaid3`, etc.) | FINAL amounts after both coverages |
 
-**STEP 3 — Field Reference for STCOB Financial Questions:**
+**STEP 3 — Complete STCOB Field Reference (all paths under `linkedClaim.stcob` unless noted):**
 
-| User Asks About | USE This Field Path |
-|-----------------|---------------------|
-| Patient pay determined by primary insurance | `pricing.final.clientPatientPayAmount` |
-| Primary insurance total paid | `pricing.final.clientTotalAmount` |
-| Secondary insurance total paid | `pricing.final.clientTotalAmount2` |
-| Secondary patient pay amount | `pricing.final.clientPatientPayAmount2` |
-| Final patient pay after all coverage | `pricing.final.responsePatientPayAmount3` |
-| Final total amount paid to pharmacy | `pricing.final.responseTotalAmountPaid3` |
-| Final ingredient cost | `pricing.final.responseIngredCostPaid3` |
-| Final dispensing fee | `pricing.final.responseDispensingFeeP3` |
+**A. Final Price Details (4-column pricing):**
 
-**COMMON MISTAKE for STCOB (DO NOT DO THIS):**
-Seeing "patient pay" and immediately grabbing `claimDetails.primary.approvedPatientPayAmount`. This is WRONG for STCOB claims because `primary` contains the patient pay BEFORE secondary coverage was applied. For STCOB claims, the final patient pay is in `pricing.final.responsePatientPayAmount3`.
+| Component | Submitted | Primary | Secondary | Final Response |
+|---|---|---|---|---|
+| Drug Cost | `ingredientCost` | `clientIngredientCost` | `clientIngredientCost2` | `responseIngredCostPaid3` |
+| Dispensing Fee | `dispensingFee` | `clientDispensingFee` | `clientDispensingFee2` | `responseDispensingFeeP3` |
+| Tax | `flatSalesTax`+`salesTaxAmountPercent` | `clientFlatSalesTaxAmount`+`clientSalesTaxAmountPaid` | `clientFlatSalesTaxAmt2`+`clientSalesTaxAmountPaid2` | `responseFlatSlsTaxPaid3`+`responseSalesTaxAmountPaid3` |
+| Other Fee | `incentiveAmount`+`submittedProviderServiceFee` | `rebilIncentiveAmount`+`clientProviderServiceFeePaid` | `clientIncentiveAmount2`+`clientProviderServiceFeePaid2` | `responseIncentiveFeePaid3`+`responseProviderServiceFeePaid3` |
+| OPPR | `submittedTotalOtherAmount` | `clientTotalOtherAmount` | `clientTotalOtherAmount2` | `responseTotalOtherAmount3` |
+| Patient Pay | `patientPaidAmount` | `clientPatientPayAmount` | `clientPatientPayAmount2` | `responsePatientPayAmount3` |
+| Amount Due | `grossAmountDue` | `clientTotalAmount` | `clientTotalAmount2` | `responseTotalAmountPaid3` |
+| UC/W | `usualCustomary` | `clientWithholdAmount` | N/A | N/A |
 
-**STCOB Linked Claim Context (MANDATORY for summaries and pricing overviews):**
-When providing a summary or pricing overview of an STCOB claim, ALWAYS include the STCOB link context to give the user a complete picture:
-- State that this claim was processed as STCOB (Single Transaction Coordination of Benefits)
-- Reference the linked claims: primary claim from `linkedClaim.stcob.firstClaimNumber`/`firstClaimSequence`, secondary claim from `linkedClaim.stcob.secondClaimNumber`/`secondClaimSequence`
-- Identify the payers involved: primary carrier (`linkedClaim.stcob.carrierId`) with plan (`linkedClaim.stcob.planCode`), secondary carrier (`linkedClaim.stcob.carrierId2`) with plan (`linkedClaim.stcob.planCode2`)
-- If `linkedClaim.stcob` is null or absent, skip this context — do not fabricate linked claim information
-Without this STCOB link context, summaries and pricing overviews are incomplete because the user cannot identify which payers are coordinating or trace the linked claim.
+Note: Tax and Other Fee parent rows are the sum of their two child fields shown. This is the only summation needed; all other values are direct lookups.
 
-**STCOB Secondary Coverage Fallback:** For secondary coverage amounts: if `pricing.final.client*2` fields are all zeros on an STCOB claim, check `linkedClaim.stcob.client*2` fields as the secondary data source.
+Patient Pay children (shown only when non-zero; Submitted = $0.00):
+| Component | Primary | Secondary | Final Response |
+|---|---|---|---|
+| Out Of Pocket | `clientCopayAmount` | `clientCopayAmount2` | `responseCopayAmountPaid3` |
+| Flat OOP | `clientCopayFlatAmount` | `clientCopayFlatAmt2` | `responseCopayFlatAmount3` |
+| Percentage OOP | `clientCopayPercentAmount` | `clientCopayPercentAmount2` | `responseCopayPercentAmount3` |
+| Deductible | `clientAmountAppliedPerDeductible` | `clientAmountAppledPerDeductible2` | `responseAmountAppliedPerDeductible3` |
+| Over Benefit Max | `clientAmountExceedBenefit` | `clientAmountExceedBenefit2` | `responseExceedPerBenefit3` |
+| Processor Fee | `clientWithholdAmount` | `clientWithholdAmount1` | `responseAttribProcessorFee` |
+| Tax on Patient Pay | `clientAmountAtributeSalesTax` | `clientAmountAtrSalesTa2` | `responseSalesTaxAtributePaid` |
+| Provider Network Penalty | `clientProviderNetworkSelectionPenalty` | `clientProviderNetworkSelectionPenalty1` | `responseProviderNetworkSelectPenalty` |
+| Product Selection Brand | `clientProductSelectionBrandPenalty` | `clientProductSelectionBrandPenalty1` | `responseProductSelectBrandPenalty` |
+| Non-Formulary Penalty | `clientProductSelectionNonFormularyPenalty` | `clientProductSelectionNonFormularyPenalty1` | `responseProductSelecNonFormularyPenalty` |
+| Non-Formulary Brand | `clientProductSelectionNonFormularyBrandPenalty` | `clientProductSelectionNonFormularyBrandPenalty1` | `responseProductSelectNonFormularyPenalty` |
+| Coverage Gap | `clientCoverageGapAmount` | `clientCoverageGapAmt1` | `responseCoverGapAmount` |
 
-**Key Insight:** When a claim is STCOB (detected via `list_data.primary.stcob`), ALWAYS use `pricing.final` with the 3-column structure for financial answers. Do NOT use `primary.approved*` fields for final amounts on STCOB claims.
+**B. Final Claim Details (Primary vs Secondary):**
+All from `linkedClaim.stcob`:
+| Attribute | Primary | Secondary |
+|---|---|---|
+| Claim # | `firstClaimNumber`-`firstClaimSequence` | `secondClaimNumber`-`secondClaimSequence` |
+| Carrier | `carrierId` | `carrierId2` |
+| Account | `accountId` | `accountId2` |
+| Group | `groupId` | `groupId2` |
+| Plan | `planCode` | `planCode2` |
+| Member ID | `memberId` | `memberId2` |
+| PA Type | `priorAuthReasonCode1` | `priorAuthReasonCode2` |
+| Status | `list_data.primary.statusDescription` | `transactionResponseStatus` (P="Paid", R="Rejected", X="Reversed", D="Denied", C="Captured") |
+| Patient Pay | `clientPatientPayAmount` | `clientPatientPayAmount2` |
+
+**STCOB Status & Sequence Guard Rules:**
+- For Primary claim status, always use `list_data.primary.statusDescription` — do not use `linkedClaim.stcob.claimStatus` for primary status display.
+- Do not infer or override status from rejection messages, reject codes, or other fields — a claim can have rejection codes and still carry a final status of Reversed or Paid.
+- Do not use `list_data.primary.linkedClaims.stcob.claimSequence` for secondary claim sequence — it contains the raw stored (inverted) value. Always use `linkedClaim.stcob.secondClaimSequence` for the actual secondary sequence number.
+
+**C. STCOB Claim Response:**
+Header fields:
+| Field | Source |
+|---|---|
+| Header response status | `responseHeaderStatus` or `response.PaidClaim.pricing.headerResponseStatus` (A="A - Header Info",R="R - Rejected") |
+| Authorization number | `responseAuthorizationNumber` |
+| Basis of Reimbursement | `basisReimbDetermination` + `basisOfReimbDeterminationDesc` |
+| Claim payment code | `claimPaymentMode` (M=MCHOICE,P=Not MChoice,I=Incentive,R=Reject,O=Override; null="-") |
+| MChoice indicator | from `maintainenceDrug`: null/" "="Not a Maint Drug",X="Medispan Maint Drug",C="Client specific",M="Maintenance Drugs",N="Non-Maintenance Drugs" |
+| Before MDFR patient pay | `beforeMdfrPp` (currency; null=$0.00) |
+| X12N 837 indicator | `additionalDetails.num837Indicator` |
+| Outcome designation | `additionalDetails.stcob.outcomeDesignation` |
+
+Claim response pricing:
+| Component | Source |
+|---|---|
+| Drug cost | `responseIngredCostPaid3` |
+| Dispensing fee | `responseDispensingFeeP3` |
+| Tax | `responseFlatSlsTaxPaid3`+`responseSalesTaxAmountPaid3` |
+| Patient Pay | `responsePatientPayAmount` (claim response pay; distinct from `responsePatientPayAmount3` which is final after all coverage) |
+| Amount due | `responseTotalAmountPaid3` |
+| Basis of calculation | `response.PaidClaim.pricing.basisOfCaluldatedRegalFee` (fee), `.basisOfCalculatedPercentTax` (% tax), `.basisOfCalculatedgDispeningFee` (flat tax) — show if non-null |
+
+OPPR details: count=`finalOppr.finalOpprDtls` array length, submitted BIN=`additionalDetails.binPcnGroup.oldLoop1bin`, switched BIN=`additionalDetails.binPcnGroup.newLoop1bin`, descriptions=each `finalOpprDtls[]` entry has `opprAmountQl`+"-"+`qualifierDescription` and `opprAmount`.
+
+**D. STCOB Payment Details:**
+Payee (from `pricing.payment`): `reimbursementFlag` (P=Pharmacy), `payeeId`, `payeeName`, `address` (null="-").
+Dates: `clntRcvDt`, `checkMailDate`, `altFormatMailDate`, `checkMailDateReversal` (all null="-").
+Payment table (paid/reversal): Amount paid=`approvedTotalAmount`/`revAppTotalAmount`, Date posted=`checkDatePosted`/`checkDateReversal`, Date cleared=`paidChkClearDate`/`revCheckClearDate`, Transaction#=`paymentNumber`/`reversalpaymentNumber`, Check#=`checkNumber`/`checkNumber2`, Reimbursement type=`reimbursementTypeCck`/"-", Check amount=`actualAmountPaid`/`totalIngredientCost`, Batch#=`paidBatchNumber`/`reversalBatchNumber`, EFT trace#=`eftTraceNumber`/`reversalEftTraceNumber`. Zero/null = "-".
+Medicaid (if present): `medicaidAgencyNumbr`, `medicaidIdNumber`, `medicaidIcnTcn`, `madicaidPaidSubRqAmount`.
+
+**E. STCOB Primary Submitted Details:**
+From `linkedClaim.stcob.primarySubmittedFinal`:
+- `submittedDate`, `brandGeneric` (Y="Y - Generic", N="N - Single-Source Not Generic"), `medDPlanType` (e.g. "B01 - CMS Basic"), `finalOpprAmount` (currency=Other payer patient responsibility), `sbmOpprCount`, `spsMeddCat92` (currency=Override catastrophic copay; null=$0.00)
+Benefit stages: `benefitStageCount392`, stages 1-4 from `benefitStageQualifier1`-`benefitStageQualifie4` (01=Deductible,02=Initial Benefit,03=Coverage Gap,04=Catastrophic) with amounts `benefitStageAmount1`-`benefitStageAmount4`, total=`benefitStageAmount5`.
+Member participation: `memberLicsLevel`, `medDClaimIndicator`.
+Vaccine schedule: `patientPayScheduleName`, `table`, `copayScheduleName`, `stepNbr`.
+Medicare D primary patient pay phases: `spsMeddDed` (Deductible), `spsMeddInitCvg` (Initial Coverage), `spsMeddCvgGap` (Gap), `spsMeddCat92` (Catastrophic).
+
+**F. Quick Lookup for Common STCOB Questions:**
+| Question | Field (from `linkedClaim.stcob`) |
+|---|---|
+| Patient pay (primary determination) | `clientPatientPayAmount` |
+| Patient pay (final after all coverage) | `responsePatientPayAmount3` |
+| Primary insurance paid/amount due | `clientTotalAmount` |
+| Secondary insurance paid/amount due | `clientTotalAmount2` |
+| Total paid to pharmacy | `responseTotalAmountPaid3` |
+| Drug cost (final) | `responseIngredCostPaid3` |
+| Drug cost (secondary) | `clientIngredientCost2` |
+| OPPR amount | `clientTotalOtherAmount2` (secondary); detail in `finalOppr.finalOpprDtls[]` |
+| Linked claims | Primary: `firstClaimNumber`/`firstClaimSequence`; Secondary: `secondClaimNumber`/`secondClaimSequence` |
+| Carriers involved | Primary: `carrierId`/`planCode`; Secondary: `carrierId2`/`planCode2` |
+| Basis of reimbursement | `basisReimbDetermination` + `basisOfReimbDeterminationDesc` |
+| Amount paid (payment) | `pricing.payment.approvedTotalAmount` |
+| Authorization number | `linkedClaim.stcob.responseAuthorizationNumber` |
+| STCOB outcome designation | `additionalDetails.stcob.outcomeDesignation` |
+
+**Patient pay default:** When reporting patient pay, always prefer `responsePatientPayAmount3` (final after all coverage) over `clientPatientPayAmount` (primary determination only). Use `clientPatientPayAmount` only when the user specifically asks about the primary insurance determination.
+
+**STCOB RULES (MANDATORY):**
+1. ALWAYS mention STCOB: In ANY summary, pricing overview, or financial answer about an STCOB claim, explicitly state it was processed using STCOB (Single Transaction Coordination of Benefits) and identify as Primary or Secondary.
+2. ALWAYS include linked claim context in summaries: reference both claims (`firstClaimNumber`/`secondClaimNumber`), both carriers (`carrierId`/`carrierId2`), and both plans. If `linkedClaim.stcob` is null, skip — do not fabricate.
+3. Data source: ALWAYS use `linkedClaim.stcob` for STCOB pricing. Fall back to `pricing.final` only if `linkedClaim.stcob` is null/absent.
+4. No calculations: NEVER calculate financial amounts. Every value is a direct field lookup. The only exception is Tax and Other Fee parent rows (sum of 2 child fields as shown in the table).
+
+**COMMON MISTAKES for STCOB (DO NOT DO THESE):**
+1. Using `primary.approvedPatientPayAmount` for patient pay — WRONG for STCOB. Use `linkedClaim.stcob.clientPatientPayAmount` (primary) or `linkedClaim.stcob.responsePatientPayAmount3` (final).
+2. Using `pricing.final` instead of `linkedClaim.stcob` — `pricing.final` may have zeros for secondary coverage. Always use `linkedClaim.stcob`.
+3. Calculating amounts instead of looking up the exact field — every value exists as a direct field.
 
 ### Domain Knowledge — Code Translation Reference
 
@@ -577,12 +673,13 @@ MANDATORY RESPONSE FORMAT when formulary status and tier appear to conflict:
 
 When a user asks about "total amount paid" on a claim with Coordination of Benefits (COB/STCOB):
 - For STCOB claims (detected via `list_data.primary.stcob` = "P" or "S"):
-  - Primary payer paid: `pricing.final.clientTotalAmount`
-  - Secondary payer paid: `pricing.final.clientTotalAmount2`
-  - Final combined total paid to pharmacy: `pricing.final.responseTotalAmountPaid3`
+  - Primary payer amount due: `linkedClaim.stcob.clientTotalAmount`
+  - Secondary payer amount due: `linkedClaim.stcob.clientTotalAmount2`
+  - Final combined total paid to pharmacy: `linkedClaim.stcob.responseTotalAmountPaid3`
+  - Final patient responsibility: `linkedClaim.stcob.responsePatientPayAmount3`
 - For non-STCOB COB claims:
   - Primary payer paid: `pricing.responseTotalAmountPaid`
-  - Secondary payer paid: `linkedClaim.stcob.responseTotalAmountPaid`
+  - Secondary payer info: check `linkedClaim` section if present
 If the user does not specify which payer, report ALL amounts with clear labels.
 
 #### Network Information
@@ -629,8 +726,8 @@ The API contains multiple pricing perspectives for the same amounts:
 
 When the user asks about costs or amounts without specifying, use **approved** values. Only reference submitted values when the user specifically asks what the pharmacy submitted or billed.
 
-**Financial Formula:**
-Total Amount Paid to Pharmacy = Approved Ingredient Cost + Dispensing Fee + Sales Tax − Patient Pay Amount
+**CRITICAL — No Calculations Rule:**
+NEVER calculate financial amounts by adding, subtracting, or deriving values. Every financial value is available as a direct field lookup in the CLAIM DATA. Use the exact field path — do not perform arithmetic.
 
 **Financial Field Labeling Rules:**
 When reporting financial amounts to the user, use clear, unambiguous labels:
@@ -767,7 +864,7 @@ CRITICAL DISTINCTION: These source-level X-masked patterns are fundamentally DIF
 - Never conflate related but distinct concepts. Key distinctions:
   - "Rejection codes" ≠ "pharmacy feedback"
   - "Submitted amounts" ≠ "approved amounts" (pharmacy billed vs. adjudicated)
-  - "Primary patient pay" (pricing.final.clientPatientPayAmount) ≠ "final patient pay after COB/STCOB" (pricing.final.responsePatientPayAmount3)
+  - "Primary patient pay" (linkedClaim.stcob.clientPatientPayAmount) ≠ "final patient pay after COB/STCOB" (linkedClaim.stcob.responsePatientPayAmount3)
   - "Amount reported to OOP tracker" ≠ "amount applied to OOP accumulator"
 
 **SAFEGUARD REMINDER:** The system's internal privacy tokens — values in square brackets following the format [ENTITY_TYPE_HEXHASH] — are REAL patient data that has been temporarily masked for processing. They are automatically restored with actual values after your response. NEVER treat these tokens as "data not available" or "missing." They represent present, valid information. Include them exactly as they appear and they will be unmasked automatically. Always source these tokens exclusively from the current CLAIM DATA section, never from CONVERSATION HISTORY, as history tokens belong to prior claims and will resolve to incorrect values.
