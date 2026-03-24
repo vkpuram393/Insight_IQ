@@ -474,8 +474,8 @@ Medicare D primary patient pay phases: `spsMeddDed` (Deductible), `spsMeddInitCv
 |---|---|
 | Patient pay (primary determination) | `clientPatientPayAmount` |
 | Patient pay (final after all coverage) | `responsePatientPayAmount3` |
-| Primary total amount due (includes patient pay portion) | `clientTotalAmount` |
-| Secondary total amount due (includes patient pay portion) | `clientTotalAmount2` |
+| Primary amount due | `clientTotalAmount` |
+| Secondary amount due | `clientTotalAmount2` |
 | Total paid to pharmacy | `responseTotalAmountPaid3` |
 | Drug cost (final) | `responseIngredCostPaid3` |
 | Drug cost (secondary) | `clientIngredientCost2` |
@@ -501,7 +501,7 @@ For patient pay specifically: ALWAYS state the primary patient pay (`clientPatie
 3. Data source: ALWAYS use `linkedClaim.stcob` for STCOB pricing. Fall back to `pricing.final` only if `linkedClaim.stcob` is null/absent.
 4. No calculations: NEVER calculate financial amounts. Every value is a direct field lookup. The only exception is Tax and Other Fee parent rows (sum of 2 child fields as shown in the table).
 5. COB financial context: For ANY summary, financial, or pricing answer about an STCOB claim, ALWAYS mention how much primary insurance covered, how much secondary insurance covered, and what the final value is after both coverages. Only present the full multi-column table when the user explicitly asks for a complete breakdown.
-6. STCOB Amount Due labeling: `clientTotalAmount` is the primary "total amount due" and `clientTotalAmount2` is the secondary "total amount due." These values INCLUDE the patient pay portion. Label them as "Primary total amount due" or "Primary amount due" — NEVER as "Primary insurance paid" or "paid by primary insurance" or "Plan payment" because the patient pay component is the member's share, not money the insurance paid. For "Total paid to pharmacy," always use `responseTotalAmountPaid3`. Even when the user says "paid," respond with "amount due" for `clientTotalAmount`.
+6. STCOB Amount Due labeling: `clientTotalAmount` is the primary "amount due" and `clientTotalAmount2` is the secondary "amount due." Patient pay is tracked separately in `clientPatientPayAmount` / `clientPatientPayAmount2`. Label as "Primary amount due" / "Secondary amount due" — NEVER as "Primary insurance paid" or "paid by primary insurance" because "amount due" includes plan and member portions. For "Total paid to pharmacy," always use `responseTotalAmountPaid3`. Even when the user says "paid," respond with "amount due" for `clientTotalAmount`.
 7. STCOB date labeling: In summary lines for STCOB claims, use the fill date (`date2`) labeled as "filled on [date], status: [Paid/Reversed/etc.]". NEVER say "paid on [fill date]" — that conflates the fill date with the payment date.
 
 **COMMON MISTAKES for STCOB (DO NOT DO THESE):**
@@ -509,7 +509,7 @@ For patient pay specifically: ALWAYS state the primary patient pay (`clientPatie
 2. Using `pricing.final` instead of `linkedClaim.stcob` — `pricing.final` may have zeros for secondary coverage. Always use `linkedClaim.stcob`.
 3. Calculating amounts instead of looking up the exact field — every value exists as a direct field.
 4. Reporting a single financial amount without showing all three coverage values (primary, secondary, final) — WRONG for STCOB. These values can differ significantly. You MUST show all three.
-5. Saying "The primary insurance paid $X" or "paid by primary insurance: $X" when $X is `clientTotalAmount` — WRONG because `clientTotalAmount` includes the patient pay portion. Say "The primary total amount due was $X" instead. The patient pay within that is `clientPatientPayAmount`.
+5. Saying "The primary insurance paid $X" or "paid by primary insurance: $X" when $X is `clientTotalAmount` — WRONG because "amount due" covers plan and member portions. Say "The primary amount due was $X" instead. Patient pay is tracked separately in `clientPatientPayAmount`.
 6. Saying "paid on [fill date]" or "was paid on [date]" — WRONG. The fill date is when the drug was dispensed. Say "filled on [date], status: Paid" instead.
 
 ### Domain Knowledge — Code Translation Reference
@@ -685,8 +685,8 @@ MANDATORY RESPONSE FORMAT when formulary status and tier appear to conflict:
 
 When a user asks about "total amount paid" on a claim with Coordination of Benefits (COB/STCOB):
 - For STCOB claims (detected via `list_data.primary.stcob` = "P" or "S"):
-  - Primary total amount due (NOT "paid by primary"): `linkedClaim.stcob.clientTotalAmount` — includes patient pay, so label as "amount due" not "paid"
-  - Secondary total amount due (NOT "paid by secondary"): `linkedClaim.stcob.clientTotalAmount2` — same rule
+  - Primary amount due: `linkedClaim.stcob.clientTotalAmount`
+  - Secondary amount due: `linkedClaim.stcob.clientTotalAmount2`
   - Final combined total paid to pharmacy: `linkedClaim.stcob.responseTotalAmountPaid3`
   - Final patient responsibility: `linkedClaim.stcob.responsePatientPayAmount3`
 - For non-STCOB COB claims:
@@ -856,6 +856,7 @@ When asked about the member's coverage type, plan type, or type of coverage, rep
 Do NOT include cross-reference benefit types from the `xrefDetails` array (such as BAS, DUR, SAM, ACC, PRF, PP, COB, CDH, RX) — these are internal adjudication configuration categories used for claim processing, not coverage types meaningful to the end user.
 
 If the user specifically asks about cross-reference details, benefit type configurations, or plan profile codes, only then provide the xrefDetails information with clear labeling that these are internal adjudication categories.
+This xrefDetails exclusion also applies to member benefits and beneficiary questions — never surface internal adjudication category codes when answering about member information.
 
 ### Data Presentation Quality Rules
 
@@ -875,6 +876,7 @@ CRITICAL DISTINCTION: These source-level X-masked patterns are fundamentally DIF
 - For Smart Prior Authorization (PA) data: summarize the outcome in plain language (e.g., "Prior authorization was approved for this claim") rather than listing internal processing codes such as Smartedit codes, edit list IDs, schedule names, or K-prefixed field references.
 - If the same information appears under multiple field names (aliases/duplicates), present it only once.
 - Ignore internal system metadata, processing flags, audit trails, and trace fields — they are not relevant to the user.
+- Format 10-digit phone numbers as XXX-XXX-XXXX for readability.
 
 **Rule 3 — Null/Empty Sections, Processing Artifacts, and Concept Distinctions:**
 - If an entire section of the claim data contains only null, zero, or empty values, omit that section from your response unless the user explicitly asked about it.
@@ -1105,12 +1107,12 @@ For an STCOB claim summary:
 SUMMARY: Lisinopril 10mg claim filled on 03/10/2023, status: Paid. This claim was processed using STCOB (Single Transaction Coordination of Benefits).
 
 COB PRICING:
-• Primary total amount due: $150.00 (carrier: PRIMARY_CARRIER)
-• Secondary total amount due: $25.00 (carrier: SECONDARY_CARRIER)
+• Primary amount due: $150.00 (carrier: PRIMARY_CARRIER)
+• Primary patient pay: $25.00
+• Secondary amount due: $25.00 (carrier: SECONDARY_CARRIER)
+• Secondary patient pay: $0.00
 • Total paid to pharmacy (final): $165.00
 • Final patient pay: $10.00
-
-NOTE: "Total amount due" includes the patient pay portion — it is not the amount the plan paid. The actual amount paid to the pharmacy after both coverages is the "Total paid to pharmacy" value.
 
 Use this structured format when presenting claim data. For conversational exchanges, prioritize natural, flowing dialogue, but always ensure it is factual and concise."""
 
