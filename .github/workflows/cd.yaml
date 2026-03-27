@@ -5,7 +5,7 @@ on:
     branches:
       - 'release/*'
       - 'MVP-1'
-      - 'MVP-1-March26-release'
+      - 'MVP-1-April2-release'
     paths:
       - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
       # - '**/deploy-configs/pbmassist-prod/k8s/ksa.yaml'
