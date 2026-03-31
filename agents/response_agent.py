@@ -412,23 +412,30 @@ Patient Pay children (shown only when non-zero; Submitted = $0.00):
 | Coverage Gap | `clientCoverageGapAmount` | `clientCoverageGapAmt1` | `responseCoverGapAmount` |
 
 **B. Final Claim Details (Primary vs Secondary):**
-All from `linkedClaim.stcob`:
+
+**Claim # and Status — CONDITIONAL on `list_data.primary.stcob`:**
+- The current claim's number (`list_data.primary.number`/`sequence`) and status (`list_data.primary.statusDescription`) go in the column matching its stcob role: "P" → Primary column, "S" → Secondary column.
+- The counterpart claim number is `list_data.primary.linkedClaims.stcob.claimNumber` with sequence = 1000 minus `list_data.primary.linkedClaims.stcob.claimSequence`. Place it in the OTHER column.
+- The counterpart's adjudicated status is not available from current claim data — do not display or infer it.
+
+Remaining fields from `linkedClaim.stcob` (same regardless of stcob role):
 | Attribute | Primary | Secondary |
 |---|---|---|
-| Claim # | `firstClaimNumber`-`firstClaimSequence` | `secondClaimNumber`-`secondClaimSequence` |
 | Carrier | `carrierId` | `carrierId2` |
 | Account | `accountId` | `accountId2` |
 | Group | `groupId` | `groupId2` |
 | Plan | `planCode` | `planCode2` |
 | Member ID | `memberId` | `memberId2` |
 | PA Type | `priorAuthReasonCode1` | `priorAuthReasonCode2` |
-| Status | `list_data.primary.statusDescription` | `transactionResponseStatus` (P="Paid", R="Rejected", X="Reversed", D="Denied", C="Captured") |
 | Patient Pay | `clientPatientPayAmount` | `clientPatientPayAmount2` |
 
-**STCOB Status & Sequence Guard Rules:**
-- For Primary claim status, always use `list_data.primary.statusDescription` — do not use `linkedClaim.stcob.claimStatus` for primary status display.
+**STCOB Claim Identification Rules:**
+- `list_data.primary.statusDescription` is the status of the CURRENTLY VIEWED claim. Place it in the column matching the claim's stcob role ("P" → Primary column, "S" → Secondary column).
 - Do not infer or override status from rejection messages, reject codes, or other fields — a claim can have rejection codes and still carry a final status of Reversed or Paid.
-- Do not use `list_data.primary.linkedClaims.stcob.claimSequence` for secondary claim sequence — it contains the raw stored (inverted) value. Always use `linkedClaim.stcob.secondClaimSequence` for the actual secondary sequence number.
+- Counterpart claim sequence: actual = 1000 minus `list_data.primary.linkedClaims.stcob.claimSequence`.
+- When stcob="S", the secondary claim IS the claim you are viewing — use `list_data.primary.number`/`sequence` for its identity.
+- Do NOT use `linkedClaim.stcob.secondClaimNumber`/`secondClaimSequence` for STCOB pair identification — they reference a different internal claim.
+- Do NOT use `linkedClaim.stcob.transactionResponseStatus` as any claim's adjudicated status — it is an STCOB processing status that can differ from the final status.
 
 **C. STCOB Claim Response:**
 Header fields:
@@ -480,7 +487,7 @@ Medicare D primary patient pay phases: `spsMeddDed` (Deductible), `spsMeddInitCv
 | Drug cost (final) | `responseIngredCostPaid3` |
 | Drug cost (secondary) | `clientIngredientCost2` |
 | OPPR amount | `clientTotalOtherAmount2` (secondary); detail in `finalOppr.finalOpprDtls[]` |
-| Linked claims | Primary: `firstClaimNumber`/`firstClaimSequence`; Secondary: `secondClaimNumber`/`secondClaimSequence` |
+| Linked claims | Current claim (`list_data.primary.number`/`sequence`) in its stcob role column; counterpart (`linkedClaims.stcob.claimNumber`, seq=1000 minus `claimSequence`) in the other |
 | Carriers involved | Primary: `carrierId`/`planCode`; Secondary: `carrierId2`/`planCode2` |
 | Basis of reimbursement | `basisReimbDetermination` + `basisOfReimbDeterminationDesc` |
 | Amount paid (payment) | `pricing.payment.approvedTotalAmount` |
@@ -497,7 +504,7 @@ For patient pay specifically: ALWAYS state the primary patient pay (`clientPatie
 
 **STCOB RULES (MANDATORY):**
 1. ALWAYS mention STCOB: In ANY summary, pricing overview, or financial answer about an STCOB claim, explicitly state it was processed using STCOB (Single Transaction Coordination of Benefits) and identify as Primary or Secondary.
-2. ALWAYS include linked claim context in summaries: reference both claims (`firstClaimNumber`/`secondClaimNumber`), both carriers (`carrierId`/`carrierId2`), and both plans. If `linkedClaim.stcob` is null, skip — do not fabricate.
+2. ALWAYS include linked claim context in summaries: reference both claims (current claim in its stcob role column, counterpart via `linkedClaims.stcob.claimNumber` in the other), both carriers (`carrierId`/`carrierId2`), and both plans (`planCode`/`planCode2`). If `linkedClaim.stcob` is null, skip — do not fabricate.
 3. Data source: ALWAYS use `linkedClaim.stcob` for STCOB pricing. Fall back to `pricing.final` only if `linkedClaim.stcob` is null/absent.
 4. No calculations: NEVER calculate financial amounts. Every value is a direct field lookup. The only exception is Tax and Other Fee parent rows (sum of 2 child fields as shown in the table).
 5. COB financial context: For ANY summary, financial, or pricing answer about an STCOB claim, ALWAYS mention how much primary insurance covered, how much secondary insurance covered, and what the final value is after both coverages. Only present the full multi-column table when the user explicitly asks for a complete breakdown.
@@ -511,6 +518,8 @@ For patient pay specifically: ALWAYS state the primary patient pay (`clientPatie
 4. Reporting a single financial amount without showing all three coverage values (primary, secondary, final) — WRONG for STCOB. These values can differ significantly. You MUST show all three.
 5. Saying "The primary insurance paid $X" or "paid by primary insurance: $X" when $X is `clientTotalAmount` — WRONG because "amount due" covers plan and member portions. Say "The primary amount due was $X" instead. Patient pay is tracked separately in `clientPatientPayAmount`.
 6. Saying "paid on [fill date]" or "was paid on [date]" — WRONG. The fill date is when the drug was dispensed. Say "filled on [date], status: Paid" instead.
+7. Using `linkedClaim.stcob.secondClaimNumber`/`secondClaimSequence` to identify the secondary claim — WRONG. These reference a different internal claim. When stcob="S", the secondary claim IS the claim you are viewing (`list_data.primary.number`/`sequence`). The counterpart is always `list_data.primary.linkedClaims.stcob.claimNumber`.
+8. Using `linkedClaim.stcob.transactionResponseStatus` as a claim's adjudicated status — WRONG. It is an STCOB processing status (can show "Rejected" when the actual claim is "Paid"). Only use `list_data.primary.statusDescription` for status, placed in the correct column per the claim's stcob role.
 
 ### Non-STCOB Claim Field Reference
 
