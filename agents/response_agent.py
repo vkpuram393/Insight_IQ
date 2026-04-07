@@ -395,6 +395,15 @@ ALWAYS use `linkedClaim.stcob` for STCOB pricing — it is the authoritative and
 
 Note: Tax and Other Fee parent rows are the sum of their two child fields shown. This is the only summation needed; all other values are direct lookups.
 
+**STCOB Column Clarification — Submitted vs Primary vs Secondary vs Final:**
+When the user asks about a SPECIFIC column of the STCOB pricing table above:
+- "Submitted" column = raw fields (`ingredientCost`, `dispensingFee`, `patientPaidAmount`, `submittedTotalOtherAmount`, etc.) — what pharmacy billed. `patientPaidAmount` is often $0.00.
+- "Primary" column = `client*` fields (`clientPatientPayAmount`, `clientTotalOtherAmount`, etc.) — what primary insurance determined
+- "Secondary" column = `client*2` fields — what secondary coverage applied
+- "Final" column = `response*3` fields — final amounts after all coverage
+Do NOT default to primary or final when asked about the "submitted" column. The submitted patient pay (`patientPaidAmount`) is typically $0.00 — this is correct, not an error.
+For OPPR: the dollar amount is `submittedTotalOtherAmount` (submitted) or `clientTotalOtherAmount` (primary). Do NOT return OPPR qualifier descriptions from `finalOppr.finalOpprDtls[]` when asked about the OPPR dollar amount — those are qualifier metadata, not the summary amount.
+
 Patient Pay children (shown only when non-zero; Submitted = $0.00):
 | Component | Primary | Secondary | Final Response |
 |---|---|---|---|
@@ -613,16 +622,21 @@ Tax = sum of flat + percentage tax fields. Other Fee = sum of incentive + profes
 | Added user/date/time/program | `list_data.primary.audit.addUser`, `addDate`, `addTime`, `addProgram` |
 | Changed user/date/time/program | `list_data.primary.audit.changeUser`, `changeDate`, `changeTime`, `changeProgram` |
 
-**Submitted Info Fields (raw codes — show as-is when asked about submitted details):**
+**Submitted Info Fields:**
+Very few submitted transaction fields are available from the current claim data. Most submitted details require a separate data source not currently accessible.
 
-| Question | Field |
-|---|---|
-| Location code | `list_data.primary.submitted.locationCode` (raw code, e.g. "00") |
-| Patient residence | `additionalDetails.pharmacyServiceProcessing.patientResidenceCode` (raw code, e.g. "01") |
-| Pharmacy service type | `additionalDetails.pharmacyServiceProcessing.pharmacyServiceTypeCode` (raw code, e.g. "01") |
-| Cost basis | `pricingAdditional.basis.costBasis` (raw code) |
-| % Tax basis | `pricingAdditional.salesTaxInformation.submittedBasis` (raw code) |
-| Rate | `pricingAdditional.salesTaxInformation.submittedRate` |
+| Question | Field | Notes |
+|---|---|---|
+| Location code | `list_data.primary.submitted.locationCode` | Raw code, e.g. "00" |
+| Cost basis | `pricingAdditional.basis.costBasis` | This is a DESCRIPTION (e.g. "Acquisition Pricing"), NOT a raw numeric code |
+| % Tax basis | `pricingAdditional.salesTaxInformation.submittedBasis` | This is a DESCRIPTION (e.g. "INGREDIENT COST"), NOT a raw numeric code |
+| Rate | `pricingAdditional.salesTaxInformation.submittedRate` | |
+
+WRONG SOURCES — Do NOT use these fields for submitted info answers:
+- `pharmacyServiceProcessing.patientResidenceCode` — this is a PROCESSING CONFIG value (e.g. "**" = any valid value), NOT the actual submitted patient residence code. Say "not available."
+- `pharmacyServiceProcessing.pharmacyServiceTypeCode` — same issue. Config value, NOT the submitted code. Say "not available."
+- `pharmacy.zip` or `list_data.primary.pharmacy.zip` — this is the PHARMACY zip code, NOT the member's zip. When asked about member zip, say "not available."
+- `primary.quantityPrescribed` or `submittedQuantityDispensed` — this is the DISPENSED quantity, NOT the originally prescribed quantity. When asked about quantity prescribed, say "not available."
 
 **BPG (BIN/PCN/Group) Configuration:**
 When the user asks about BPG or BIN/PCN/Group configuration for a claim:
@@ -737,6 +751,19 @@ Note: field name casing is inconsistent in the data — `drugSpendBeforeOopThisC
 
 IMPORTANT: The "Benefit Phases" table above shows amounts FOR THIS SPECIFIC CLAIM in each benefit phase. The "Benefit/Accumulation Details" table above shows running TOTALS (this claim + to date + remaining). Do NOT confuse these — when the user asks "what is the deductible for this claim?", use the Benefit Phase deductible fields. When they ask "what is the total/accumulated deductible?", use the Accumulation Details deductible fields.
 
+**CRITICAL — Medicare D Table Disambiguation (3 different tables — NEVER mix them):**
+TABLE 1 — "Accumulation Details" = Running TOTALS across all claims (This Claim + To Date + Remaining columns)
+  Use when asked: "accumulated deductible", "deductible to date", "total TrOOP", "how much drug spend"
+TABLE 2 — "Benefit Phases" = Amounts for THIS CLAIM ONLY in each phase (Drug Cost, Patient Pay, Plan Pay, DS Patient Pay)
+  Use when asked: "deductible for this claim", "DED", "ICP", "OOP gap amount", "benefit phases"
+TABLE 3 — "EOB OPAR Allocations" = 5-column per-phase breakdown (Drug Cost, Pay Before MSP, Pay After MSP, OPAR, Plan Pay)
+  Use when asked: "EOB OPAR", "OPAR allocations", "EOB allocations"
+NEVER MIX THESE:
+- "OOP Gap" (Coverage Gap phase — TABLE 2) is NOT "TrOOP" (True Out of Pocket — TABLE 1)
+- "Deductible (DED)" in TABLE 2 is the amount applied BY THIS CLAIM — NOT the accumulated total from TABLE 1
+- "PLRO" and "Other TrOOP" are in the Payments table, NOT in Benefit Phases or Accumulation Details
+- When asked about "deductible" without qualifier, default to THIS CLAIM's benefit phase amount (TABLE 2)
+
 **Medicare D — Payments (all paths prefixed with `accumulation.accumulationDetails`):**
 
 | Row | This Claim | To Date | Remaining |
@@ -771,16 +798,48 @@ When the user asks about "accumulation rules", "accumulation schedule", or "accu
 
 **HRA Reminder:** The `healthReimbursementAccount` section in claim data contains member routing metadata that is populated regardless of whether HRA was used. Check the authoritative field `hraUsed`. If `hraUsed` is null → No HRA was used. Do NOT report `healthReimbursementAccount` section fields as "HRA information."
 
+**CRITICAL — Zero/Null Value Handling for Medicare D Financial Fields:**
+For ALL financial fields in the Medicare D tables above (Accumulation Details, Benefit Phases, Payments, EOB OPAR Allocations):
+- Field value is 0, 0.0, 0.00, or null → report as "$0.00" — this IS the correct answer
+- NEVER say "not available" for a financial field that is 0 or null in these tables
+- $0.00 means zero dollars were applied/accumulated — it is a valid, meaningful value
+- Only say "not available" if the ENTIRE accumulation or medDDetails section is absent from the claim data
+This applies to: deductibles, TrOOP, PLRO, Other TrOOP, DSBOOPT/GDCB, DSAOOPT/GDCA, copay amounts, plan pay, drug cost, patient pay, CPP, NPP, EGWP OHI, catastrophic copay, and all other dollar amounts in these tables.
+
 **Fields NOT in Claim Data — Polite Admission Required:**
 The following information is NOT available in the claim data. When asked about any of these, respond: "I don't have [specific field] available in the claim data for this claim."
 Do NOT hallucinate, guess, or pull from a wrong field. Simply acknowledge the limitation.
-- Transaction count, Prescription written date, Rx origin, Refills authorized
-- Basis days supply determined, Unit dose, Level of service
+
+Submitted transaction details (requires separate data not currently accessible):
+- Transaction count
+- Patient residence code (do NOT use pharmacyServiceProcessing config value "**")
+- Pharmacy service type code (do NOT use pharmacyServiceProcessing config value "**")
+- Pharmacy qualifier with description and ID (e.g. "NCPDP Provider ID - 0103301")
+- Prescription qualifier with description and ID (e.g. "Rx Billing - 236761215202")
+- Prescriber qualifier with description and ID (e.g. "NPI - 2840038691")
+- Primary prescriber qualifier/ID (separate from standard prescriber)
+- Date received (pharmacy submission date — do NOT use `dateReceived2` which is a different timestamp)
+- Prescription written date
+- Rx origin code
+- Refills authorized
+- Basis days supply determined
+- Unit dose indicator
+- Level of service code
+- Prior auth type/number as submitted (may differ from processed PA in claim data)
+- Patient qualifier ID and patient ID
+- SSN as submitted (claim data may have different/masked value)
+- Member zip code (do NOT use pharmacy zip)
+- Provider qualifier and ID (pharmacy provider, NOT prescriber/doctor)
+- Product type (originally prescribed)
+- Quantity prescribed (do NOT use dispensed quantity)
+- Employment/workers compensation fields (employer name, phone, injury date)
+- Dosage form description code
+- Dispense unit form indicator
+- Total ingredient count
+
+Other unavailable fields:
 - Eligibility clarification, Facility ID, Smoking/Pregnant indicators
-- Dosage form description, Dispense unit from indicator, Total ingredient count
-- Primary prescriber qualifier/ID (separate from standard prescriber qualifier)
-- Employment/workers compensation fields (phone, injury date)
-- Member phone number, Member zip code
+- Member phone number
 
 **COMMON FIELD CONFUSIONS (DO NOT MIX THESE UP):**
 | User Asks About | WRONG Field (do NOT use) | CORRECT Field |
@@ -799,6 +858,12 @@ Do NOT hallucinate, guess, or pull from a wrong field. Simply acknowledge the li
 | M3P eligible | Fabricating or inferring from other fields | Check `linkedClaim.medicarePrescriptionPaymentPlan.medDClaimTag` — null = "No" |
 | Date of birth | `beneficiary.dateOfBirth` (enrollment records — may differ from claim) | `primary.date8` (patient DOB as submitted on the claim) |
 | Transition Fill (when LTC override present) | Saying "paid under Transition Fill" based on `transtionfillTag` alone | FIRST check `settlementCodesDetail` for LTC messages (programName "RCLTC100" or message containing "LTC"). If LTC settlement codes present → "Paid using LTC override that bypassed eligible rejects." Do NOT say "paid under transition fill." Only derive TF from `transtionfillTag` if NO LTC settlement codes exist. |
+| Patient residence (submitted) | `pharmacyServiceProcessing.patientResidenceCode` (config value "**") | Not available — config value, not actual submitted code |
+| Pharmacy service type (submitted) | `pharmacyServiceProcessing.pharmacyServiceTypeCode` (config value "**") | Not available — config value, not actual submitted code |
+| Member zip code | `pharmacy.zip` (that is the PHARMACY zip) | Not available — member zip requires separate data |
+| Quantity prescribed | Dispensed quantity fields (`quantityPrescribed`, `submittedQuantityDispensed`) | Not available — originally prescribed quantity requires separate data |
+| Provider qualifier/ID | Prescriber qualifier/ID (prescriber = doctor) | Not available — provider = pharmacy provider, different from prescriber |
+| Date received (submitted) | `additionalDetails.dateReceived2` (that is a claim-received timestamp) | Not available — submitted date-received requires separate data |
 
 ### Domain Knowledge — Code Translation Reference
 
