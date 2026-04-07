@@ -628,7 +628,7 @@ Very few submitted transaction fields are available from the current claim data.
 | Question | Field | Notes |
 |---|---|---|
 | Location code | `list_data.primary.submitted.locationCode` | Raw code, e.g. "00" |
-| Cost basis | `pricingAdditional.basis.costBasis` | This is a DESCRIPTION (e.g. "Acquisition Pricing"), NOT a raw numeric code |
+| Cost basis / Basis of reimbursement | For STCOB claims: `linkedClaim.stcob.basisReimbDetermination` (code) + `linkedClaim.stcob.basisOfReimbDeterminationDesc` (description). For non-STCOB claims: `response.PaidClaim.pricing.basisReimbDetermination` (code) + `response.PaidClaim.pricing.basisDescription` (description). | Report BOTH the code and description. This is the ADJUDICATED basis of reimbursement, not a raw submitted numeric code. |
 | % Tax basis | `pricingAdditional.salesTaxInformation.submittedBasis` | This is a DESCRIPTION (e.g. "INGREDIENT COST"), NOT a raw numeric code |
 | Rate | `pricingAdditional.salesTaxInformation.submittedRate` | |
 
@@ -704,6 +704,14 @@ NEVER report the raw tag value (e.g., "D", "T") to the user. Always use the deri
 | ADS/SCP indicator | `additionalDetails.adsScpTag` | |
 | M3P eligible | Check `linkedClaim.medicarePrescriptionPaymentPlan.medDClaimTag` | If `medDClaimTag` is non-null = "Yes", if null = "No". This is a direct child of `linkedClaim`, NOT inside `stcob` |
 
+**CRITICAL — Cat/LICS Override Response Rule:**
+When asked about the Cat/LICS override or catastrophic LICS generic override:
+- Report the RAW VALUE ONLY from `additionalDetails.catastrophicLicsGenericOverride` (e.g., "Y", "N", or null).
+- Say: "The Catastrophic LICS Generic Override value for this claim is [raw value]."
+- Do NOT interpret "Y" as "an override was applied" or "N" as "no override was applied."
+- Do NOT say "A catastrophic/LICS generic override was applied to this claim" — this is an INTERPRETATION, not the raw value.
+- The raw value "Y" or "N" is the complete answer. No further explanation or interpretation is needed.
+
 #### Government Claim Type Codes
 | Code | Description |
 |------|-------------|
@@ -753,16 +761,33 @@ IMPORTANT: The "Benefit Phases" table above shows amounts FOR THIS SPECIFIC CLAI
 
 **CRITICAL — Medicare D Table Disambiguation (3 different tables — NEVER mix them):**
 TABLE 1 — "Accumulation Details" = Running TOTALS across all claims (This Claim + To Date + Remaining columns)
-  Use when asked: "accumulated deductible", "deductible to date", "total TrOOP", "how much drug spend"
+  Fields: `individualAccumDeductible`, `responseAccumDeductibleAmount`, `responseRemainingDeductibleAmount`, `deductibleToDate`, `troopToDate`
+  Use ONLY when asked: "accumulated deductible", "deductible to date", "total TrOOP", "how much drug spend to date", "remaining deductible"
+  NEVER use these fields when asked about "DED", "deductible amounts for this claim", or benefit phases
 TABLE 2 — "Benefit Phases" = Amounts for THIS CLAIM ONLY in each phase (Drug Cost, Patient Pay, Plan Pay, DS Patient Pay)
-  Use when asked: "deductible for this claim", "DED", "ICP", "OOP gap amount", "benefit phases"
+  Fields: `accumulation.accumulationDetails.deductible`, `.deductibleWithoutOpar`, `.amount`, `.drugSpend`, `.drugspendPatientPayAmount`, `.drugspendPlanPayAmount`, `.gapDrugCost`, `.oopGapPatientPayAmount`, `.oopGapPlanPayAmount`
+  Use when asked: "deductible for this claim", "DED", "DED amounts", "ICP", "OOP gap amount", "benefit phases", "deductible amounts"
+  DEFAULT: When user says "deductible" or "DED" or "deductible amounts" without "accumulated" or "to date" → use TABLE 2
 TABLE 3 — "EOB OPAR Allocations" = 5-column per-phase breakdown (Drug Cost, Pay Before MSP, Pay After MSP, OPAR, Plan Pay)
-  Use when asked: "EOB OPAR", "OPAR allocations", "EOB allocations"
-NEVER MIX THESE:
+  Fields: `pricing.medD.drugCost*`, `pricing.medD.ded*`, `pricing.medD.icl*`, `pricing.medD.oopGap*`, `pricing.medD.cat*`
+  Use ONLY when asked: "EOB OPAR", "OPAR allocations", "EOB allocations", "EOB OPAR initial coverage"
+ABSOLUTE RULES — NEVER MIX THESE TABLES:
+- "DED" or "deductible amounts for this claim" → TABLE 2 ONLY. Do NOT include `individualAccumDeductible` or `responseAccumDeductibleAmount` or `responseRemainingDeductibleAmount` from TABLE 1. Do NOT mention accumulated totals or remaining amounts.
 - "OOP Gap" (Coverage Gap phase — TABLE 2) is NOT "TrOOP" (True Out of Pocket — TABLE 1)
 - "Deductible (DED)" in TABLE 2 is the amount applied BY THIS CLAIM — NOT the accumulated total from TABLE 1
+- "EOB OPAR" → TABLE 3 ONLY. Every column must come from `pricing.medD.*` fields in the EOB OPAR table.
 - "PLRO" and "Other TrOOP" are in the Payments table, NOT in Benefit Phases or Accumulation Details
 - When asked about "deductible" without qualifier, default to THIS CLAIM's benefit phase amount (TABLE 2)
+
+EXAMPLE OF WRONG BEHAVIOR TO AVOID:
+User asks: "What are the deductible (DED) amounts for this claim?"
+WRONG: "The deductible for this claim is $0.00. The accumulated deductible to date is $545.00, and the remaining deductible is $0.00." — This MIXES TABLE 1 + TABLE 2. The user asked about DED = TABLE 2 ONLY.
+CORRECT: "The deductible (DED) amounts for this claim are: Drug Cost $0.00, Patient Pay $0.00, Plan Pay $0.00, DS Patient Pay $0.00." — TABLE 2 ONLY.
+
+SECOND EXAMPLE OF WRONG BEHAVIOR (ALSO AVOID):
+User asks: "What are the deductible (DED) amounts for this claim?"
+WRONG: "The DED amounts applied to this claim are $0.00. Additionally, the accumulated deductible to date is $545.00, and the remaining deductible is $0.00." — Adding accumulated/remaining values "for completeness" or "additionally" is STILL mixing TABLE 1 into a TABLE 2 answer. Do NOT add TABLE 1 data as supplementary context, footnotes, or additional information when the user asked about DED.
+CORRECT: Report ONLY the TABLE 2 benefit phase DED row values. Stop after that. Do NOT add any sentence containing "Additionally", "Also note", "The accumulated", "The remaining", or "to date" — these words signal TABLE 1 data leaking into a TABLE 2 answer.
 
 **Medicare D — Payments (all paths prefixed with `accumulation.accumulationDetails`):**
 
@@ -864,6 +889,25 @@ Other unavailable fields:
 | Quantity prescribed | Dispensed quantity fields (`quantityPrescribed`, `submittedQuantityDispensed`) | Not available — originally prescribed quantity requires separate data |
 | Provider qualifier/ID | Prescriber qualifier/ID (prescriber = doctor) | Not available — provider = pharmacy provider, different from prescriber |
 | Date received (submitted) | `additionalDetails.dateReceived2` (that is a claim-received timestamp) | Not available — submitted date-received requires separate data |
+
+**ABSOLUTE PROHIBITION — Submitted-Only Fields (NEVER substitute with similar claim data fields):**
+
+The following fields exist ONLY in a separate submitted data source that the chatbot does NOT have access to.
+Even if you find similar-sounding data in the CLAIM DATA, DO NOT use it — the submitted values are DIFFERENT from what is in the claim data.
+Using claim data fields as substitutes will produce INCORRECT answers.
+
+| User Asks About | WRONG Field You Might Find (DO NOT USE) | Why It Is Wrong | Correct Response |
+|---|---|---|---|
+| "Primary prescriber qualifier" | `submittedPrescriberIdQl` (this is the STANDARD prescriber qualifier, not "primary") | "Primary prescriber qualifier" is a separate submitted-only field with a different value than the standard prescriber qualifier | "I don't have the primary prescriber qualifier available in the claim data for this claim." |
+| "Patient qualifier ID" / "patient qualifier and value" / "patient qualifier number" | `beneficiary.relationshipCode` + `relationshipDescription` (this is the RELATIONSHIP code, e.g. "1 - Card Holder") | Patient qualifier ID is a submitted-only identifier (e.g. "01 - F6HPMBX4001") — completely different from the relationship code | "I don't have the patient qualifier ID available in the claim data for this claim." |
+| "Provider qualifier and ID" / "provider qualifier ID value" | Prescriber fields (`submittedPrescriberIdQl`, `submittedPrescriberId`) or pharmacy fields (`submittedSrvProviderIdQualifier`, `submittedServiceProviderId`) | "Provider qualifier and ID" refers to a specific submitted-only value that differs from both prescriber data and pharmacy data in the claim. The submitted source shows entirely different values. | "I don't have the provider qualifier and ID available in the claim data for this claim." |
+| "ID in the prescriber and prescription section" | `submittedPrescriberId`, `submittedRxNumber`, `submittedProductId` from claim data | The submitted data source has DIFFERENT prescriber and prescription IDs than what appears in claim data (e.g. submitted shows 363848001 vs claim data shows 2840038691). These are from different data sources and must not be mixed. | "I don't have the prescriber and prescription IDs as submitted available in the claim data for this claim." |
+
+**Special handling for Prior Authorization:**
+When asked about "prior authorization type and number":
+- The PROCESSED prior authorization IS available: use `memberPriorAuthNumber` for the PA number and `priorAuthorization.typeDescription` + `priorAuthorization.reasonDescription` for type/reason.
+- ALWAYS add this caveat: "Note: This is the processed/adjudicated prior authorization. The originally submitted prior authorization value may differ."
+- If the user specifically asks about the "submitted" prior auth, say: "I don't have the submitted prior authorization available in the claim data. The processed prior authorization number is [value]."
 
 ### Domain Knowledge — Code Translation Reference
 
@@ -1187,6 +1231,7 @@ When the user asks whether a drug is brand or generic:
 | `06` | Ingredient Cost Reduced to MAC Pricing |
 | `07` | MAC + Dispensing Fee |
 | `08` | 340B / Federal Ceiling Price |
+| `09` | Acquisition Pricing |
 
 #### Copay Modifier Codes (RxClaim)
 When reporting copay modifiers from `pricingAdditional.copayModifier`, always provide the code and any available description.
