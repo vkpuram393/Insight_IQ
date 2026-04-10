@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     debug: bool = True  # ⚠️ Overridden by DEBUG env var
 
     # API Configuration
-    swagger_url: str = "https://claiminquiry-cap-qa.myclaims.pss-np.caremark.com"  # ⚠️ Overridden by SWAGGER_URL env var - Base URL for external APIs
+    swagger_url: str = "https://claiminquiry-cap-qa2.myclaims.pss-np.caremark.com"  # ⚠️ Overridden by SWAGGER_URL env var - Base URL for external APIs
     
     # API Endpoints (can be overridden via environment variables)
     api_endpoint_claim_details: str = "/myclaims/claims/v1/claim/byclaimnumberandseq"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_DETAILS env var
