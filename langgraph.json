@@ -1,0 +1,7 @@
+{
+  "dependencies": ["requirements.txt"],
+  "graphs": {
+    "agent": "langgraph_agent.py:create_graph"
+  },
+  "env": ".env"
+}

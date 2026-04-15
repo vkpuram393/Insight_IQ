@@ -1,0 +1,94 @@
+# IDE directories
+.idea/
+.vscode/
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.build/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Unit test / coverage reports
+.coverage*
+htmlcov/
+.pytest_cache/
+
+# Logs & temp files
+*.log
+logs/
+/tmp/
+*.swp
+.DS_Store
+
+# Checkpoint / state databases
+checkpoints.db*
+
+# SQLite telemetry databases
+data/telemetry.db
+data/telemetry.db-wal
+data/telemetry.db-shm
+data/telemetry_test.db*
+data/*.corrupted.*
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Certificates (should never be committed)
+certs/
+*.cer
+*.crt
+*.pem
+*.p12
+*.pfx
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Cache directories
+.cache/
+
+# MyPy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Ruff / lint caches
+.ruff_cache/
+
+# Profiling data
+.prof
+
+# Generated documentation
+site/
+
+# Coverage XML/Reports
+coverage.xml
+
+# Ignore local tooling state
+copilot-*.json
+*.pkl
+data/telemetry.db
+
+# Test and documentation files (keep local only)
+monitor_flow.sh
+cvs_classifier_steps_3_to_12.png
+nodes/master_llm_agent.py
+test_cvs_classifier_endpoints.sh
+CVS_INTENT_CLASSIFIER_FLOW.md
+CVS_INTENT_CLASSIFIER_INTEGRATION.md
+*.pid
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

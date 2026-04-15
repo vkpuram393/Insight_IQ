@@ -1,0 +1,106 @@
+#namespace, app version and image details1
+envName: pbmassist-prod
+skipSecurityContext: true
+projectId: pbm-prod-myclaims   # top-level projectId
+
+#Workload Identity configuration..
+workloadIdentity:
+  enabled: true
+  gcpProject: pbm-prod-myclaims
+  serviceAccountName: sa-myclaims-ai-prod
+  serviceAccountEmail: sa-myclaims-ai-prod@pbm-prod-myclaims.iam.gserviceaccount.com
+
+# App metadata
+appData:
+  envName: pbmassist-prod
+  nameSpace: pbmassist-prod
+  dockerHub: cvsh.jfrog.io
+  dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
+  dockerImageName: pss-myclaims-ai-agent
+  dockerImageTag: d425cd9ad133ee8af3cd8a16cfa3f6c8144630cb
+  # This will be overridden by the deployment workflow with git SHA tag
+
+
+#hpa settings - min and max replicas and minAvailable for PDB
+hpaSettings: 
+  minAvailable: 3
+  minReplicas: 3
+  maxReplicas: 3
+  averageUtilization: 80
+
+# Pod resource requests and limits
+resources:
+  requests:
+    cpu: "2000m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+# environment variables for app - secret values come from vault
+envVars: |
+  - name: ENABLE_TRACING
+    value: 'true'
+  - name: ENV
+    value: prod
+  - name: ENVIRONMENT
+    value: "prod"
+  - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    value: https://otelc-gmp-collector-grpc.nonprod.aig.aetna.com
+  - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    value: https://otelc-traces-collector-grpc.nonprod.aig.aetna.com
+  - name: OTEL_SERVICE_NAME
+    value: APM0017166
+  - name: GCP_PROJECT_ID
+    value: pbm-prod-myclaims
+  - name: PROJECT_ID
+    value: pbm-prod-myclaims
+  - name: ENV_NAME
+    value: pbmassist-prod
+  - name: LOCATION
+    value: us-east4
+  - name: APP_NAME
+    value: pss-myclaims-ai-agent
+  - name: APP_VERSION
+    value: "1.0.2.0"
+  - name: LOG_LEVEL
+    value: ERROR
+  - name: USE_MOCK_LLM
+    value: "false"
+  - name: LLM_MODEL
+    value: "gemini-2.5-flash"
+  - name: DATABASE_URI
+    value: "sqlite:///:memory:"
+  - name: REDIS_URI
+    value: "redis://localhost:6379/0"
+  - name: PERSISTENCE_STORE_TYPE
+    value: "mongodb"
+  - name: MONGODB_HOST
+    value: "mdb-use4-myclaims-prod01-pl-0-us-east4.lzvfx7.mongodb.net"
+  - name: MONGODB_DATABASE_NAME
+    value: "myclaims-PROD"
+  - name: SWAGGER_URL
+    value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
+  - name: use_embedding_classifier
+    value: 'true'
+  # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
+
+# Environment secrets from HashiCorp Vault
+envSecrets: |-
+  - secretRef:
+      name: pss-myclaims-secrets-prod
+
+istioHttpRoutes:
+  routes:
+    - route: "/pss-myclaims-ai-agent/"
+      matchHeaders: '^(.*?;)?\s*(canary=on)(;.*)?$'
+    - route: "/"
+    - route: "/api/"
+    - route: "/docs/"
+    - route: "/health"
+    - route: "/pss/pbmassist/v1"
+    - route: "/pss/pbmassist/"
+    - route: "/debug/memory/"
+    - route: "/debug/memory/reset-baseline"
+## Triggers 3
+  

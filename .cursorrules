@@ -1,0 +1,20 @@
+# Cursor Rules for pss-myclaims-ai-agent
+
+## File Generation Rules
+
+### Markdown Files
+- **DO NOT** create, generate, or write markdown (.md) files unless the user explicitly requests it
+- This includes documentation files, README files, changelogs, implementation plans, summaries, or any other markdown documentation
+- Only create markdown files when the user specifically asks for documentation or explicitly requests a markdown file
+- If you need to provide explanations or summaries, do so in your responses, not in markdown files
+- Update readme and developer_guide as changes are made
+
+### Code Files
+
+## General Guidelines
+- Follow existing code patterns and conventions
+- Maintain consistency with the codebase architecture
+- Use type hints and follow PEP 8 style guidelines
+- Add appropriate error handling and logging
+
+
