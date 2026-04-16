@@ -16,6 +16,7 @@ from core.errors.error_handler import to_agent_error
 from utils.retry import async_retry
 from core.errors.exceptions import ExternalAPIError, ToolTimeoutError
 from tools.api_fallbacks import get_fallback_details, get_fallback_list  # dynamic fallback data
+from tools.sequence_transformer import transform_sequences_to_user_format  # deep sequence 999→001 converter
 
 from core.node_models import ToolResult, ToolExecutionStatus
 from core.errors.models import (
@@ -1536,28 +1537,23 @@ async def combine_claim_details_and_list(claimNumber: str, claimSequence: str, a
     logger.info("Step 4: Merging claim details with list data")
     enriched_details = claim_details.copy() if isinstance(claim_details, dict) else {}
 
-    # CRITICAL: Transform sequence from API format to user format
-    # API uses inverted sequence: API_seq = 1000 - user_seq
-    # Example: User asks for 001 → API stores 999 → we convert back to 001
     if matched_claim and isinstance(matched_claim, dict):
-        matched_claim_copy = matched_claim.copy()
-        primary = matched_claim_copy.get("primary", {})
-        if isinstance(primary, dict) and "sequence" in primary:
-            api_sequence = primary.get("sequence")
-            if api_sequence is not None:
-                try:
-                    user_sequence = 1000 - int(api_sequence)
-                    # Format as 3-digit string with leading zeros (e.g., 1 -> "001")
-                    primary["sequence"] = str(user_sequence).zfill(3)
-                    logger.info(f"   🔄 Transformed sequence: {api_sequence} → {primary['sequence']}")
-                except (ValueError, TypeError):
-                    logger.warning(f"   ⚠️ Could not transform sequence: {api_sequence}")
-            matched_claim_copy["primary"] = primary
-        enriched_details["list_data"] = matched_claim_copy
+        enriched_details["list_data"] = matched_claim
     else:
         enriched_details["list_data"] = matched_claim
 
-    logger.info(f"✅ Successfully enriched claim details with list_data")
+    # Step 5: Deep sequence transformation (999 → 001 throughout entire response)
+    # This replaces the old single-field workaround that only fixed list_data.primary.sequence.
+    # The transformer converts ALL matching sequence fields in the entire response
+    # so the LLM never sees internal 999-form values.
+    logger.info("Step 5: Transforming all internal sequences to user-facing format")
+    enriched_details = transform_sequences_to_user_format(
+        data=enriched_details,
+        user_sequence=claimSequence,
+        claim_number=claimNumber,
+    )
+
+    logger.info(f"✅ Successfully enriched claim details with list_data + sequence transform")
     logger.info(f"   📌 User requested: claimNumber={claimNumber}, claimSequence={claimSequence}")
 
     return enriched_details

@@ -76,19 +76,27 @@ class ConversationContextService:
             logger.info(f"✓ Extracted claim_number from history (most recent): {extracted['claim_number']}")
         
         # ========================================================================
-        # FALLBACK: Standalone 15-digit claim ID (no keyword required)
+        # ALWAYS CHECK: Standalone 15-digit claim ID for recency override
         # ========================================================================
         # Aligned with EntityExtractor pattern: r'\b(CLM\d{3,10}|\d{15})\b'
         # This catches user input like "253016267966353 - 1" without "claim" keyword
         # Safe: 15-digit numbers are highly specific, low false positive risk
-        # Only runs if keyword-based extraction above found nothing
-        if "claim_number" not in extracted:
-            standalone_claim_pattern = r'\b(\d{15})\b'
-            standalone_claim_matches = re.findall(standalone_claim_pattern, history_text)
-            if standalone_claim_matches:
-                # Use most recent 15-digit number (last in list)
-                extracted["claim_number"] = standalone_claim_matches[-1]
+        #
+        # CRITICAL FIX: Always run this check, even if keyword-based extraction
+        # already found a claim. The keyword pattern misses inputs like
+        # "253524123664273 001 summary" where no claim/clm keyword is adjacent.
+        # Since history_text is concatenated oldest→newest, findall()[-1] gives
+        # the most recent mention, which should take priority.
+        standalone_claim_pattern = r'\b(\d{15})\b'
+        standalone_claim_matches = re.findall(standalone_claim_pattern, history_text)
+        if standalone_claim_matches:
+            most_recent_claim = standalone_claim_matches[-1]
+            if "claim_number" not in extracted:
+                extracted["claim_number"] = most_recent_claim
                 logger.info(f"✓ Extracted claim_number from history (standalone 15-digit): {extracted['claim_number']}")
+            elif extracted["claim_number"] != most_recent_claim:
+                logger.info(f"✓ Overriding claim_number from history for recency: {extracted['claim_number']} → {most_recent_claim}")
+                extracted["claim_number"] = most_recent_claim
         
         # ========================================================================
         # Pattern 2: Member IDs - MUST have "member"/"patient" keyword

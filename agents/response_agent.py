@@ -424,7 +424,7 @@ Patient Pay children (shown only when non-zero; Submitted = $0.00):
 
 **Claim # and Status — CONDITIONAL on `list_data.primary.stcob`:**
 - The current claim's number (`list_data.primary.number`/`sequence`) and status (`list_data.primary.statusDescription`) go in the column matching its stcob role: "P" → Primary column, "S" → Secondary column.
-- The counterpart claim number is `list_data.primary.linkedClaims.stcob.claimNumber` with sequence = 1000 minus `list_data.primary.linkedClaims.stcob.claimSequence`. Place it in the OTHER column.
+- The counterpart claim number is `list_data.primary.linkedClaims.stcob.claimNumber` with sequence = `list_data.primary.linkedClaims.stcob.claimSequence`. Place it in the OTHER column.
 - The counterpart's adjudicated status is not available from current claim data — do not display or infer it.
 
 Remaining fields from `linkedClaim.stcob` (same regardless of stcob role):
