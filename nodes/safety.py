@@ -1623,6 +1623,12 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
             # This can happen when response_safety_pii_precheck runs twice and overwrites mapping
             response_cleaned = re.sub(r'\bclaim\s+claim\s+(\d{4,})', r'claim \1', response_cleaned, flags=re.IGNORECASE)
             
+            # FIX: Strip markdown bold formatting (**text**) from LLM response
+            # LLMs sometimes use **bold** despite explicit prompt instructions not to
+            response_cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', response_cleaned)
+            # FIX: Strip markdown heading syntax (# Heading) from start of lines
+            response_cleaned = re.sub(r'^#{1,6}\s+', '', response_cleaned, flags=re.MULTILINE)
+            
             # FIX: Unmask entities using token_storage fallback even when combined_token_mapping is empty
             # The second call to response_safety_pii_precheck clears the mapping, but tokens persist in storage
             entities = state.get("entities")
@@ -1938,6 +1944,19 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         cleaned_response = re.sub(r'\bclaim\s+claim\s+(\d{4,})', r'claim \1', unmasked_response, flags=re.IGNORECASE)
         if cleaned_response != unmasked_response:
             logger.info(f"🔧 Cleaned 'claim claim' duplication in response")
+            unmasked_response = cleaned_response
+        
+        # FIX: Strip markdown bold formatting (**text**) from LLM response
+        # LLMs sometimes use **bold** despite explicit prompt instructions not to
+        # This is a deterministic post-processing fix (prompt alone is insufficient)
+        cleaned_response = re.sub(r'\*\*(.*?)\*\*', r'\1', unmasked_response)
+        if cleaned_response != unmasked_response:
+            logger.info(f"🔧 Stripped markdown bold formatting from response")
+            unmasked_response = cleaned_response
+        # FIX: Strip markdown heading syntax (# Heading) from start of lines
+        cleaned_response = re.sub(r'^#{1,6}\s+', '', unmasked_response, flags=re.MULTILINE)
+        if cleaned_response != unmasked_response:
+            logger.info(f"🔧 Stripped markdown heading formatting from response")
             unmasked_response = cleaned_response
         
         # === Unmask recommendations ===

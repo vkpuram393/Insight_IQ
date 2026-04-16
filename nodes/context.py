@@ -319,6 +319,30 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
             logger.error(f"   ❌ Failed to save conversation: {save_error}")
             print(f"   ❌ SAVE FAILED: {save_error}")
             traceback.print_exc()
+            # Log to MongoDB exceptions collection (additive - existing logging above preserved)
+            try:
+                save_tb = traceback.format_exc()
+                save_err = create_internal_error(
+                    error_message=f"Conversation save failed: {str(save_error)}",
+                    stacktrace=save_tb,
+                    session_id=log_ctx["session_id"],
+                    node_name=node_name
+                )
+                await persistence_store.log_exception(
+                    error_code=save_err.error_code.value,
+                    category=save_err.category.value,
+                    severity=save_err.severity.value,
+                    message=save_err.message,
+                    user_message=save_err.user_message,
+                    session_id=log_ctx["session_id"],
+                    request_id=log_ctx["request_id"],
+                    node_name=node_name,
+                    stacktrace=save_tb,
+                    metadata={"sub_operation": "save_conversation"},
+                    user_id=log_ctx["user_id"]
+                )
+            except Exception:
+                pass  # Don't break workflow if exception logging itself fails
             # Continue execution even if save fails - don't break the workflow
 
         # Get updated context from memory store
@@ -364,7 +388,7 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         
         logger.error(f"🚨 Exception in memory update: {e}\n{tb}")
         
-        return {
+        result = {
             "error": error.user_message,
             "conversation_history": state.get("conversation_history", []),
             "relevant_facts": state.get("relevant_facts", []),
@@ -375,3 +399,6 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
                 "memory_updated": False
             }
         }
+        # Log state snapshot for debugging (matches build_context_node except pattern)
+        await log_state_snapshot(state, node_name, result)
+        return result

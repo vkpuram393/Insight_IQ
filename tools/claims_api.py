@@ -177,7 +177,30 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=None,
                 is_retryable=False
             )
-            return {"tool_results": tool_result.dict()}
+            # Log to exceptions collection for debugging (additive - existing log_audit above preserved)
+            try:
+                if log_ctx and settings.enable_telemetry:
+                    if persistence_store is None:
+                        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        metadata={"validation_type": "no_intent"},
+                        user_id=log_ctx.get("user_id")
+                    )
+            except Exception:
+                pass  # Never break tool flow if exception logging fails
+            # Log state snapshot for debugging
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
             
         # Validate entities exist
         if not entities:
@@ -197,7 +220,30 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=None,
                 is_retryable=False
             )
-            return {"tool_results": tool_result.dict()}
+            # Log to exceptions collection for debugging (additive)
+            try:
+                if log_ctx and settings.enable_telemetry:
+                    if persistence_store is None:
+                        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        metadata={"validation_type": "no_entities"},
+                        user_id=log_ctx.get("user_id")
+                    )
+            except Exception:
+                pass  # Never break tool flow if exception logging fails
+            # Log state snapshot for debugging
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
         
         entities = normalize_entities(entities) 
 
@@ -270,7 +316,30 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=None,
                 is_retryable=False
             )
-            return {"tool_results": tool_result.dict()}
+            # Log to exceptions collection for debugging (additive - existing GCP log above preserved)
+            try:
+                if log_ctx and settings.enable_telemetry:
+                    if persistence_store is None:
+                        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        metadata={"validation_type": "sequence_required", "claim_number": claim_num},
+                        user_id=log_ctx.get("user_id")
+                    )
+            except Exception:
+                pass  # Never break tool flow if exception logging fails
+            # Log state snapshot for debugging
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
         
         # ========================================================================
         # ENRICHED CLAIM DETAILS FLOW (claim number + sequence)
@@ -371,7 +440,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                     is_retryable=False,
                     metadata={}
                 )
-                return {"tool_results": tool_result.dict()}
+                # Log state snapshot for debugging (success path - no exception logging needed)
+                result_dict = {"tool_results": tool_result.dict()}
+                if isinstance(state, dict):
+                    await log_state_snapshot(state, "call_claims_tool", result_dict)
+                return result_dict
                 
             except Exception as exc:
                 elapsed_ms = (time.time() - start) * 1000.0
@@ -380,7 +453,7 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 # Map exception to AgentError
                 ae = to_agent_error(exc, node="claim_details_enriched")
                 
-                # Log failure
+                # Log failure (existing log_audit preserved, log_exception added alongside)
                 if log_ctx and persistence_store:
                     await persistence_store.log_audit(
                         session_id=log_ctx.get("session_id"),
@@ -395,6 +468,23 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                             "status": "failure"
                         }
                     )
+                    # Also log to exceptions collection for debugging
+                    try:
+                        await persistence_store.log_exception(
+                            error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                            category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                            severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                            message=ae.message,
+                            user_message=ae.user_message,
+                            session_id=log_ctx.get("session_id"),
+                            request_id=log_ctx.get("request_id"),
+                            node_name="call_claims_tool",
+                            stacktrace=traceback.format_exc(),
+                            metadata={"flow": "enriched_details_failure", "execution_time_ms": elapsed_ms},
+                            user_id=log_ctx.get("user_id")
+                        )
+                    except Exception:
+                        pass  # Never break tool flow if exception logging fails
                 
                 # Extract full API error response details from exception if available
                 # This ensures response agent gets complete error info for all error types
@@ -434,7 +524,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                     http_status_code=ae.metadata.get("status_code") if isinstance(ae.metadata, dict) else None,
                     is_retryable=ae.is_retryable
                 )
-                return {"tool_results": tool_result.dict()}
+                # Log state snapshot for debugging
+                result_dict = {"tool_results": tool_result.dict()}
+                if isinstance(state, dict):
+                    await log_state_snapshot(state, "call_claims_tool", result_dict)
+                return result_dict
         
         # ========================================================================
         # STANDARD FLOW: All other intents use normal matching logic
@@ -461,8 +555,30 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 http_status_code=None,
                 is_retryable=False
             )
-            # return tool_result.dict()
-            return {"tool_results": tool_result.dict()}
+            # Log to exceptions collection for debugging (additive)
+            try:
+                if log_ctx and settings.enable_telemetry:
+                    if persistence_store is None:
+                        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        metadata={"validation_type": "no_matching_api", "intent": intent},
+                        user_id=log_ctx.get("user_id")
+                    )
+            except Exception:
+                pass  # Never break tool flow if exception logging fails
+            # Log state snapshot for debugging
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
 
         logger.info(f"✅ [MATCH] Selected API → {getattr(api, 'name', '<unknown>')}")
 
@@ -486,7 +602,31 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                 api_endpoint=getattr(api, "full_url", None),
                 is_retryable=False
             )
-            return {"tool_results": tool_result.dict()}
+            # Log to exceptions collection for debugging (additive)
+            try:
+                if log_ctx and settings.enable_telemetry:
+                    if persistence_store is None:
+                        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        stacktrace=traceback.format_exc(),
+                        metadata={"validation_type": "body_template_failure", "api_name": getattr(api, "name", "unknown")},
+                        user_id=log_ctx.get("user_id")
+                    )
+            except Exception:
+                pass  # Never break tool flow if exception logging fails
+            # Log state snapshot for debugging
+            result_dict = {"tool_results": tool_result.dict()}
+            if isinstance(state, dict):
+                await log_state_snapshot(state, "call_claims_tool", result_dict)
+            return result_dict
 
         # Log API call attempt for audit trail
         if log_ctx and persistence_store:
@@ -556,7 +696,7 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
             # map exception -> AgentError and fill ToolResult
             ae = to_agent_error(exc, node=getattr(api, "name", None))
 
-            # Log failed API call
+            # Log failed API call (existing log_audit preserved, log_exception added alongside)
             if log_ctx and persistence_store:
                 await persistence_store.log_audit(
                     session_id=log_ctx.get("session_id"),
@@ -571,6 +711,23 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
                         "status": "failure"
                     }
                 )
+                # Also log to exceptions collection for debugging
+                try:
+                    await persistence_store.log_exception(
+                        error_code=ae.error_code.value if hasattr(ae.error_code, "value") else str(ae.error_code),
+                        category=ae.category.value if hasattr(ae.category, "value") else str(ae.category),
+                        severity=ae.severity.value if hasattr(ae.severity, "value") else str(ae.severity),
+                        message=ae.message,
+                        user_message=ae.user_message,
+                        session_id=log_ctx.get("session_id"),
+                        request_id=log_ctx.get("request_id"),
+                        node_name="call_claims_tool",
+                        stacktrace=traceback.format_exc(),
+                        metadata={"flow": "standard_api_failure", "api_name": getattr(api, "name", "unknown"), "execution_time_ms": elapsed_ms},
+                        user_id=log_ctx.get("user_id")
+                    )
+                except Exception:
+                    pass  # Never break tool flow if exception logging fails
 
             # Extract full API error response details from exception if available
             api_error_details = {}
@@ -603,9 +760,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
         tb = traceback.format_exc()
         logger.error(f"🚨 Unexpected exception in call_claims_tool_node: {e}\n{tb}")
         
-        # Log exception to database
-        if log_ctx and persistence_store:
+        # Log exception to database (fix: initialize persistence_store if not yet created)
+        if log_ctx:
             try:
+                if persistence_store is None:
+                    persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
                 await persistence_store.log_exception(
                     session_id=log_ctx.get("session_id"),
                     request_id=log_ctx.get("request_id"),
@@ -637,7 +796,11 @@ async def call_claims_tool_node(state) -> Dict[str, Any]:
             http_status_code=None,
             is_retryable=False
         )
-        return {"tool_results": tool_result.dict()}
+        # Log state snapshot for debugging
+        result_dict = {"tool_results": tool_result.dict()}
+        if isinstance(state, dict):
+            await log_state_snapshot(state, "call_claims_tool", result_dict)
+        return result_dict
 
 
 
