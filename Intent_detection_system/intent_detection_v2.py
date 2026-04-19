@@ -16,6 +16,7 @@ import os
 import json
 import logging
 import math
+import time
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Tuple, Union, Optional
@@ -67,17 +68,73 @@ class VertexEmbeddings:
             logger.error(f"❌ Vertex AI auth failed: {e}")
             raise
 
-    def embed(self, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+    # Rate-limit settings for Vertex AI text-embedding-005
+    MAX_RETRIES = 5
+    INITIAL_BACKOFF = 2.0        # seconds
+    BACKOFF_MULTIPLIER = 2.0     # exponential: 2s, 4s, 8s, 16s, 32s
+    INTER_REQUEST_DELAY = 0.3    # seconds between individual API calls
+    BATCH_PAUSE_EVERY = 20       # pause after every N calls
+    BATCH_PAUSE_SECONDS = 5.0    # how long to pause
+
+    def _embed_single_with_retry(self, text: str) -> List[float]:
+        """Embed a single text with exponential backoff retry on 429 errors."""
         from google.genai import types
+
+        backoff = self.INITIAL_BACKOFF
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                response = self.client.models.embed_content(
+                    model=self.model_name,
+                    contents=[types.Part.from_text(text=text)],
+                )
+                return response.embeddings[0].values
+            except Exception as e:
+                error_str = str(e).lower()
+                is_rate_limit = (
+                    "429" in error_str
+                    or "resource exhausted" in error_str
+                    or "too many requests" in error_str
+                    or "quota" in error_str
+                )
+                if is_rate_limit and attempt < self.MAX_RETRIES:
+                    logger.warning(
+                        f"⏳ Rate limited (attempt {attempt}/{self.MAX_RETRIES}). "
+                        f"Retrying in {backoff:.1f}s …"
+                    )
+                    time.sleep(backoff)
+                    backoff *= self.BACKOFF_MULTIPLIER
+                else:
+                    logger.error(f"❌ Embedding failed after {attempt} attempts: {e}")
+                    raise
+
+    def embed(self, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+        """Generate embedding(s) with rate-limit handling.
+
+        Adds:
+        - Exponential backoff retry on 429 / Resource Exhausted errors
+        - Inter-request delay to stay under QPM quota
+        - Periodic batch pause to avoid sustained burst
+        """
         is_single = isinstance(text, str)
         texts = [text] if is_single else text
+
         embeddings_list = []
-        for t in texts:
-            response = self.client.models.embed_content(
-                model=self.model_name,
-                contents=[types.Part.from_text(text=t)],
-            )
-            embeddings_list.append(response.embeddings[0].values)
+        for i, t in enumerate(texts):
+            # Throttle: pause between requests
+            if i > 0:
+                time.sleep(self.INTER_REQUEST_DELAY)
+
+            # Batch pause: longer break every N requests
+            if i > 0 and i % self.BATCH_PAUSE_EVERY == 0:
+                logger.info(
+                    f"  ⏸  Batch pause after {i} calls "
+                    f"({self.BATCH_PAUSE_SECONDS}s cooldown) …"
+                )
+                time.sleep(self.BATCH_PAUSE_SECONDS)
+
+            vec = self._embed_single_with_retry(t)
+            embeddings_list.append(vec)
+
         return embeddings_list[0] if is_single else embeddings_list
 
 
