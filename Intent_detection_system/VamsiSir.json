@@ -1,0 +1,62 @@
+{
+    "cap_api": {
+        "name": "Cap-API",
+        "description": 
+            "Capability API for single-claim operations: claim status, pricing, pharmacy details, prescriber information, rejection analysis, settlement codes, reversals, coordination of benefits, reimbursement, prescription details, and generic alternatives."
+        ,
+        "api_endpoint": "/myclaims/claims/v1/claim/byclaimnumber",
+        "intents": [
+            "claim_status",         
+            "multi_claim_summary",  
+            "pharmacy_info",        
+            "prescriber_info",      
+            "pricing_info",         
+            "reimbursement_info",   
+            "rejection_reasons",    
+            "settlement_info",      
+            "rx_details",           
+            "reversal_info",        
+            "cob_info",             
+            "generic_availability"
+        ]
+    },
+    "claim_history_search": {
+        "name": "Claim History Search",
+        "description": 
+            "Claim history and drug search API: searching claims by date range, drug information lookups, fill date queries, drug interaction reviews (DUR), and compound medication details."
+        ,
+        "api_endpoint": "/myclaims/claims/v1/claim/history",
+        "intents": [
+            "claim_status",         
+            "date_range_claims",    
+            "drug_info",            
+            "fill_date_info",       
+            "drug_interaction_info",
+            "compound_info"     
+            ]
+    },
+    "benefits_api": {
+        "name": "Benefits API",
+        "description": 
+            "Member benefits API: benefit phase and coverage tier, audit trail and change history, approval details including transition fill (TF), plan overrides, and BPG configuration."
+        ,
+        "api_endpoint": "/myclaims/benefits/v1/member",
+        "intents": [
+            "beneficiary_info",     
+            "audit_info",           
+            "approval_info"
+        ]
+    },
+    "general": {
+        "name": "General",
+        "description": 
+            "Non-API intents: greetings, help requests, and queries unrelated to pharmacy claims."
+        ,
+        "api_endpoint": null,
+        "intents": [
+            "greeting",             
+            "help",                 
+            "out_of_scope"         
+        ]
+    }
+}
