@@ -310,6 +310,242 @@ def _load_or_generate_intent_centroids() -> Dict[str, List[float]]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# INTENT DESCRIPTIONS (for cross-encoder reranking)
+# ═════════════════════════════════════════════════════════════════════════════
+
+INTENT_DESCRIPTIONS = {
+    # ── Cap-API ──────────────────────────────────────────────────────────
+    "claim_status": (
+        "General claim status, adjudication outcome, processing result, "
+        "and overall claim summary including whether the claim was paid, "
+        "rejected, or is pending."
+    ),
+    "multi_claim_summary": (
+        "Summary of ALL claims for a member, complete claim list, "
+        "multiple claim records, and full claim history overview."
+    ),
+    "pharmacy_info": (
+        "Dispensing pharmacy name, location, address, NCPDP number, "
+        "and store details where the prescription was filled."
+    ),
+    "prescriber_info": (
+        "Prescribing physician name, NPI number, credentials, "
+        "contact information, and ordering provider details."
+    ),
+    "pricing_info": (
+        "Pricing and cost information for a pharmacy claim including copay amount, "
+        "ingredient cost, dispensing fee, patient pay, manufacturer rebate, "
+        "and total out-of-pocket cost breakdown."
+    ),
+    "reimbursement_info": (
+        "Reimbursement payment details for paper claims including the amount "
+        "paid to the pharmacy, reimbursement rationale, and payment calculation."
+    ),
+    "rejection_reasons": (
+        "Specific rejection reasons, failed edit codes, denial explanations, "
+        "and actionable steps to resolve or overturn a rejected pharmacy claim."
+    ),
+    "settlement_info": (
+        "Settlement codes and pharmacy response information sent back to the "
+        "dispensing pharmacy after claim adjudication, including feedback codes "
+        "and response messages."
+    ),
+    "rx_details": (
+        "Prescription RX number, fill number, quantity dispensed, "
+        "days supply, drug strength, and refill information."
+    ),
+    "reversal_info": (
+        "Claim reversal details, manual adjustments, reverse and resubmit "
+        "(R&R) information, modification history, and resubmission status."
+    ),
+    "cob_info": (
+        "Coordination of Benefits (COB) pricing, other insurance details, "
+        "secondary payer information, dual coverage breakdown, "
+        "and primary/secondary insurance adjudication."
+    ),
+    "generic_availability": (
+        "Generic alternative medications, therapeutic equivalents, "
+        "formulary-approved substitutes, and cheaper drug options "
+        "available for the prescribed medication."
+    ),
+    # ── Claim History Search ─────────────────────────────────────────────
+    "date_range_claims": (
+        "Claims within a specific date range, deductible-contributing claims, "
+        "accumulation history, and prescription fill history over time."
+    ),
+    "drug_info": (
+        "Drug name, NDC code, GPI, therapeutic class, formulary status, "
+        "medication tier, and drug classification assigned by RxClaim."
+    ),
+    "fill_date_info": (
+        "Date the prescription was filled, dispensing date, "
+        "service date, and fill timestamp."
+    ),
+    "drug_interaction_info": (
+        "Drug utilization review (DUR) edits, drug interaction alerts, "
+        "clinical screening results, and override details for "
+        "potential medication conflicts."
+    ),
+    "compound_info": (
+        "Compound medication details, Most Ingredient Cost (MIC) breakdown, "
+        "individual ingredient costs, funded versus unfunded components, "
+        "and compound formulation information."
+    ),
+    # ── Benefits API ─────────────────────────────────────────────────────
+    "beneficiary_info": (
+        "Member benefit phase, coverage tier, eligibility status, "
+        "accumulation rules, linked LOE information, and whether medical "
+        "dollars contribute to the member's accumulations."
+    ),
+    "audit_info": (
+        "Audit trail and change history for a claim, including "
+        "modification records, edit timestamps, and who made changes."
+    ),
+    "approval_info": (
+        "Claim approval details including plan overrides, transition fill (TF) "
+        "status and type, BPG configuration, accumulation bypass, "
+        "and Smart PA or Member PA applied during adjudication."
+    ),
+    # ── General ──────────────────────────────────────────────────────────
+    "greeting": "Casual greeting, hello, hi, welcome message, or conversation starter.",
+    "help": "Help request, guidance on claim submission, instructions for using the system.",
+    "out_of_scope": "Question unrelated to pharmacy claims, prescriptions, or insurance benefits.",
+    # ── Extra intents (from training data) ───────────────────────────────
+    "daw_info": "Dispense As Written (DAW) code, brand vs generic dispensing indicator.",
+    "prior_auth_info": "Prior authorization (PA) status, PA number, Smart PA configuration.",
+    "government_claim_type": "Government claim type, Medicare Part D, Medicaid, federal program indicator.",
+    "medicare_part_d": "Medicare Part D details, MEDD pricing, PDE information, CMS phase.",
+}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CROSS-ENCODER RERANKER (Tier 2 — local, no API calls)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class CrossEncoderReranker:
+    """Precision reranker using a cross-encoder model.
+    
+    Unlike bi-encoders (embed separately, compare vectors), a cross-encoder
+    processes the query AND candidate description TOGETHER, enabling word-level
+    attention that resolves cases like:
+      - "pricing summary" → pricing_info  (not claim_status)
+      - "claim summary"  → claim_status   (not pricing_info)
+    
+    Runs 100% locally on CPU. No API calls. No rate limits. ~5ms per pair.
+    
+    Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (22MB, fast)
+    Alternative: BAAI/bge-reranker-v2-m3 (568MB, more accurate)
+    """
+    
+    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    
+    def __init__(self):
+        self.model = None
+        self.tokenizer = None
+        self._loaded = False
+    
+    def _ensure_loaded(self):
+        """Lazy-load the model on first use (saves startup time)."""
+        if self._loaded:
+            return
+        try:
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+            import torch  # noqa: F401 — just verify it's available
+            
+            logger.info(f"🔄 Loading cross-encoder: {self.MODEL_NAME} …")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_NAME)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.MODEL_NAME)
+            self.model.eval()
+            self._loaded = True
+            logger.info(f"✅ Cross-encoder loaded (runs on CPU, ~5ms/pair)")
+        except ImportError:
+            logger.warning(
+                "⚠️  Cross-encoder unavailable (install: pip install transformers torch). "
+                "Falling back to embedding-only classification."
+            )
+            self._loaded = False
+    
+    @property
+    def available(self) -> bool:
+        """Check if cross-encoder can be used."""
+        if self._loaded:
+            return True
+        self._ensure_loaded()
+        return self._loaded and self.model is not None
+    
+    def rerank(
+        self,
+        query: str,
+        candidates: List[Tuple[str, str, float]],  # (intent_name, domain, embedding_score)
+    ) -> List[Tuple[str, str, float, float]]:
+        """Rerank intent candidates using cross-encoder.
+        
+        Args:
+            query: User's raw text query
+            candidates: List of (intent_name, domain, embedding_score)
+            
+        Returns:
+            List of (intent_name, domain, ce_score, embedding_score)
+            sorted by cross-encoder score descending.
+        """
+        import torch
+        
+        self._ensure_loaded()
+        if not self._loaded:
+            # Fallback: return candidates sorted by embedding score
+            return [
+                (name, domain, emb_score, emb_score)
+                for name, domain, emb_score in candidates
+            ]
+        
+        # Build (query, description) pairs
+        pairs = []
+        intent_names = []
+        domains = []
+        emb_scores = []
+        
+        for intent_name, domain, emb_score in candidates:
+            desc = INTENT_DESCRIPTIONS.get(intent_name, intent_name)
+            pairs.append((query, desc))
+            intent_names.append(intent_name)
+            domains.append(domain)
+            emb_scores.append(emb_score)
+        
+        # Batch encode and score
+        inputs = self.tokenizer(
+            pairs,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt",
+        )
+        
+        with torch.no_grad():
+            logits = self.model(**inputs).logits.squeeze(-1)
+            scores = torch.sigmoid(logits).numpy()
+        
+        # Combine results
+        results = [
+            (intent_names[i], domains[i], float(scores[i]), emb_scores[i])
+            for i in range(len(candidates))
+        ]
+        
+        # Sort by cross-encoder score
+        results.sort(key=lambda x: x[2], reverse=True)
+        return results
+
+
+# Module-level singleton (lazy loaded)
+_cross_encoder: CrossEncoderReranker = None
+
+def _get_cross_encoder() -> CrossEncoderReranker:
+    global _cross_encoder
+    if _cross_encoder is None:
+        _cross_encoder = CrossEncoderReranker()
+    return _cross_encoder
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # TASK 4: HIERARCHICAL CLASSIFICATION (Domain → Intent within Domain)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -354,6 +590,9 @@ def classify_hierarchical(
     domain_intent_map: Dict[str, Dict[str, np.ndarray]],
     domain_gap_threshold: float = 0.02,
     top_k_domains: int = 2,
+    query_text: str = None,
+    use_cross_encoder: bool = True,
+    ce_intent_gap_threshold: float = 0.05,
 ) -> Dict[str, Any]:
     """Hierarchical classification: domain first, then intent within domain.
     
@@ -418,20 +657,89 @@ def classify_hierarchical(
     else:
         candidate_domains = [top_domain]
 
-    # ── Step 3: Find best intent across candidate domains ────────────────
-    best_intent = None
-    best_intent_score = -1.0
-    best_intent_domain = None
+    # ── Step 3: Find best intent across candidate domains (embedding) ───
+    embedding_ranked = []  # (intent_name, domain, cosine_score)
 
     for domain_name in candidate_domains:
         if domain_name not in domain_intent_map:
             continue
         for intent_name, intent_centroid in domain_intent_map[domain_name].items():
             sim = _cosine_similarity(query_vec, intent_centroid)
-            if sim > best_intent_score:
-                best_intent_score = sim
-                best_intent = intent_name
-                best_intent_domain = domain_name
+            embedding_ranked.append((intent_name, domain_name, sim))
+
+    embedding_ranked.sort(key=lambda x: x[2], reverse=True)
+
+    if not embedding_ranked:
+        return {
+            "predicted_domain": top_domain,
+            "predicted_intent": "unknown",
+            "domain_score": top_score,
+            "intent_score": 0.0,
+            "domain_scores": domain_scores,
+            "considered_domains": candidate_domains,
+            "is_ambiguous_domain": is_ambiguous,
+            "tier_used": "none",
+        }
+
+    top_embedding = embedding_ranked[0]
+    second_embedding = embedding_ranked[1] if len(embedding_ranked) > 1 else None
+    embedding_gap = (
+        top_embedding[2] - second_embedding[2] if second_embedding else 1.0
+    )
+
+    # ── Step 4: Cross-encoder reranking (only when ambiguous) ────────────
+    #
+    #  When to fire the cross-encoder:
+    #   a) Domain was ambiguous (multi-domain fallback active)  OR
+    #   b) Top-2 intents from embedding are very close (gap < threshold)
+    #
+    #  When NOT to fire:
+    #   - Clear domain + clear intent winner → embedding is sufficient
+    #   - Cross-encoder unavailable (not installed)
+    #   - Disabled via use_cross_encoder=False
+    #
+    intent_is_ambiguous = embedding_gap < ce_intent_gap_threshold
+    should_rerank = (
+        use_cross_encoder
+        and query_text is not None
+        and (is_ambiguous or intent_is_ambiguous)
+    )
+
+    tier_used = "embedding"  # default
+
+    if should_rerank:
+        ce = _get_cross_encoder()
+        if ce.available:
+            # Send top-5 candidates to cross-encoder
+            top_k = embedding_ranked[:5]
+            reranked = ce.rerank(query_text, top_k)
+
+            if reranked:
+                best = reranked[0]
+                best_intent = best[0]
+                best_intent_domain = best[1]
+                best_intent_score = best[2]  # cross-encoder score
+                tier_used = "cross_encoder"
+
+                logger.debug(
+                    f"  🔀 Cross-encoder reranked: {best_intent} ({best_intent_domain}) "
+                    f"CE={best_intent_score:.3f}, Emb={best[3]:.3f}"
+                )
+            else:
+                # Fallback to embedding result
+                best_intent = top_embedding[0]
+                best_intent_domain = top_embedding[1]
+                best_intent_score = top_embedding[2]
+        else:
+            # Cross-encoder not available — use embedding
+            best_intent = top_embedding[0]
+            best_intent_domain = top_embedding[1]
+            best_intent_score = top_embedding[2]
+    else:
+        # Clear winner from embeddings — no reranking needed
+        best_intent = top_embedding[0]
+        best_intent_domain = top_embedding[1]
+        best_intent_score = top_embedding[2]
 
     # ── The domain of the winning intent IS the final domain ─────────────
     # This is crucial: even if domain routing said "cap_api", but the
@@ -444,6 +752,7 @@ def classify_hierarchical(
         "domain_scores": domain_scores,
         "considered_domains": candidate_domains,
         "is_ambiguous_domain": is_ambiguous,
+        "tier_used": tier_used,
     }
 
 
@@ -521,7 +830,8 @@ def classify_and_evaluate(
 
         if method == "hierarchical":
             result = classify_hierarchical(
-                query_vec, domain_centroids_np, domain_intent_map
+                query_vec, domain_centroids_np, domain_intent_map,
+                query_text=text,
             )
             predicted_intent = result["predicted_intent"]
             predicted_domain = result["predicted_domain"]
@@ -529,6 +839,7 @@ def classify_and_evaluate(
                 "intent_score": result["intent_score"],
                 "domain_score": result["domain_score"],
                 "is_ambiguous": result["is_ambiguous_domain"],
+                "tier_used": result.get("tier_used", "embedding"),
                 "considered_domains": "|".join(result["considered_domains"]),
             }
         elif method == "flat_cosine":
@@ -577,6 +888,21 @@ def classify_and_evaluate(
     print(f"  Intent Classification Accuracy : {intent_accuracy:.2f}%")
     print(f"  Domain Classification Accuracy : {domain_accuracy:.2f}%")
     print(f"{'='*60}")
+
+    # ── Cross-encoder usage stats (hierarchical only) ────────────────────
+    if method == "hierarchical" and "tier_used" in df.columns:
+        tier_counts = df["tier_used"].value_counts()
+        total = len(df)
+        print(f"\n  Classification Tier Usage:")
+        for tier, count in tier_counts.items():
+            pct = count / total * 100
+            print(f"    {tier:<20} {count:>5} queries ({pct:.1f}%)")
+        if "cross_encoder" in tier_counts:
+            ce_rows = df[df["tier_used"] == "cross_encoder"]
+            ce_intent_acc = ce_rows["intent_match"].mean() * 100
+            ce_domain_acc = ce_rows["domain_match"].mean() * 100
+            print(f"    Cross-encoder accuracy: intent={ce_intent_acc:.1f}%, domain={ce_domain_acc:.1f}%")
+        print()
 
     # ── Per-domain breakdown ─────────────────────────────────────────────
     print(f"\n  Per-Domain Accuracy:")
