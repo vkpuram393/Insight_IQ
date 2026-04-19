@@ -222,6 +222,11 @@ if __name__ == "__main__":
 
     MODEL_DIR = r"C:\ProjectData\POC-Flow-1\local_model"
 
+    # Fallback to HuggingFace model if local model directory doesn't exist
+    if not os.path.isdir(MODEL_DIR):
+        logger.warning(f"Local model dir not found: {MODEL_DIR}. Falling back to HuggingFace model.")
+        MODEL_DIR = "microsoft/deberta-large-mnli"
+
     router = NLIDomainRouter(
         domain_hypotheses=DOMAIN_HYPOTHESES,
         model_dir=MODEL_DIR,

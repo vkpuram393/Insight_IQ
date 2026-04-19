@@ -29,6 +29,7 @@
 13. [Performance & Cost Analysis](#13-performance--cost-analysis)
 14. [Migration Strategy](#14-migration-strategy)
 15. [Appendix](#appendix)
+    - [F. Domain Imbalance & Cluster Overlap Problem (v2 Fix)](#f-domain-imbalance--cluster-overlap-problem-v2-fix)
 
 ---
 
@@ -1769,7 +1770,141 @@ If the cascading router underperforms in production:
 
 ---
 
-### F. References
+### F. Domain Imbalance & Cluster Overlap Problem (v2 Fix)
+
+#### F.1 The Problem
+
+When domains have **vastly different numbers of intents**, naive centroid computation creates accuracy drops:
+
+| Domain | Intents | Raw Embeddings (v1) | Effect |
+|--------|---------|---------------------|--------|
+| Cap-API | 12 | 240 vectors averaged | Centroid = vague "center of pharmacy" |
+| Claim History | 6 | 120 vectors averaged | Centroid = moderate spread |
+| Benefits API | 3 | 60 vectors averaged | Centroid = tight cluster |
+| **New Overrides Domain** | **15** | **300 vectors averaged** | **Centroid overlaps Benefits API** |
+
+**Why this fails**: The `cap_api` centroid is the average of 240 vectors spanning 12 diverse topics (pricing, pharmacy, COB, reversals...). This creates a "gravitational well" that absorbs queries from neighboring domains. A small domain like `benefits_api` (3 focused intents) gets overwhelmed when its centroid overlaps with a larger domain's spread.
+
+**Observed failure**: With the v1 approach:
+- Intent Accuracy: **72.04%**
+- Domain Accuracy: **61.14%** (nearly 40% of queries routed to wrong API!)
+
+#### F.2 Root Causes Identified
+
+| # | Root Cause | Impact |
+|---|-----------|--------|
+| 1 | **Domain centroids from raw embeddings** — larger domains contribute more vectors, diluting the centroid | Domain accuracy ~61% |
+| 2 | **Euclidean distance** — poor discriminator in 768-dimensional space | Intent accuracy ~72% |
+| 3 | **Flat classification** — domain and intent classified independently | Cross-domain misrouting |
+| 4 | **No multi-domain fallback** — ambiguous queries locked to single domain | Benefits API queries stolen by Cap-API |
+
+#### F.3 The Fix: Three-Layer Defense
+
+**Fix 1: Intent-Weighted Domain Centroids**
+
+```python
+# v1 (BROKEN): Domain centroid = mean(ALL raw embeddings)
+#   cap_api centroid = mean(240 vectors from 12 intents)
+#   benefits_api centroid = mean(60 vectors from 3 intents)
+#   → Cap-API centroid absorbs everything
+
+# v2 (FIXED): Domain centroid = mean(INTENT centroids)
+#   cap_api centroid = mean(12 intent centroids)  — each intent = 1 vote
+#   benefits_api centroid = mean(3 intent centroids) — each intent = 1 vote
+#   → Each intent contributes equally regardless of example count
+```
+
+This ensures that a domain with 3 tightly-focused intents produces a tight, well-defined centroid that clearly separates from a domain with 15 diverse intents.
+
+**Fix 2: Cosine Similarity Instead of Euclidean Distance**
+
+```python
+# v1 (BROKEN): Euclidean distance — magnitude-sensitive
+#   "COB summary" → cap_api (Euclidean: 1.23) vs benefits_api (1.25)
+#   Wrong! Margin is only 0.02 in magnitude space
+
+# v2 (FIXED): Cosine similarity — direction-sensitive  
+#   "COB summary" → cap_api (cosine: 0.87) vs benefits_api (0.72)
+#   Correct! Clear 0.15 margin in angular space
+```
+
+**Fix 3: Hierarchical Classification with Multi-Domain Fallback**
+
+```
+User Query: "Show the approval overrides for this claim"
+    │
+    ▼
+[1] DOMAIN ROUTING (cosine similarity)
+    │  benefits_api:  0.83  ← winner
+    │  cap_api:       0.81  ← close second
+    │  gap: 0.02 < threshold (0.03) → AMBIGUOUS
+    │
+    ▼
+[2] MULTI-DOMAIN INTENT SEARCH (consider BOTH domains)
+    │  From benefits_api:
+    │    approval_info:    0.91 ✅  ← "approval overrides" = TF/BPG
+    │    audit_info:       0.68
+    │    beneficiary_info: 0.54
+    │  From cap_api:
+    │    rejection_reasons: 0.72
+    │    claim_status:     0.65
+    │    ...
+    │
+    ▼
+[3] BEST INTENT DETERMINES DOMAIN
+    │  approval_info (0.91) > rejection_reasons (0.72)
+    │  → Route to benefits_api / approval_info ✅
+```
+
+The key insight: **even when domain routing is ambiguous, intent-level comparison resolves the ambiguity** because intent centroids are more discriminative than domain centroids.
+
+#### F.4 Handling the "New Large Domain" Scenario
+
+When a new `overrides` domain with 15+ intents is added and overlaps with `benefits_api`:
+
+| Strategy | How It Helps |
+|----------|-------------|
+| **Intent-weighted centroids** | The new domain's centroid is the mean of 15 intent centroids, not 300 raw vectors. Each intent gets 1 vote, preventing the centroid from becoming a vague blob. |
+| **Multi-domain fallback** | When `overrides` and `benefits_api` centroids are close (gap < threshold), the system searches intents in BOTH domains. The winning intent determines the final domain. |
+| **Cluster tightness matters** | `benefits_api` has 3 tightly clustered intents (avg intra-domain similarity ~0.85). `overrides` with 15 spread intents has lower tightness (~0.72). For queries that truly belong to `benefits_api`, its intent centroids produce higher similarity scores. |
+| **Discriminative descriptions** | Each domain's intent descriptions are crafted to exclude vocabulary from overlapping domains (see Section 8.2). |
+| **Pre-deployment overlap check** | `analyze_domain_overlap()` measures domain↔domain similarity before deployment. If overlap > 0.90, the system warns and suggests improving intent descriptions. |
+
+#### F.5 Implementation: `intent_detection_v2.py`
+
+The v2 implementation in `intent_detection_v2.py` includes:
+
+```python
+# 1. Intent-weighted domain centroids
+domain_centroid = mean([intent_centroids[i] for i in domain_intents])
+
+# 2. Cosine similarity
+similarity = dot(query, centroid) / (norm(query) * norm(centroid))
+
+# 3. Hierarchical classification with multi-domain fallback
+if domain_gap < threshold:
+    search_intents_in_top_k_domains()
+    best_intent_determines_final_domain()
+
+# 4. Diagnostic: Domain overlap analysis
+analyze_domain_overlap()  # Detects problematic overlap before deployment
+```
+
+Run the v2 evaluation:
+```bash
+cd Intent_detection_system
+python intent_detection_v2.py
+```
+
+This produces:
+- Per-domain accuracy breakdown
+- Domain confusion matrix
+- Domain cluster overlap analysis
+- Full ablation: v1 baseline vs v2 improvements
+
+---
+
+### G. References
 
 - [BGE Reranker v2](https://huggingface.co/BAAI/bge-reranker-v2-m3) — Cross-encoder model
 - [ms-marco-MiniLM](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) — Lightweight cross-encoder
