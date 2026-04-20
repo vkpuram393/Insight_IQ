@@ -8,6 +8,7 @@ Fixes for v1 (72% intent / 61% domain accuracy):
   4. Domain-size normalization to prevent large-cluster absorption
   5. Cross-domain intent handling (claim_status in cap_api + claim_history_search)
   6. Confidence-aware multi-domain fallback
+  7. kNN Exemplar Voting for overlapping intents (replaces cross-encoder)
 
 Uses Google Cloud Vertex AI text-embedding-005 (same as v1).
 """
@@ -310,242 +311,6 @@ def _load_or_generate_intent_centroids() -> Dict[str, List[float]]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# INTENT DESCRIPTIONS (for cross-encoder reranking)
-# ═════════════════════════════════════════════════════════════════════════════
-
-INTENT_DESCRIPTIONS = {
-    # ── Cap-API ──────────────────────────────────────────────────────────
-    "claim_status": (
-        "General claim status, adjudication outcome, processing result, "
-        "and overall claim summary including whether the claim was paid, "
-        "rejected, or is pending."
-    ),
-    "multi_claim_summary": (
-        "Summary of ALL claims for a member, complete claim list, "
-        "multiple claim records, and full claim history overview."
-    ),
-    "pharmacy_info": (
-        "Dispensing pharmacy name, location, address, NCPDP number, "
-        "and store details where the prescription was filled."
-    ),
-    "prescriber_info": (
-        "Prescribing physician name, NPI number, credentials, "
-        "contact information, and ordering provider details."
-    ),
-    "pricing_info": (
-        "Pricing and cost information for a pharmacy claim including copay amount, "
-        "ingredient cost, dispensing fee, patient pay, manufacturer rebate, "
-        "and total out-of-pocket cost breakdown."
-    ),
-    "reimbursement_info": (
-        "Reimbursement payment details for paper claims including the amount "
-        "paid to the pharmacy, reimbursement rationale, and payment calculation."
-    ),
-    "rejection_reasons": (
-        "Specific rejection reasons, failed edit codes, denial explanations, "
-        "and actionable steps to resolve or overturn a rejected pharmacy claim."
-    ),
-    "settlement_info": (
-        "Settlement codes and pharmacy response information sent back to the "
-        "dispensing pharmacy after claim adjudication, including feedback codes "
-        "and response messages."
-    ),
-    "rx_details": (
-        "Prescription RX number, fill number, quantity dispensed, "
-        "days supply, drug strength, and refill information."
-    ),
-    "reversal_info": (
-        "Claim reversal details, manual adjustments, reverse and resubmit "
-        "(R&R) information, modification history, and resubmission status."
-    ),
-    "cob_info": (
-        "Coordination of Benefits (COB) pricing, other insurance details, "
-        "secondary payer information, dual coverage breakdown, "
-        "and primary/secondary insurance adjudication."
-    ),
-    "generic_availability": (
-        "Generic alternative medications, therapeutic equivalents, "
-        "formulary-approved substitutes, and cheaper drug options "
-        "available for the prescribed medication."
-    ),
-    # ── Claim History Search ─────────────────────────────────────────────
-    "date_range_claims": (
-        "Claims within a specific date range, deductible-contributing claims, "
-        "accumulation history, and prescription fill history over time."
-    ),
-    "drug_info": (
-        "Drug name, NDC code, GPI, therapeutic class, formulary status, "
-        "medication tier, and drug classification assigned by RxClaim."
-    ),
-    "fill_date_info": (
-        "Date the prescription was filled, dispensing date, "
-        "service date, and fill timestamp."
-    ),
-    "drug_interaction_info": (
-        "Drug utilization review (DUR) edits, drug interaction alerts, "
-        "clinical screening results, and override details for "
-        "potential medication conflicts."
-    ),
-    "compound_info": (
-        "Compound medication details, Most Ingredient Cost (MIC) breakdown, "
-        "individual ingredient costs, funded versus unfunded components, "
-        "and compound formulation information."
-    ),
-    # ── Benefits API ─────────────────────────────────────────────────────
-    "beneficiary_info": (
-        "Member benefit phase, coverage tier, eligibility status, "
-        "accumulation rules, linked LOE information, and whether medical "
-        "dollars contribute to the member's accumulations."
-    ),
-    "audit_info": (
-        "Audit trail and change history for a claim, including "
-        "modification records, edit timestamps, and who made changes."
-    ),
-    "approval_info": (
-        "Claim approval details including plan overrides, transition fill (TF) "
-        "status and type, BPG configuration, accumulation bypass, "
-        "and Smart PA or Member PA applied during adjudication."
-    ),
-    # ── General ──────────────────────────────────────────────────────────
-    "greeting": "Casual greeting, hello, hi, welcome message, or conversation starter.",
-    "help": "Help request, guidance on claim submission, instructions for using the system.",
-    "out_of_scope": "Question unrelated to pharmacy claims, prescriptions, or insurance benefits.",
-    # ── Extra intents (from training data) ───────────────────────────────
-    "daw_info": "Dispense As Written (DAW) code, brand vs generic dispensing indicator.",
-    "prior_auth_info": "Prior authorization (PA) status, PA number, Smart PA configuration.",
-    "government_claim_type": "Government claim type, Medicare Part D, Medicaid, federal program indicator.",
-    "medicare_part_d": "Medicare Part D details, MEDD pricing, PDE information, CMS phase.",
-}
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# CROSS-ENCODER RERANKER (Tier 2 — local, no API calls)
-# ═════════════════════════════════════════════════════════════════════════════
-
-class CrossEncoderReranker:
-    """Precision reranker using a cross-encoder model.
-    
-    Unlike bi-encoders (embed separately, compare vectors), a cross-encoder
-    processes the query AND candidate description TOGETHER, enabling word-level
-    attention that resolves cases like:
-      - "pricing summary" → pricing_info  (not claim_status)
-      - "claim summary"  → claim_status   (not pricing_info)
-    
-    Runs 100% locally on CPU. No API calls. No rate limits. ~5ms per pair.
-    
-    Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (22MB, fast)
-    Alternative: BAAI/bge-reranker-v2-m3 (568MB, more accurate)
-    """
-    
-    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    
-    def __init__(self):
-        self.model = None
-        self.tokenizer = None
-        self._loaded = False
-    
-    def _ensure_loaded(self):
-        """Lazy-load the model on first use (saves startup time)."""
-        if self._loaded:
-            return
-        try:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
-            import torch  # noqa: F401 — just verify it's available
-            
-            logger.info(f"🔄 Loading cross-encoder: {self.MODEL_NAME} …")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_NAME)
-            self.model = AutoModelForSequenceClassification.from_pretrained(self.MODEL_NAME)
-            self.model.eval()
-            self._loaded = True
-            logger.info(f"✅ Cross-encoder loaded (runs on CPU, ~5ms/pair)")
-        except ImportError:
-            logger.warning(
-                "⚠️  Cross-encoder unavailable (install: pip install transformers torch). "
-                "Falling back to embedding-only classification."
-            )
-            self._loaded = False
-    
-    @property
-    def available(self) -> bool:
-        """Check if cross-encoder can be used."""
-        if self._loaded:
-            return True
-        self._ensure_loaded()
-        return self._loaded and self.model is not None
-    
-    def rerank(
-        self,
-        query: str,
-        candidates: List[Tuple[str, str, float]],  # (intent_name, domain, embedding_score)
-    ) -> List[Tuple[str, str, float, float]]:
-        """Rerank intent candidates using cross-encoder.
-        
-        Args:
-            query: User's raw text query
-            candidates: List of (intent_name, domain, embedding_score)
-            
-        Returns:
-            List of (intent_name, domain, ce_score, embedding_score)
-            sorted by cross-encoder score descending.
-        """
-        import torch
-        
-        self._ensure_loaded()
-        if not self._loaded:
-            # Fallback: return candidates sorted by embedding score
-            return [
-                (name, domain, emb_score, emb_score)
-                for name, domain, emb_score in candidates
-            ]
-        
-        # Build (query, description) pairs
-        pairs = []
-        intent_names = []
-        domains = []
-        emb_scores = []
-        
-        for intent_name, domain, emb_score in candidates:
-            desc = INTENT_DESCRIPTIONS.get(intent_name, intent_name)
-            pairs.append((query, desc))
-            intent_names.append(intent_name)
-            domains.append(domain)
-            emb_scores.append(emb_score)
-        
-        # Batch encode and score
-        inputs = self.tokenizer(
-            pairs,
-            padding=True,
-            truncation=True,
-            max_length=256,
-            return_tensors="pt",
-        )
-        
-        with torch.no_grad():
-            logits = self.model(**inputs).logits.squeeze(-1)
-            scores = torch.sigmoid(logits).numpy()
-        
-        # Combine results
-        results = [
-            (intent_names[i], domains[i], float(scores[i]), emb_scores[i])
-            for i in range(len(candidates))
-        ]
-        
-        # Sort by cross-encoder score
-        results.sort(key=lambda x: x[2], reverse=True)
-        return results
-
-
-# Module-level singleton (lazy loaded)
-_cross_encoder: CrossEncoderReranker = None
-
-def _get_cross_encoder() -> CrossEncoderReranker:
-    global _cross_encoder
-    if _cross_encoder is None:
-        _cross_encoder = CrossEncoderReranker()
-    return _cross_encoder
-
-
-# ═════════════════════════════════════════════════════════════════════════════
 # TASK 4: HIERARCHICAL CLASSIFICATION (Domain → Intent within Domain)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -590,9 +355,6 @@ def classify_hierarchical(
     domain_intent_map: Dict[str, Dict[str, np.ndarray]],
     domain_gap_threshold: float = 0.02,
     top_k_domains: int = 2,
-    query_text: str = None,
-    use_cross_encoder: bool = True,
-    ce_intent_gap_threshold: float = 0.05,
 ) -> Dict[str, Any]:
     """Hierarchical classification: domain first, then intent within domain.
     
@@ -657,89 +419,20 @@ def classify_hierarchical(
     else:
         candidate_domains = [top_domain]
 
-    # ── Step 3: Find best intent across candidate domains (embedding) ───
-    embedding_ranked = []  # (intent_name, domain, cosine_score)
+    # ── Step 3: Find best intent across candidate domains ────────────────
+    best_intent = None
+    best_intent_score = -1.0
+    best_intent_domain = None
 
     for domain_name in candidate_domains:
         if domain_name not in domain_intent_map:
             continue
         for intent_name, intent_centroid in domain_intent_map[domain_name].items():
             sim = _cosine_similarity(query_vec, intent_centroid)
-            embedding_ranked.append((intent_name, domain_name, sim))
-
-    embedding_ranked.sort(key=lambda x: x[2], reverse=True)
-
-    if not embedding_ranked:
-        return {
-            "predicted_domain": top_domain,
-            "predicted_intent": "unknown",
-            "domain_score": top_score,
-            "intent_score": 0.0,
-            "domain_scores": domain_scores,
-            "considered_domains": candidate_domains,
-            "is_ambiguous_domain": is_ambiguous,
-            "tier_used": "none",
-        }
-
-    top_embedding = embedding_ranked[0]
-    second_embedding = embedding_ranked[1] if len(embedding_ranked) > 1 else None
-    embedding_gap = (
-        top_embedding[2] - second_embedding[2] if second_embedding else 1.0
-    )
-
-    # ── Step 4: Cross-encoder reranking (only when ambiguous) ────────────
-    #
-    #  When to fire the cross-encoder:
-    #   a) Domain was ambiguous (multi-domain fallback active)  OR
-    #   b) Top-2 intents from embedding are very close (gap < threshold)
-    #
-    #  When NOT to fire:
-    #   - Clear domain + clear intent winner → embedding is sufficient
-    #   - Cross-encoder unavailable (not installed)
-    #   - Disabled via use_cross_encoder=False
-    #
-    intent_is_ambiguous = embedding_gap < ce_intent_gap_threshold
-    should_rerank = (
-        use_cross_encoder
-        and query_text is not None
-        and (is_ambiguous or intent_is_ambiguous)
-    )
-
-    tier_used = "embedding"  # default
-
-    if should_rerank:
-        ce = _get_cross_encoder()
-        if ce.available:
-            # Send top-5 candidates to cross-encoder
-            top_k = embedding_ranked[:5]
-            reranked = ce.rerank(query_text, top_k)
-
-            if reranked:
-                best = reranked[0]
-                best_intent = best[0]
-                best_intent_domain = best[1]
-                best_intent_score = best[2]  # cross-encoder score
-                tier_used = "cross_encoder"
-
-                logger.debug(
-                    f"  🔀 Cross-encoder reranked: {best_intent} ({best_intent_domain}) "
-                    f"CE={best_intent_score:.3f}, Emb={best[3]:.3f}"
-                )
-            else:
-                # Fallback to embedding result
-                best_intent = top_embedding[0]
-                best_intent_domain = top_embedding[1]
-                best_intent_score = top_embedding[2]
-        else:
-            # Cross-encoder not available — use embedding
-            best_intent = top_embedding[0]
-            best_intent_domain = top_embedding[1]
-            best_intent_score = top_embedding[2]
-    else:
-        # Clear winner from embeddings — no reranking needed
-        best_intent = top_embedding[0]
-        best_intent_domain = top_embedding[1]
-        best_intent_score = top_embedding[2]
+            if sim > best_intent_score:
+                best_intent_score = sim
+                best_intent = intent_name
+                best_intent_domain = domain_name
 
     # ── The domain of the winning intent IS the final domain ─────────────
     # This is crucial: even if domain routing said "cap_api", but the
@@ -752,7 +445,246 @@ def classify_hierarchical(
         "domain_scores": domain_scores,
         "considered_domains": candidate_domains,
         "is_ambiguous_domain": is_ambiguous,
-        "tier_used": tier_used,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TASK 4b: kNN EXEMPLAR VOTING — THE CROSS-ENCODER REPLACEMENT
+# ═════════════════════════════════════════════════════════════════════════════
+#
+#  ┌──────────────────────────────────────────────────────────────────────┐
+#  │  WHY kNN EXEMPLAR VOTING BEATS CROSS-ENCODER FOR OVERLAPPING INTENTS│
+#  │                                                                      │
+#  │  Cross-encoder (DeBERTa / ms-marco-MiniLM) problems:                │
+#  │    ✗ Trained on web search relevance, not intent discrimination     │
+#  │    ✗ Needs long passages — our intent descriptions are 1-2 lines    │
+#  │    ✗ Can't learn domain jargon (TF, BPG, DUR, COB) without data    │
+#  │    ✗ 15ms per pair → 75ms for 5 candidates → adds latency          │
+#  │                                                                      │
+#  │  Centroid comparison problems:                                       │
+#  │    ✗ Averaging 20 diverse examples destroys discriminative detail   │
+#  │    ✗ "audit trail for this claim" centroid ≈ "approval details"     │
+#  │    ✗ A single centroid can't represent multi-modal intent clusters  │
+#  │                                                                      │
+#  │  kNN Exemplar Voting (what we use instead):                          │
+#  │    ✓ Compare query against ALL 20 training examples per intent      │
+#  │    ✓ Top-K nearest neighbors VOTE on the intent                     │
+#  │    ✓ Preserves decision boundary detail that centroids destroy      │
+#  │    ✓ No model download, no GPU, no training, no extra latency       │
+#  │    ✓ Uses the SAME embeddings you already have cached               │
+#  │    ✓ Naturally handles multi-modal clusters (intent has subtypes)   │
+#  │                                                                      │
+#  │  Example: "Show the audit trail for this claim's approval"          │
+#  │                                                                      │
+#  │    Centroid method:                                                   │
+#  │      audit_info centroid:    0.83  ← "audit trail" pulls centroid   │
+#  │      approval_info centroid: 0.81  ← "approval" pulls centroid     │
+#  │      Gap: 0.02 → CONFUSED                                           │
+#  │                                                                      │
+#  │    kNN (k=5) method:                                                 │
+#  │      Top-5 neighbors:                                                │
+#  │        1. approval_info example "Show approval details"  (0.92)     │
+#  │        2. approval_info example "Approval logic for claim" (0.91)   │
+#  │        3. audit_info example "Show audit trail" (0.89)              │
+#  │        4. approval_info example "Plan override details" (0.87)      │
+#  │        5. audit_info example "Change history" (0.85)                │
+#  │      Vote: approval_info=3, audit_info=2 → approval_info WINS      │
+#  │                                                                      │
+#  │  The key insight: individual examples near the decision boundary     │
+#  │  are more discriminative than averaged centroids.                    │
+#  └──────────────────────────────────────────────────────────────────────┘
+
+def _build_domain_exemplar_index(
+    intent_embeddings: Dict[str, List[List[float]]],
+) -> Dict[str, Dict[str, np.ndarray]]:
+    """Build a map of domain → {intent_name: (N, D) embedding matrix}.
+    
+    Each intent has ~20 example embeddings. These are the "exemplars"
+    that kNN votes over.
+    """
+    domain_registry = embeddingVars.DOMAIN_REGISTRY
+    domain_exemplars = {}
+
+    for domain_key, domain_info in domain_registry.items():
+        domain_exemplars[domain_key] = {}
+        for intent_name in domain_info["intents"]:
+            if intent_name in intent_embeddings:
+                matrix = np.array(intent_embeddings[intent_name])
+                # L2-normalize each row for fast cosine via dot product
+                norms = np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
+                domain_exemplars[domain_key][intent_name] = matrix / norms
+
+    return domain_exemplars
+
+
+def _knn_vote_within_domain(
+    query_vec: np.ndarray,
+    domain_exemplars: Dict[str, np.ndarray],
+    k: int = 7,
+) -> List[Tuple[str, float, float]]:
+    """kNN voting over exemplars within a single domain.
+    
+    For each intent in the domain, compute cosine similarity against
+    ALL its exemplars. Collect the top-K nearest neighbors globally,
+    then count votes per intent.
+    
+    Args:
+        query_vec: L2-normalized query vector (D,)
+        domain_exemplars:  {intent_name: (N, D) matrix of L2-norm exemplars}
+        k: Number of nearest neighbors to vote
+        
+    Returns:
+        List of (intent_name, vote_fraction, max_similarity) sorted by vote desc
+    """
+    # Collect all (similarity, intent_name) pairs
+    all_neighbors = []
+
+    query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-10)
+
+    for intent_name, exemplar_matrix in domain_exemplars.items():
+        # Fast cosine similarity: dot product of L2-normalized vectors
+        sims = exemplar_matrix @ query_norm  # (N,)
+        for sim_val in sims:
+            all_neighbors.append((float(sim_val), intent_name))
+
+    # Sort by similarity descending, take top-K
+    all_neighbors.sort(key=lambda x: x[0], reverse=True)
+    top_k = all_neighbors[:k]
+
+    # Count votes
+    from collections import Counter
+    votes = Counter(intent_name for _, intent_name in top_k)
+    total_votes = sum(votes.values())
+
+    # Also compute max similarity per intent (for confidence)
+    max_sim_per_intent = {}
+    for sim_val, intent_name in all_neighbors:
+        if intent_name not in max_sim_per_intent:
+            max_sim_per_intent[intent_name] = sim_val
+
+    # Build results: (intent, vote_fraction, max_similarity)
+    results = []
+    for intent_name in votes:
+        results.append((
+            intent_name,
+            votes[intent_name] / total_votes,
+            max_sim_per_intent.get(intent_name, 0.0),
+        ))
+
+    # Sort by votes (desc), then by max_sim (desc) for ties
+    results.sort(key=lambda x: (x[1], x[2]), reverse=True)
+    return results
+
+
+def classify_hierarchical_knn(
+    query_vec: np.ndarray,
+    domain_centroids: Dict[str, np.ndarray],
+    domain_exemplars: Dict[str, Dict[str, np.ndarray]],
+    domain_intent_map: Dict[str, Dict[str, np.ndarray]],
+    domain_gap_threshold: float = 0.02,
+    top_k_domains: int = 2,
+    knn_k: int = 7,
+) -> Dict[str, Any]:
+    """Hierarchical classification with kNN exemplar voting for intent resolution.
+    
+    Same domain-routing logic as classify_hierarchical, but replaces
+    centroid-based intent comparison with kNN exemplar voting.
+    
+    Pipeline:
+      1. Score all domains using centroid cosine similarity
+      2. If top-2 domains are close (gap < threshold), consider both
+      3. Within candidate domain(s), run kNN voting over ALL exemplars
+      4. The intent with the most votes wins; its domain is the final domain
+    
+    Args:
+        query_vec: Embedded query vector
+        domain_centroids: {domain_name: centroid_vector}
+        domain_exemplars: {domain_name: {intent_name: (N,D) exemplar matrix}}
+        domain_intent_map: {domain_name: {intent_name: centroid_vector}} (for fallback)
+        domain_gap_threshold: If gap between top-2 domains < this, consider both
+        top_k_domains: Max domains to consider when ambiguous
+        knn_k: Number of nearest neighbors for voting
+        
+    Returns:
+        Same structure as classify_hierarchical, plus knn_votes
+    """
+    # ── Step 1: Score all domains (same as hierarchical) ─────────────────
+    domain_scores = {}
+    for domain_name, centroid in domain_centroids.items():
+        domain_scores[domain_name] = _cosine_similarity(query_vec, centroid)
+
+    ranked_domains = sorted(domain_scores.items(), key=lambda x: x[1], reverse=True)
+    top_domain, top_score = ranked_domains[0]
+    second_domain, second_score = ranked_domains[1] if len(ranked_domains) > 1 else (None, -1)
+
+    gap = top_score - second_score
+    is_ambiguous = gap < domain_gap_threshold
+
+    # ── Step 2: Determine candidate domains ──────────────────────────────
+    if is_ambiguous:
+        candidate_domains = [d for d, _ in ranked_domains[:top_k_domains]]
+    else:
+        candidate_domains = [top_domain]
+
+    # ── Step 3: kNN voting across candidate domains ──────────────────────
+    # Merge exemplars from all candidate domains into one pool
+    merged_exemplars = {}
+    for domain_name in candidate_domains:
+        if domain_name not in domain_exemplars:
+            continue
+        for intent_name, matrix in domain_exemplars[domain_name].items():
+            # For cross-domain intents (claim_status), prefix with domain
+            # to keep them separate in the vote
+            key = f"{intent_name}@{domain_name}"
+            merged_exemplars[key] = matrix
+
+    if merged_exemplars:
+        knn_results = _knn_vote_within_domain(query_vec, merged_exemplars, k=knn_k)
+    else:
+        knn_results = []
+
+    # ── Step 4: Extract winner ───────────────────────────────────────────
+    if knn_results:
+        winner_key, vote_frac, max_sim = knn_results[0]
+        # Parse "intent_name@domain_name"
+        if "@" in winner_key:
+            best_intent, best_domain = winner_key.rsplit("@", 1)
+        else:
+            best_intent = winner_key
+            best_domain = top_domain
+
+        # Build readable vote summary
+        vote_summary = {
+            k: f"{v:.0%}" for k, v, _ in knn_results[:5]
+        }
+    else:
+        # Fallback to centroid-based if exemplars unavailable
+        best_intent = None
+        best_intent_score = -1.0
+        best_domain = top_domain
+        for domain_name in candidate_domains:
+            if domain_name not in domain_intent_map:
+                continue
+            for intent_name, centroid in domain_intent_map[domain_name].items():
+                sim = _cosine_similarity(query_vec, centroid)
+                if sim > best_intent_score:
+                    best_intent_score = sim
+                    best_intent = intent_name
+                    best_domain = domain_name
+        vote_frac = 1.0
+        max_sim = best_intent_score
+        vote_summary = {}
+
+    return {
+        "predicted_domain": best_domain,
+        "predicted_intent": best_intent or "unknown",
+        "domain_score": domain_scores.get(best_domain, top_score),
+        "intent_score": max_sim,
+        "domain_scores": domain_scores,
+        "considered_domains": candidate_domains,
+        "is_ambiguous_domain": is_ambiguous,
+        "knn_vote_fraction": vote_frac,
+        "knn_votes": vote_summary,
     }
 
 
@@ -796,13 +728,14 @@ def classify_flat_cosine(
 
 def classify_and_evaluate(
     test_data: List[Dict[str, str]],
-    method: str = "hierarchical",
+    method: str = "hierarchical_knn",
 ) -> Dict[str, float]:
     """Classify and evaluate using the specified method.
     
     Args:
         test_data: List of {text, actual_classification_intent, actual_classification_domain}
-        method: "hierarchical" (recommended), "flat_cosine", or "flat_euclidean" (v1)
+        method: "hierarchical_knn" (recommended), "hierarchical", "flat_cosine",
+                or "flat_euclidean" (v1)
         
     Returns:
         dict with intent_accuracy, domain_accuracy, and per-domain breakdown
@@ -818,6 +751,12 @@ def classify_and_evaluate(
     # Build domain→intent map for hierarchical mode
     domain_intent_map = _build_domain_intent_map(intent_centroids_raw)
 
+    # Build exemplar index for kNN mode (load raw embeddings once)
+    domain_exemplars = None
+    if method == "hierarchical_knn":
+        intent_embeddings = _load_intent_embeddings()
+        domain_exemplars = _build_domain_exemplar_index(intent_embeddings)
+
     embedder = _get_embedder()
     results = []
 
@@ -828,10 +767,10 @@ def classify_and_evaluate(
 
         query_vec = np.array(embedder.embed(text))
 
-        if method == "hierarchical":
-            result = classify_hierarchical(
-                query_vec, domain_centroids_np, domain_intent_map,
-                query_text=text,
+        if method == "hierarchical_knn":
+            result = classify_hierarchical_knn(
+                query_vec, domain_centroids_np, domain_exemplars,
+                domain_intent_map
             )
             predicted_intent = result["predicted_intent"]
             predicted_domain = result["predicted_domain"]
@@ -839,7 +778,19 @@ def classify_and_evaluate(
                 "intent_score": result["intent_score"],
                 "domain_score": result["domain_score"],
                 "is_ambiguous": result["is_ambiguous_domain"],
-                "tier_used": result.get("tier_used", "embedding"),
+                "considered_domains": "|".join(result["considered_domains"]),
+                "knn_vote_fraction": result.get("knn_vote_fraction", ""),
+            }
+        elif method == "hierarchical":
+            result = classify_hierarchical(
+                query_vec, domain_centroids_np, domain_intent_map
+            )
+            predicted_intent = result["predicted_intent"]
+            predicted_domain = result["predicted_domain"]
+            extra = {
+                "intent_score": result["intent_score"],
+                "domain_score": result["domain_score"],
+                "is_ambiguous": result["is_ambiguous_domain"],
                 "considered_domains": "|".join(result["considered_domains"]),
             }
         elif method == "flat_cosine":
@@ -888,21 +839,6 @@ def classify_and_evaluate(
     print(f"  Intent Classification Accuracy : {intent_accuracy:.2f}%")
     print(f"  Domain Classification Accuracy : {domain_accuracy:.2f}%")
     print(f"{'='*60}")
-
-    # ── Cross-encoder usage stats (hierarchical only) ────────────────────
-    if method == "hierarchical" and "tier_used" in df.columns:
-        tier_counts = df["tier_used"].value_counts()
-        total = len(df)
-        print(f"\n  Classification Tier Usage:")
-        for tier, count in tier_counts.items():
-            pct = count / total * 100
-            print(f"    {tier:<20} {count:>5} queries ({pct:.1f}%)")
-        if "cross_encoder" in tier_counts:
-            ce_rows = df[df["tier_used"] == "cross_encoder"]
-            ce_intent_acc = ce_rows["intent_match"].mean() * 100
-            ce_domain_acc = ce_rows["domain_match"].mean() * 100
-            print(f"    Cross-encoder accuracy: intent={ce_intent_acc:.1f}%, domain={ce_domain_acc:.1f}%")
-        print()
 
     # ── Per-domain breakdown ─────────────────────────────────────────────
     print(f"\n  Per-Domain Accuracy:")
@@ -968,9 +904,10 @@ def run_ablation(test_data: List[Dict[str, str]]) -> None:
     """Run all classification methods and compare accuracy.
     
     Methods:
-      1. flat_euclidean — v1 baseline (Euclidean + raw-embedding domain centroids)
-      2. flat_cosine    — v1 + cosine similarity + intent-weighted domain centroids
-      3. hierarchical   — v2: domain→intent routing + multi-domain fallback
+      1. flat_euclidean   — v1 baseline (Euclidean + raw-embedding domain centroids)
+      2. flat_cosine      — v1 + cosine similarity + intent-weighted domain centroids
+      3. hierarchical     — v2: domain→intent routing (centroid) + multi-domain fallback
+      4. hierarchical_knn — v3: domain→intent routing (kNN exemplar voting) ★ BEST
     """
     print("\n" + "="*70)
     print("  ABLATION STUDY: Comparing Classification Methods")
@@ -978,7 +915,7 @@ def run_ablation(test_data: List[Dict[str, str]]) -> None:
 
     all_results = {}
 
-    for method in ["flat_euclidean", "flat_cosine", "hierarchical"]:
+    for method in ["flat_euclidean", "flat_cosine", "hierarchical", "hierarchical_knn"]:
         print(f"\n{'─'*70}")
         print(f"  Running method: {method}")
         print(f"{'─'*70}")
@@ -986,6 +923,9 @@ def run_ablation(test_data: List[Dict[str, str]]) -> None:
         # For flat_euclidean, use v1 domain centroids (raw-embedding based)
         if method == "flat_euclidean":
             _generate_v1_domain_centroids()
+        elif method in ("hierarchical", "hierarchical_knn"):
+            # Ensure v2 domain centroids are active
+            generate_domain_centroids()
 
         metrics = classify_and_evaluate(test_data, method=method)
         all_results[method] = metrics
@@ -1140,7 +1080,7 @@ def analyze_domain_overlap() -> None:
 
 if __name__ == "__main__":
     print("="*70)
-    print("  Intent Detection v2 — Domain-Balanced Hierarchical Classification")
+    print("  Intent Detection v2 — Domain-Balanced + kNN Exemplar Voting")
     print("="*70)
 
     # Step 1: Generate embeddings
@@ -1183,18 +1123,17 @@ if __name__ == "__main__":
 
         print(f"\n  ▸ Loaded {len(test_data)} test records from Testdata.csv")
 
-        # Run the improved hierarchical method
+        # ── Run the BEST method: hierarchical + kNN exemplar voting ──────
         print("\n" + "─"*70)
-        print("  Running HIERARCHICAL classification (v2 — recommended)")
+        print("  Running HIERARCHICAL + kNN EXEMPLAR VOTING (v3 — recommended)")
         print("─"*70)
-        metrics = classify_and_evaluate(test_data, method="hierarchical")
+        metrics = classify_and_evaluate(test_data, method="hierarchical_knn")
 
-        print(f"\n📊 v2 Results:")
+        print(f"\n📊 v3 Results (Hierarchical + kNN):")
         print(f"   Intent Accuracy : {metrics['intent_accuracy']:.2f}%")
         print(f"   Domain Accuracy : {metrics['domain_accuracy']:.2f}%")
 
-        # Optionally run full ablation
-        print("\n\nRunning full ablation study (v1 baseline vs v2 improvements)…")
-        # Regenerate v2 domain centroids (ablation may have overwritten them)
-        generate_domain_centroids()
+        # ── Run full ablation to compare all methods ─────────────────────
+        print("\n\nRunning full ablation study (all 4 methods)…")
+        generate_domain_centroids()  # Ensure v2 centroids for hierarchical methods
         run_ablation(test_data)
