@@ -183,7 +183,7 @@ class IntentPipeline:
 
         self.clfs["svm"] = SVC(kernel="rbf", C=10, gamma="scale", probability=True,
             class_weight="balanced", random_state=42).fit(X_s,y)
-        self.clfs["logreg"] = LogisticRegression(C=10, max_iter=3000, multi_class="multinomial",
+        self.clfs["logreg"] = LogisticRegression(C=10, max_iter=3000,
             solver="lbfgs", class_weight="balanced", random_state=42).fit(X_s,y)
         self.clfs["knn"] = KNeighborsClassifier(n_neighbors=min(self.knn_k,X_raw.shape[0]-1),
             weights="distance", metric="cosine").fit(X_s,y)
@@ -235,7 +235,7 @@ class IntentPipeline:
             Xs = fp.scaler.fit_transform(Xp)
             fp.clfs["svm"] = SVC(kernel="rbf",C=10,gamma="scale",probability=True,
                 class_weight="balanced",random_state=42).fit(Xs,ytr)
-            fp.clfs["logreg"] = LogisticRegression(C=10,max_iter=3000,multi_class="multinomial",
+            fp.clfs["logreg"] = LogisticRegression(C=10,max_iter=3000,
                 solver="lbfgs",class_weight="balanced",random_state=42).fit(Xs,ytr)
             fp.clfs["knn"] = KNeighborsClassifier(n_neighbors=min(self.knn_k,Xtr.shape[0]-1),
                 weights="distance",metric="cosine").fit(Xs,ytr)
@@ -291,7 +291,7 @@ def run_ablation(X, y, labels, best_dim):
         "kNN-7 (PCA, cosine)": (KNeighborsClassifier(7, weights="distance", metric="cosine"), Xs),
         "SVM-Linear (PCA)": (SVC(kernel="linear",C=1,probability=True,class_weight="balanced",random_state=42), Xs),
         "SVM-RBF (PCA)": (SVC(kernel="rbf",C=10,gamma="scale",probability=True,class_weight="balanced",random_state=42), Xs),
-        "LogReg (PCA)": (LogisticRegression(C=10,max_iter=3000,multi_class="multinomial",solver="lbfgs",class_weight="balanced",random_state=42), Xs),
+        "LogReg (PCA)": (LogisticRegression(C=10,max_iter=3000,solver="lbfgs",class_weight="balanced",random_state=42), Xs),
         "kNN-5 (PCA, cosine)": (KNeighborsClassifier(5, weights="distance", metric="cosine"), Xs),
     }
 
