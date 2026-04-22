@@ -840,6 +840,46 @@ Tax = sum of flat + percentage tax fields. Other Fee = sum of incentive + profes
 | Emergency override for lock-ins | `additionalDetails.providerOverrideFlag` |
 | Mail retail price type | `additionalDetails.mrpriceType` |
 
+#### MD Network ID — Field Disambiguation (MANDATORY)
+When the user asks about the "MD network ID" or "Med D network ID":
+- The correct source is `additionalDetails.networkId`
+- If `networkId` is null or empty → MD network ID is not populated for this claim. Say: "The MD network ID is not populated for this claim."
+- If it has a value → report the value directly
+
+CRITICAL: Do NOT use these other fields for "MD network ID" — they are DIFFERENT fields with DIFFERENT meanings:
+- `additionalDetails.rxNetworkId` → this is "Pharmacy network ID 1" (a completely separate network identifier)
+- `list_data.primary.pharmacyNetwork` → this is the pharmacy network code from the claim list data
+- `additionalDetails.tagging.standardNetwork` → this is an internal tagging field
+
+These fields can have different values from `networkId`. They represent completely different network concepts.
+
+#### Pharmacy Qualifier | ID Formatting Rule (MANDATORY)
+When the user asks about the "pharmacy qualifier ID", "pharmacy qualifier and ID", or "pharmacy qualifier | ID":
+1. Get the qualifier code from `additionalDetails.submittedSrvProviderIdQualifier`
+2. Translate the code to a description:
+   - "01" → "Nat'l Provider Identifier"
+   - "02" → "Blue Cross"
+   - "03" → "Blue Shield"
+   - "04" → "Medicare"
+   - "05" → "Medicaid"
+   - "06" → "UPIN"
+   - "07" → "NCPDP Provider ID"
+   - "08" → "State License"
+   - "09" → "TRICARE"
+   - "10" → "Health Industry Number"
+   - "11" → "Federal Tax ID"
+   - "12" → "Drug Enforcement Admin"
+   - "13" → "State Issued"
+   - "14" → "Plan Specific"
+   - "99" → "Other"
+   - If code is not in this list → use the raw code itself
+3. Get the ID from `additionalDetails.submittedServiceProviderId`
+4. Format as: "[description] - [ID]"
+
+If both fields are null or empty, say the pharmacy qualifier ID is not available.
+Do NOT report the qualifier code, description, and ID as separate prose items. Combine them in the "[description] - [ID]" format.
+Note: This is different from "Provider qualifier and ID" which refers to a submitted-only value not available in current claim data.
+
 **Drug Information Fields:**
 
 | Question | Field |
@@ -943,6 +983,23 @@ To determine the transition fill status, follow this logic:
      → If claimStatus = "V" (Reversed): Transition fill = "No — the claim was reversed"
 3. If `transtionfillTag` IS null or empty: Transition fill = "No"
 NEVER report the raw tag value (e.g., "D", "T") to the user. Always use the derived status above.
+
+**TF Tag Response Format:**
+When reporting the TF tag value, state the DERIVED label ("Yes", "No", or "Engaged") directly as the value. Do NOT mention the raw field value (e.g., avoid saying "the value is null" or "the tag is D"). The derived label is the complete answer.
+- Correct: "The TF tag value for this claim is No."
+- Avoid: "The TF tag value for this claim is null, which means transition fill was not applied."
+
+#### Smart Edit Field Rule (MANDATORY)
+When the user asks about the "smart edit" or "smart edit value" for a claim, the answer comes ONLY from `additionalDetails.primaryEdit` — this is a direct field lookup.
+- If `primaryEdit` is null or empty → Smart edit is not populated for this claim. Say: "The smart edit value for this claim is not populated."
+- If `primaryEdit` = "Y" → "Yes"
+- If `primaryEdit` = "N" → "No"
+- If any other non-null value → report that value as-is
+
+Do NOT look at `smartPriorAuthorization.executedSPAPriList[].executed[].smarteditValue` to answer this question. That section contains Smart PA processing infrastructure metadata (schedule-level edit codes and values evaluated during adjudication), not the "Smart edit" summary field. Those are different concepts:
+- "Smart edit" (the field) = `additionalDetails.primaryEdit`
+- Smart PA executed list = separate drill-down processing data
+The Smart PA executed list always has data when Smart PA schedules were evaluated, regardless of whether `smartPriorAuthorizationUsed` is "Y" or "N". Using it to answer "smart edit" will produce incorrect values.
 
 **Medicare Part D — Plan & Indicators:**
 
@@ -1109,11 +1166,10 @@ Do NOT hallucinate, guess, or pull from a wrong field.
 
 Submitted transaction details (requires separate data not currently accessible):
 - Transaction count
-- Patient residence code (do NOT use pharmacyServiceProcessing config value "**")
-- Pharmacy service type code (do NOT use pharmacyServiceProcessing config value "**")
-- Pharmacy qualifier with description and ID (e.g. "NCPDP Provider ID - 0103301")
-- Prescription qualifier with description and ID (e.g. "Rx Billing - 236761215202")
-- Prescriber qualifier with description and ID (e.g. "NPI - 2840038691")
+- Patient residence code (do NOT use pharmacyServiceProcessing config value)
+- Pharmacy service type code (do NOT use pharmacyServiceProcessing config value)
+- Prescription qualifier with description and ID
+- Prescriber qualifier with description and ID
 - Primary prescriber qualifier/ID (separate from standard prescriber)
 - Date received (pharmacy submission date — do NOT use `dateReceived2` which is a different timestamp)
 - Prescription written date
@@ -1511,6 +1567,16 @@ When the user asks whether a drug is brand or generic:
    - Report only the clinical/formulary classification, NOT the CMS Part D classification.
 4. If `brandGenericCode` is missing or null in the data, state "CMS Part D brand/generic classification is not available in the PDE data for this claim" rather than inferring from other fields.
 5. Always report the clinical indicators (`genericIndicator`, `multiSourceInd`) alongside the Part D classification when both are available, as they may differ.
+
+#### Multi Source Code Suspense Indicator — Field Disambiguation (MANDATORY)
+When the user asks about the "multi source code suspense indicator":
+- This is NOT the same as `multiSourceInd` (the MONY code / multi-source indicator). These are two completely different fields:
+  - "Multi-source indicator" (MONY) = `list_data.primary.multiSourceInd` — drug classification (Generic/Brand)
+  - "Multi source code suspense indicator" = a separate field that is not available in the claim data
+- Do NOT use `multiSourceInd` or any drug classification field to answer this question
+- The correct response is: "The multi source code suspense indicator value is not populated for this claim."
+
+This rule applies to ALL claims, not just specific ones. The multi source code suspense indicator is a distinct field from the multi-source indicator (MONY).
 
 #### Compound Code (NCPDP 406-D6)
 | Code | Meaning |
