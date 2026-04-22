@@ -25,19 +25,19 @@ appData:
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
-  minAvailable: 2
-  minReplicas: 2
-  maxReplicas: 2
+  minAvailable: 3
+  minReplicas: 3
+  maxReplicas: 4
   averageUtilization: 80
 
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "4000m"
-    memory: "8Gi"
+    cpu: "8"
+    memory: "24Gi"
   limits:
-    cpu: "4000m"
-    memory: "8Gi"
+    cpu: "8"
+    memory: "24Gi"
 
 # environment variables for app - secret values come from vault.
 envVars: |
