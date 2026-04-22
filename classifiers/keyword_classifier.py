@@ -197,6 +197,30 @@ class CVSIntentClassifier:
                 'show': 0.6, 'my': 0.3, 'both': 0.7,
                 'and': 0.4, 'together': 0.6, 'combined': 0.7
             },
+
+            # ========== CLAIMS SEARCH (member-level multi-claim queries) ==========
+            # Routes to Claims_search_api pipeline for NDC, manufacturer, generic/brand,
+            # refills, days supply, prior auth, diagnosis, settlement, pharmacy type,
+            # plan, pharmacy, prescriber, pricing across claims, status, reject code,
+            # drug history, date-range/month queries
+            'claims_search': {
+                'ndc': 1.0, 'manufactured': 1.0, 'manufacturer': 1.0,
+                'generic': 0.9, 'brand': 0.9, 'refills': 1.0, 'refill': 0.9,
+                'day supply': 1.0, 'days supply': 1.0, '90 day': 0.9,
+                'prior authorization': 1.0, 'prior auth': 1.0,
+                'diagnosis code': 1.0, 'settlement code': 1.0,
+                'retail pharmacy': 1.0, 'mail order': 0.9,
+                'plan': 0.4, 'prescriber': 0.4, 'pharmacy': 0.3,
+                'rejected claims': 1.0, 'paid claims': 1.0,
+                'reject code': 1.0, 'taken last': 1.0,
+                'member pay': 0.9, 'how much': 0.6,
+                'all claims': 0.9, 'member': 0.4,
+                'january': 0.8, 'february': 0.8, 'march': 0.8,
+                'april': 0.8, 'may': 0.5, 'june': 0.8,
+                'july': 0.8, 'august': 0.8, 'september': 0.8,
+                'october': 0.8, 'november': 0.8, 'december': 0.8,
+                'filled at': 0.9,
+            },
             
             # ========== SPECIAL INTENTS ==========
             'greeting': {
@@ -549,6 +573,7 @@ class CVSIntentClassifier:
             'settlement_info': 'Settlement codes (maps to: statusDetails.settlementCodes[])',
             'date_range_claims': 'Claims in date range (filter on: submitted.dateOfFill)',
             'multi_claim_summary': 'Summary of multiple claims (maps to: multiple claimNumber requests)',
+            'claims_search': 'Member-level multi-claim search (NDC, manufacturer, generic/brand, refills, days supply, prior auth, diagnosis, settlement, pharmacy type, plan, pharmacy, prescriber, pricing, status, reject code, drug history, date range)',
             
             # Additional CVS-Specific Intents
             'compound_info': 'Compound medication details (maps to: compound)',

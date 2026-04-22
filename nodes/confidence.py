@@ -114,13 +114,27 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     # INTENTS_WITHOUT_ENTITIES: Intents that don't require entity extraction
     INTENTS_WITHOUT_ENTITIES = {'out_of_scope', 'greeting', 'help'}
 
+    # CLAIMS_SEARCH_INTENTS: Intents handled by the claims search pipeline.
+    # These only need claim_number (no sequence) and are routed via intent_router
+    # after build_context. They also may be detected by regex patterns even when
+    # the embedding classifier maps to a different intent (e.g., rejection_reasons).
+    CLAIMS_SEARCH_INTENTS = {'claims_search'}
+
     # Check if we have required entities (check for required entities specifically, not just any entities)
     # FIXED: Changed from `v is not None` to `v` to properly handle empty lists ([] is falsy)
     # FIXED: Check if required entities are present, not just if ANY entities exist
     # Use missing_slots if available (most reliable), otherwise check required_entities_list
     if missing_slots:
         # Entity extractor already computed missing slots - if any are missing, we don't have required entities
-        has_entities = False
+        # BUT: For claims_search intent, only claim_number matters (no sequence needed)
+        if intent in CLAIMS_SEARCH_INTENTS:
+            # Only check for claim_number, ignore sequence
+            claims_search_missing = [s for s in missing_slots if s == "claim_number"]
+            has_entities = len(claims_search_missing) == 0
+            if has_entities:
+                logger.info(f"   claims_search intent: ignoring missing sequence (only claim_number needed)")
+        else:
+            has_entities = False
         logger.debug(f"   Missing required slots: {missing_slots}")
     elif required_entities_list:
         # Check if all required entities are present (handle both list format and single value format)

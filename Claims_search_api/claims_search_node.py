@@ -44,7 +44,7 @@ async def call_claims_search_node(state: Dict[str, Any]) -> Dict[str, Any]:
     LangGraph node: runs the claims search pipeline.
 
     Reads from state:
-        - user_input:  The user's query text
+        - text:        The user's query text (AgentState field name)
         - entities:    Should contain claim_ids (list) from intent detection
         - user_info:   Contains auth_token, x-api-key, x-clientrefid headers
 
@@ -61,7 +61,7 @@ async def call_claims_search_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # ------------------------------------------------------------------
         # Extract inputs from state
         # ------------------------------------------------------------------
-        user_query = state.get("user_input", "")
+        user_query = state.get("text", "") or state.get("user_input", "")
         entities = state.get("entities") or {}
         user_info = state.get("user_info") or {}
         extracted_slots = state.get("extracted_slots") or {}
@@ -190,6 +190,7 @@ async def call_claims_search_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "totalCount": total_count,
                     "filteredCount": filtered_count,
                     "memberInfo": member_info,
+                    "_masked_response": llm_context,
                 },
             },
             "response": llm_response,

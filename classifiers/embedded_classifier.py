@@ -767,7 +767,30 @@ class CVSIntentEmbedded:
 # ================================================================================
 
 CVS_INTENT_EXAMPLES = {
-    
+
+    "claims_search": [
+        "Show me all rejected claims for this member.",
+        "When was LEVOTHYROXINE taken last for this member?",
+        "Show all claims with reject code 79.",
+        "Give me all the claims for this member in January.",
+        "Show me claims filled at CVS PHARMACY 00610.",
+        "How much did the member pay for LEVOTHYROXINE?",
+        "Show me all claims with settlement code 358.",
+        "Show claims with diagnosis code E1129.",
+        "Which claims used prior authorization?",
+        "Show claims with 90 day supply.",
+        "Show all refills for this member.",
+        "Show brand name claims.",
+        "Show all generic drug claims.",
+        "Show retail pharmacy claims.",
+        "Show claims under plan LICS2.",
+        "Show claims by prescriber NOEUV.",
+        "NDC 33342-0395-44.",
+        "Manufactured by MACLEODS.",
+        "Give me all paid claims for this member.",
+        "Show me the member's claim history for this drug.",
+    ],
+
     "approval_info": [
         "Provide a detailed approval summary for this claim.",
         "Show which plan overrides were triggered during adjudication.",

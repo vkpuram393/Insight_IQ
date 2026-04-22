@@ -2051,6 +2051,38 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Detect mode
         needs_clarification = state.get("needs_clarification", False)
         
+        # =====================================================================
+        # CLAIMS SEARCH PASSTHROUGH: If call_claims_search_node already
+        # generated a response via ClaimsResponseAgent, pass it through
+        # instead of regenerating with the generic response agent.
+        # =====================================================================
+        existing_response = state.get("response", "")
+        tool_results = state.get("tool_results") or {}
+        is_claims_search = (
+            not needs_clarification
+            and existing_response
+            and isinstance(existing_response, str)
+            and len(existing_response.strip()) > 0
+            and tool_results.get("data", {}).get("filteredCount") is not None
+        )
+        
+        if is_claims_search:
+            logger.info("🔀 Claims search response detected — passing through pre-generated response")
+            logger.info(f"   Response length: {len(existing_response)} chars")
+            response_id = str(uuid.uuid4())
+            result = {
+                "response": existing_response,
+                "response_id": response_id,
+                "recommendations": [],
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "response_source": "claims_search_agent",
+                    "response_passthrough": True,
+                }
+            }
+            await log_state_snapshot(state, node_name, result)
+            return result
+        
         if needs_clarification:
             logger.info("🤖 AGENT 2: Follow-Up Question Generation (Clarification Mode)")
         else:

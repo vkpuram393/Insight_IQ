@@ -80,6 +80,36 @@ _CLAIMS_SEARCH_PATTERNS = [
     # Refill queries
     re.compile(r'(all\s+)?refills?\s+(for|of)', re.IGNORECASE),
     re.compile(r'show\s+(all\s+)?refills', re.IGNORECASE),
+
+    # Pricing for a drug across claims (e.g., "how much did the member pay for LEVOTHYROXINE?")
+    re.compile(r'(how\s+much|what).+(pay|cost|paid|copay).+(for|on)\s+\w+', re.IGNORECASE),
+
+    # DAW / Dispense As Written across claims
+    re.compile(r'(daw|dispense\s+as\s+written)\s+claims?', re.IGNORECASE),
+
+    # Drug name "last taken" queries
+    re.compile(r'when\s+was\s+\w+\s+(last|taken|filled)', re.IGNORECASE),
+
+    # "show claims filled at <pharmacy name>" (pharmacy name pattern)
+    re.compile(r'claims?\s+filled\s+at', re.IGNORECASE),
+
+    # "show claims by prescriber <name>"
+    re.compile(r'claims?\s+by\s+prescriber', re.IGNORECASE),
+
+    # "show me all claims with reject code <code>"
+    re.compile(r'claims?\s+with\s+reject\s+code', re.IGNORECASE),
+
+    # "show brand name claims"
+    re.compile(r'(brand|generic)\s+(name\s+)?claims?', re.IGNORECASE),
+
+    # "show claims with diagnosis code" 
+    re.compile(r'claims?\s+with\s+diagnosis', re.IGNORECASE),
+
+    # "show claims under plan <plan_id>"
+    re.compile(r'under\s+plan\s+\w+', re.IGNORECASE),
+
+    # "give me all the claims for this member in <month>"
+    re.compile(r'(all\s+)?(the\s+)?claims\s+for\s+(this\s+)?member', re.IGNORECASE),
 ]
 
 
@@ -88,12 +118,13 @@ def is_claims_search_query(state: Dict[str, Any]) -> bool:
     Determine if the user's query should route to the claims search pipeline.
 
     Args:
-        state: LangGraph AgentState dict
+        state: LangGraph AgentState dict (or dict with 'text' or 'user_input')
 
     Returns:
         True if the query matches claims-search patterns
     """
-    user_input = (state.get("user_input") or "").strip()
+    # Support both 'text' (AgentState field) and 'user_input' (legacy)
+    user_input = (state.get("text") or state.get("user_input") or "").strip()
     if not user_input:
         return False
 

@@ -34,6 +34,28 @@ ENDPOINTS = {
 # If either is missing, the system routes to clarification engine
 INTENT_API_ROUTING = {
     # ============================================================
+    # CLAIMS SEARCH API (Member-level multi-claim queries)
+    # Use for: Member history, filtered claim lists, aggregate queries
+    # Uses internal search API via Claims_search_api/api_utils.py
+    # ============================================================
+
+    "claims_search": {
+        "api_endpoint": "claims_search_api",  # Handled by call_claims_search_node, not the standard CAP API
+        "method": "POST",
+        "required_entities": ["claim_number"],  # Only claim_number needed (no sequence) — used to find member
+        "optional_entities": [],
+        "response_fields": [
+            "claims[].claimInformation",
+            "claims[].drug",
+            "claims[].pricing",
+            "claims[].prescription",
+            "claims[].member",
+        ],
+        "fallback_api": None,
+        "description": "Member-level multi-claim search (NDC, manufacturer, generic/brand, refills, days supply, prior auth, diagnosis, settlement, pharmacy type, plan, pharmacy, prescriber, pricing, status, reject code, drug history, date range)"
+    },
+
+    # ============================================================
     # BASIC SEARCH API (Faster, lighter)
     # Use for: Quick status checks, list views
     # ============================================================

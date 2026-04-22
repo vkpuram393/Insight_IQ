@@ -757,54 +757,16 @@ def classify_hierarchical_knn(
 def _build_intent_to_domain_lookup() -> Dict[str, str]:
     """Build reverse map: intent_name → domain_name.
     
-    Sources (in priority order):
-      1. DOMAIN_REGISTRY — official mapping
-      2. Fallback heuristic — intents in CVS_INTENT_EXAMPLES that are NOT in
-         any domain. These are "orphaned" intents that have training data but
-         were removed from the registry. We still need to classify them.
-    
-    This ensures test data intents that no longer appear in DOMAIN_REGISTRY
-    can still be classified and mapped to their historical domain.
+    For cross-domain intents (appears in multiple domains), we store
+    the FIRST domain encountered. The test data labels determine which
+    domain is correct in evaluation — we use Testdata.csv's 'domain' column.
     """
     domain_registry = embeddingVars.DOMAIN_REGISTRY
     lookup = {}
-
-    # 1. Official registry mapping
     for domain_key, domain_info in domain_registry.items():
         for intent_name in domain_info["intents"]:
             if intent_name not in lookup:
                 lookup[intent_name] = domain_key
-
-    # 2. Orphaned intents — map them based on the OLD domain structure
-    #    These are training intents not assigned to any current domain.
-    LEGACY_DOMAIN_MAP = {
-        # Old benefits_api intents
-        "approval_info": "benefits_api",
-        "audit_info": "benefits_api",
-        "beneficiary_info": "benefits_api",
-        # Old claim_history_search intents
-        "compound_info": "claim_history_search",
-        "date_range_claims": "claim_history_search",
-        "drug_info": "claim_history_search",
-        "drug_interaction_info": "claim_history_search",
-        "fill_date_info": "claim_history_search",
-        # Old cap_api intents
-        "daw_info": "cap_api",
-        "government_claim_type": "cap_api",
-        "mail_order_info": "cap_api",
-        "medicare_part_d": "cap_api",
-        "network_info": "cap_api",
-        "prior_auth_info": "cap_api",
-    }
-
-    for intent_name in embeddingVars.CVS_INTENT_EXAMPLES:
-        if intent_name not in lookup:
-            if intent_name in LEGACY_DOMAIN_MAP:
-                lookup[intent_name] = LEGACY_DOMAIN_MAP[intent_name]
-            else:
-                lookup[intent_name] = "unknown"
-                logger.warning(f"⚠️  Orphaned intent '{intent_name}' has no domain mapping")
-
     return lookup
 
 
@@ -929,275 +891,6 @@ def classify_global_knn(
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# TASK 4d: LLM CLASSIFIER — Gemini Flash for ambiguous cases
-# ═════════════════════════════════════════════════════════════════════════════
-#
-#  ┌──────────────────────────────────────────────────────────────────────┐
-#  │  WHY LLM IS NEEDED FOR >90% ACCURACY                                │
-#  │                                                                      │
-#  │  Embedding similarity has a hard ceiling (~85-88%) when:             │
-#  │    • Multiple intents share 80%+ vocabulary                         │
-#  │    • Training examples follow identical templates                    │
-#  │      ("Show the X for this claim" vs "Display the X for this claim")│
-#  │    • Domain jargon (TF, BPG, COB) appears in 1-2 word differences  │
-#  │                                                                      │
-#  │  An LLM understands MEANING, not just word overlap:                  │
-#  │    • "override codes" → rejection_reasons (what failed)             │
-#  │    • "plan overrides" → approval_info (what was approved)           │
-#  │    • A human can tell these apart; embeddings can't                  │
-#  │                                                                      │
-#  │  HYBRID APPROACH:                                                    │
-#  │    kNN handles ~70% of queries (high confidence, single API call)   │
-#  │    LLM handles ~30% (ambiguous cases only, ~300ms per call)         │
-#  │    Combined accuracy: 90%+                                          │
-#  └──────────────────────────────────────────────────────────────────────┘
-
-# Intent descriptions for LLM — much richer than training examples
-INTENT_DESCRIPTIONS_FOR_LLM: Dict[str, str] = {
-    # --- cap_api intents ---
-    "claim_status": "General claim status, adjudication outcome, processing result, whether paid/rejected/pending, overall claim summary",
-    "multi_claim_summary": "Summary of ALL/MULTIPLE claims for a member, complete claim list, full history overview",
-    "pharmacy_info": "Dispensing pharmacy name, location, address, NCPDP number, store where prescription was filled",
-    "prescriber_info": "Prescribing physician/doctor name, NPI number, credentials, ordering provider details",
-    "pricing_info": "Copay, ingredient cost, dispensing fee, patient pay, out-of-pocket cost breakdown, pricing schedule",
-    "reimbursement_info": "Amount paid TO the pharmacy, reimbursement rationale, payment calculation for paper claims",
-    "rejection_reasons": "Rejection codes, failed edit codes, denial explanations, why claim was denied, how to resolve/fix/overturn rejection",
-    "settlement_info": "Settlement codes, pharmacy response/feedback codes sent back to pharmacy after adjudication",
-    "rx_details": "RX/prescription number, fill number, quantity dispensed, days supply, drug strength, refill information",
-    "reversal_info": "Claim reversal, R&R (reverse and resubmit), manual adjustments, modification history, resubmission",
-    "cob_info": "Coordination of Benefits (COB), other insurance, secondary payer, dual coverage, primary/secondary adjudication",
-    "generic_availability": "Generic alternatives, therapeutic equivalents, formulary substitutes, cheaper drug options",
-    # --- benefits_api intents (old / legacy) ---
-    "approval_info": "Claim approval details, plan overrides, transition fill (TF) status/type/eligibility, BPG configuration, Smart PA, accumulation bypass",
-    "audit_info": "Audit trail, change history, modification records, edit timestamps, who made changes, add date, change date",
-    "beneficiary_info": "Member benefit phase, coverage tier, eligibility status, accumulation rules, LOE, medical dollar contribution",
-    # --- claim_history_search intents (old / legacy) ---
-    "compound_info": "Compound medication details, MIC (Most Ingredient Cost) breakdown, individual ingredient costs, compound formulation",
-    "date_range_claims": "Claims within a date range, deductible-contributing claims, accumulation history, prescription fill history over time",
-    "drug_info": "Drug name, NDC code, GPI, therapeutic class, formulary status, medication tier, drug classification",
-    "drug_interaction_info": "DUR edits, drug utilization review, drug interaction alerts, clinical screening, override details",
-    "fill_date_info": "Date prescription was filled, dispensing date, service date, fill timestamp",
-    # --- general ---
-    "greeting": "Hello, hi, welcome, good morning/afternoon/evening, casual greeting",
-    "help": "How to submit claims, steps to avoid rejection, claim filing guidance, instructions",
-    "out_of_scope": "Unrelated to pharmacy claims — weather, recipes, sports, random text, gibberish",
-    # --- cap_api extras ---
-    "daw_info": "DAW (Dispense As Written) status, brand vs generic requirement, substitution allowed",
-    "government_claim_type": "Medicare/Medicaid claim type, government program classification",
-    "mail_order_info": "Mail order/home delivery prescription status, shipping details",
-    "medicare_part_d": "Medicare Part D summary, PDE details, MEDD pricing, LICS, N1",
-    "network_info": "Pharmacy network details, which network processed/paid the claim",
-    "prior_auth_info": "Prior authorization (PA) status, Smart PA, Member PA, authorization requirements",
-    # --- claim_history_search new intents ---
-    "Refills": "Refill counts, remaining refills, refill history for prescriptions",
-    "DaysSupply": "Days supply filtering (30-day, 90-day, etc.)",
-    "PriorAuth": "Claims that required prior authorization, PA status in search context",
-    "Diagnosis": "Claims filtered by ICD-10 diagnosis code",
-    "Settlement": "Claims filtered by settlement/response code",
-    "PharmType": "Claims filtered by pharmacy type (retail, mail-order, specialty)",
-    "Plan": "Claims filtered by insurance plan code",
-    "Pharmacy": "Claims from a specific pharmacy by name/ID",
-    "Prescriber": "Claims by a specific prescriber/doctor name or NPI",
-    "Pricing": "Pricing details in claim search context (copay, cost, member pay)",
-    "Status": "Claims filtered by status (rejected, paid, pending, reversed)",
-    "RejectCode": "Claims filtered by specific NCPDP reject code",
-    "DrugLast": "When a specific drug was last dispensed for a member",
-    "Month": "Claims filtered by calendar month",
-    "ClaimNum": "Lookup a specific claim by claim number",
-    "NDC": "Claims filtered by drug NDC code",
-    "Manufacturer": "Claims filtered by drug manufacturer name",
-    "Generic": "Claims for generic drugs only",
-    "Brand": "Claims for brand-name drugs only",
-    # --- benefits_api new intents ---
-    "plan_summary": "Current benefit plan overview, active plan snapshot, coverage summary",
-    "plan_history": "Change log of benefit plan, plan revision history, amendments over time",
-    "plan_finder": "Search/find/locate available benefit plans, plan catalog lookup",
-}
-
-
-def classify_with_llm(
-    query: str,
-    candidate_intents: List[str],
-    intent_descriptions: Dict[str, str],
-    intent_to_domain: Dict[str, str],
-) -> Dict[str, Any]:
-    """Classify using Gemini Flash with structured output.
-    
-    Args:
-        query: User's natural language query
-        candidate_intents: List of candidate intent names to choose from
-        intent_descriptions: {intent: description} for the candidates
-        intent_to_domain: {intent: domain} reverse lookup
-        
-    Returns:
-        {predicted_intent, predicted_domain, confidence, reasoning}
-    """
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(
-        vertexai=True,
-        project=os.getenv("PROJECT_ID", "pbm-poc-coderev-genai-poc"),
-        location=os.getenv("LOCATION", "us-central1"),
-    )
-
-    # Build intent list for prompt
-    intent_list = "\n".join(
-        f"  - {name}: {intent_descriptions.get(name, name)}"
-        for name in candidate_intents
-    )
-
-    prompt = f"""You are a pharmacy claims intent classifier. Classify the user query into exactly ONE intent.
-
-CANDIDATE INTENTS:
-{intent_list}
-
-USER QUERY: {query}
-
-Respond with ONLY the intent name (e.g., "approval_info"). No explanation."""
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=50,
-            ),
-        )
-        predicted = response.text.strip().strip('"').strip("'").strip()
-
-        # Validate response is one of the candidates
-        if predicted in candidate_intents:
-            return {
-                "predicted_intent": predicted,
-                "predicted_domain": intent_to_domain.get(predicted, "unknown"),
-                "confidence": 1.0,
-                "source": "llm",
-            }
-
-        # Fuzzy match — LLM might return slightly different casing
-        for c in candidate_intents:
-            if c.lower() == predicted.lower():
-                return {
-                    "predicted_intent": c,
-                    "predicted_domain": intent_to_domain.get(c, "unknown"),
-                    "confidence": 0.9,
-                    "source": "llm_fuzzy",
-                }
-
-        # LLM returned unknown intent — fall back
-        logger.warning(f"LLM returned unknown intent '{predicted}', falling back to first candidate")
-        return {
-            "predicted_intent": candidate_intents[0],
-            "predicted_domain": intent_to_domain.get(candidate_intents[0], "unknown"),
-            "confidence": 0.3,
-            "source": "llm_fallback",
-        }
-
-    except Exception as e:
-        logger.error(f"LLM classification failed: {e}")
-        return {
-            "predicted_intent": candidate_intents[0] if candidate_intents else "unknown",
-            "predicted_domain": intent_to_domain.get(candidate_intents[0], "unknown") if candidate_intents else "unknown",
-            "confidence": 0.0,
-            "source": "llm_error",
-        }
-
-
-def classify_hybrid_knn_llm(
-    query: str,
-    query_vec: np.ndarray,
-    exemplar_matrix: np.ndarray,
-    exemplar_labels: List[str],
-    intent_to_domain: Dict[str, str],
-    knn_k: int = 7,
-    confidence_threshold: float = 0.55,
-    margin_threshold: float = 0.10,
-) -> Dict[str, Any]:
-    """Hybrid classifier: kNN for easy cases, LLM for hard cases.
-    
-    ┌────────────────────────────────────────────────────────────────────────┐
-    │  Pipeline:                                                             │
-    │                                                                        │
-    │  1. Run global kNN (distance-weighted, k=7)                            │
-    │  2. Check confidence:                                                  │
-    │     a. IF vote_fraction > 55% AND margin > 10% → kNN wins (fast path) │
-    │     b. ELSE → send to Gemini Flash with top-5 candidates               │
-    │  3. Domain derived from winning intent                                 │
-    │                                                                        │
-    │  Expected split: ~70% kNN (fast), ~30% LLM (accurate)                 │
-    │  Expected accuracy: 90%+                                               │
-    └────────────────────────────────────────────────────────────────────────┘
-    """
-    from collections import defaultdict
-
-    # ── Step 1: Global kNN ───────────────────────────────────────────────
-    query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-10)
-    similarities = exemplar_matrix @ query_norm
-
-    if knn_k < len(similarities):
-        top_k_idx = np.argpartition(similarities, -knn_k)[-knn_k:]
-        top_k_idx = top_k_idx[np.argsort(similarities[top_k_idx])[::-1]]
-    else:
-        top_k_idx = np.argsort(similarities)[::-1][:knn_k]
-
-    intent_votes: Dict[str, float] = defaultdict(float)
-    intent_max_sim: Dict[str, float] = {}
-
-    for idx in top_k_idx:
-        sim = float(similarities[idx])
-        label = exemplar_labels[idx]
-        intent_votes[label] += sim
-        if label not in intent_max_sim:
-            intent_max_sim[label] = sim
-
-    total_weight = sum(intent_votes.values())
-    ranked = sorted(intent_votes.items(), key=lambda x: x[1], reverse=True)
-
-    best_intent = ranked[0][0]
-    best_fraction = ranked[0][1] / total_weight if total_weight > 0 else 0
-    second_fraction = ranked[1][1] / total_weight if len(ranked) > 1 and total_weight > 0 else 0
-    margin = best_fraction - second_fraction
-
-    # ── Step 2: Confidence check ─────────────────────────────────────────
-    knn_confident = best_fraction >= confidence_threshold and margin >= margin_threshold
-
-    if knn_confident:
-        # Fast path — kNN is confident
-        return {
-            "predicted_intent": best_intent,
-            "predicted_domain": intent_to_domain.get(best_intent, "unknown"),
-            "intent_score": intent_max_sim.get(best_intent, 0.0),
-            "knn_vote_fraction": best_fraction,
-            "knn_margin": margin,
-            "source": "knn",
-        }
-
-    # ── Step 3: LLM arbitration ──────────────────────────────────────────
-    # Send top-5 candidates to Gemini Flash
-    top_candidates = [intent for intent, _ in ranked[:5]]
-
-    llm_result = classify_with_llm(
-        query=query,
-        candidate_intents=top_candidates,
-        intent_descriptions=INTENT_DESCRIPTIONS_FOR_LLM,
-        intent_to_domain=intent_to_domain,
-    )
-
-    return {
-        "predicted_intent": llm_result["predicted_intent"],
-        "predicted_domain": llm_result["predicted_domain"],
-        "intent_score": intent_max_sim.get(llm_result["predicted_intent"], 0.0),
-        "knn_vote_fraction": best_fraction,
-        "knn_margin": margin,
-        "source": llm_result["source"],
-        "knn_top_intent": best_intent,
-        "llm_candidates": "|".join(top_candidates),
-    }
-
-
-# ═════════════════════════════════════════════════════════════════════════════
 # TASK 5: FLAT CLASSIFICATION (for comparison / ablation)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -1268,7 +961,7 @@ def classify_and_evaluate(
 
     intent_embeddings = _load_intent_embeddings()
 
-    if method in ("global_knn", "hybrid_knn_llm"):
+    if method == "global_knn":
         global_matrix, global_labels = _build_global_exemplar_index(intent_embeddings)
         intent_to_domain = _build_intent_to_domain_lookup()
     elif method == "hierarchical_knn":
@@ -1276,7 +969,6 @@ def classify_and_evaluate(
 
     embedder = _get_embedder()
     results = []
-    llm_call_count = 0
 
     for idx, record in enumerate(test_data):
         text = record["text"]
@@ -1285,27 +977,7 @@ def classify_and_evaluate(
 
         query_vec = np.array(embedder.embed(text))
 
-        if method == "hybrid_knn_llm":
-            result = classify_hybrid_knn_llm(
-                query=text,
-                query_vec=query_vec,
-                exemplar_matrix=global_matrix,
-                exemplar_labels=global_labels,
-                intent_to_domain=intent_to_domain,
-                knn_k=7,
-            )
-            predicted_intent = result["predicted_intent"]
-            predicted_domain = result["predicted_domain"]
-            source = result.get("source", "knn")
-            if source != "knn":
-                llm_call_count += 1
-            extra = {
-                "intent_score": result["intent_score"],
-                "knn_vote_fraction": result.get("knn_vote_fraction", ""),
-                "knn_margin": result.get("knn_margin", ""),
-                "source": source,
-            }
-        elif method == "global_knn":
+        if method == "global_knn":
             result = classify_global_knn(
                 query_vec, global_matrix, global_labels, intent_to_domain,
                 k=7, distance_weighted=True,
@@ -1387,10 +1059,6 @@ def classify_and_evaluate(
     print(f"  Method: {method.upper()}")
     print(f"  Intent Classification Accuracy : {intent_accuracy:.2f}%")
     print(f"  Domain Classification Accuracy : {domain_accuracy:.2f}%")
-    if method == "hybrid_knn_llm":
-        knn_pct = (len(test_data) - llm_call_count) / len(test_data) * 100
-        print(f"  kNN resolved (no LLM)          : {knn_pct:.1f}% ({len(test_data) - llm_call_count}/{len(test_data)})")
-        print(f"  LLM calls                      : {llm_call_count}/{len(test_data)}")
     print(f"{'='*60}")
 
     # ── Per-domain breakdown ─────────────────────────────────────────────
@@ -1623,10 +1291,8 @@ def analyze_domain_overlap() -> None:
 # ═════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    import sys
-
     print("="*70)
-    print("  Intent Detection v3 — Hybrid kNN + Gemini Flash")
+    print("  Intent Detection v3 — Global kNN + Distance-Weighted Voting")
     print("="*70)
 
     # Step 1: Generate embeddings (auto-detects stale cache)
@@ -1650,40 +1316,31 @@ if __name__ == "__main__":
 
     if not os.path.exists(TESTDATA_PATH):
         print(f"\n⚠️  Testdata.csv not found at {TESTDATA_PATH} — skipping evaluation.")
-        sys.exit(0)
+    else:
+        test_df = pd.read_csv(TESTDATA_PATH)
 
-    test_df = pd.read_csv(TESTDATA_PATH)
+        required_cols = {"Prompt", "Intent", "domain"}
+        missing = required_cols - set(test_df.columns)
+        if missing:
+            raise ValueError(f"Testdata.csv is missing columns: {missing}")
 
-    required_cols = {"Prompt", "Intent", "domain"}
-    missing = required_cols - set(test_df.columns)
-    if missing:
-        raise ValueError(f"Testdata.csv is missing columns: {missing}")
+        test_data: List[Dict[str, str]] = [
+            {
+                "text": row["Prompt"],
+                "actual_classification_intent": row["Intent"],
+                "actual_classification_domain": row["domain"],
+            }
+            for _, row in test_df.iterrows()
+        ]
 
-    test_data: List[Dict[str, str]] = [
-        {
-            "text": row["Prompt"],
-            "actual_classification_intent": row["Intent"],
-            "actual_classification_domain": row["domain"],
-        }
-        for _, row in test_df.iterrows()
-    ]
+        print(f"\n  ▸ Loaded {len(test_data)} test records from Testdata.csv")
 
-    print(f"\n  ▸ Loaded {len(test_data)} test records from Testdata.csv")
+        # ── Run the BEST method: global kNN (no domain routing) ──────────
+        print("\n" + "─"*70)
+        print("  Running GLOBAL kNN + DISTANCE-WEIGHTED VOTING (v3 — recommended)")
+        print("─"*70)
+        metrics = classify_and_evaluate(test_data, method="global_knn")
 
-    # ── Choose method via command line arg ────────────────────────────
-    method = sys.argv[1] if len(sys.argv) > 1 else "hybrid_knn_llm"
-    valid_methods = ["hybrid_knn_llm", "global_knn", "hierarchical_knn", "hierarchical", "flat_cosine"]
-
-    if method not in valid_methods:
-        print(f"⚠️  Unknown method '{method}'. Valid: {valid_methods}")
-        sys.exit(1)
-
-    print(f"\n{'─'*70}")
-    print(f"  Running: {method.upper()}")
-    print(f"{'─'*70}")
-
-    metrics = classify_and_evaluate(test_data, method=method)
-
-    print(f"\n📊 Results ({method}):")
-    print(f"   Intent Accuracy : {metrics['intent_accuracy']:.2f}%")
-    print(f"   Domain Accuracy : {metrics['domain_accuracy']:.2f}%")
+        print(f"\n📊 v3 Results (Global kNN):")
+        print(f"   Intent Accuracy : {metrics['intent_accuracy']:.2f}%")
+        print(f"   Domain Accuracy : {metrics['domain_accuracy']:.2f}%")
