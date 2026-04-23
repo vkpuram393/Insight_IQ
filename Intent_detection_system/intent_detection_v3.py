@@ -660,6 +660,34 @@ def evaluate(test_data, pipeline, embedder, use_llm=True, conf_t=0.30, margin_t=
     if use_llm and llm_n:
         lr = df[df["source"]=="llm"]
         print(f"\n  LLM accuracy: {lr['intent_match'].mean()*100:.1f}% ({int(lr['intent_match'].sum())}/{llm_n})")
+
+    # ── Confidence distribution analysis ─────────────────────────────────
+    print(f"\n  CONFIDENCE DISTRIBUTION:")
+    print(f"  {'Confidence Band':<22} {'Queries':>8} {'Accuracy':>10} {'% of Total':>12}")
+    print(f"  {'-'*54}")
+    bands = [(0.85, 1.01, "≥ 85% (high)"), (0.70, 0.85, "70-85% (good)"),
+             (0.50, 0.70, "50-70% (moderate)"), (0.30, 0.50, "30-50% (low)"),
+             (0.0, 0.30, "< 30% (very low)")]
+    for lo, hi, label in bands:
+        band = df[(df["confidence"] >= lo) & (df["confidence"] < hi)]
+        if len(band) > 0:
+            acc = band["intent_match"].mean() * 100
+            pct = len(band) / len(df) * 100
+            print(f"  {label:<22} {len(band):>8} {acc:>8.1f}% {pct:>10.1f}%")
+
+    # Key metric: accuracy at ≥85% confidence
+    high_conf = df[df["confidence"] >= 0.85]
+    if len(high_conf) > 0:
+        print(f"\n  YOUR TARGET: Queries with ≥85% confidence:")
+        print(f"    Count:    {len(high_conf)}/{len(df)} ({len(high_conf)/len(df)*100:.1f}% of all queries)")
+        print(f"    Accuracy: {high_conf['intent_match'].mean()*100:.1f}%")
+    
+    # Also show ≥70% and ≥50%
+    for threshold in [0.70, 0.50]:
+        subset = df[df["confidence"] >= threshold]
+        if len(subset) > 0:
+            print(f"    At ≥{threshold:.0%} confidence: {len(subset)} queries ({len(subset)/len(df)*100:.1f}%), accuracy {subset['intent_match'].mean()*100:.1f}%")
+
     print()
     return {"intent_accuracy": ia, "domain_accuracy": da}
 
