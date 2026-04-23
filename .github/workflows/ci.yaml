@@ -6,9 +6,16 @@ on:
       - '**/deploy-configs/**'
       - '**/.github/**'
 
+permissions:
+  id-token: write
+  contents: write
+  actions: read
+
 concurrency:
   group: docker-cache-${{ github.workflow }}-serial
   cancel-in-progress: true
+
+
 
 jobs:
   cicd:
