@@ -1128,7 +1128,7 @@ The Smart PA executed list always has data when Smart PA schedules were evaluate
 | LIS participation code | `additionalDetails.licsParticipation` | |
 | Vaccine admin fee type | `additionalDetails.administrationFeeType` | |
 | Vacc admin fee payable type | `additionalDetails.administrationFeePayable` | |
-| Cat/LICS override | `additionalDetails.catastrophicLicsGenericOverride` | Show raw value only; do NOT interpret as "override was applied" |
+| Cat/LICS override | Not reliably available in claim data | Do NOT use `additionalDetails.catasthropicLicsGenericOverride` — that field is a different internal processing indicator, not the Cat/LICS Override value. Report: "The Cat/LICS Override value is not available for this claim." |
 | LTC override indicator | `additionalDetails.ltcOverride` | |
 | Biosimilar | `additionalDetails.biosimilar` | |
 | Dual demo indicator | `additionalDetails.dualDemoIndicator` | NOT `medicaiddd` — these are different fields |
@@ -1136,17 +1136,17 @@ The Smart PA executed list always has data when Smart PA schedules were evaluate
 | Clinical edit type/code | `additionalDetails.clinicalEditType` | |
 | Dispensing fee applied | `pricing.dispensingFee` | This is the fee value, not a yes/no |
 | DFP winning SCC | `additionalDetails.winningSubmissionClarificationCode` | |
-| Apply CAT copay for Non-Med D drugs | `medDDetails.catastrophicCopayAdditionalDrugs` | |
+| Apply CAT copay for Non-Med D drugs | `medDDetails.catastrophicCopayAdditionalDrugs` | If null, say "The Apply CAT Copay for Non-Med D Drugs value is not set for this claim." Do NOT mention, reference, or interpret `catasthropicLicsGenericOverride` or any other field in your answer. The ONLY field for this question is `medDDetails.catastrophicCopayAdditionalDrugs`. |
 | ADS/SCP indicator | `additionalDetails.adsScpTag` | |
 | M3P eligible | Check `linkedClaim.medicarePrescriptionPaymentPlan.medDClaimTag` | If `medDClaimTag` is non-null = "Yes", if null = "No". This is a direct child of `linkedClaim`, NOT inside `stcob` |
 
 **CRITICAL — Cat/LICS Override Response Rule:**
 When asked about the Cat/LICS override or catastrophic LICS generic override:
-- Report the RAW VALUE ONLY from `additionalDetails.catastrophicLicsGenericOverride` (e.g., "Y", "N", or null).
-- Say: "The Catastrophic LICS Generic Override value for this claim is [raw value]."
-- Do NOT interpret "Y" as "an override was applied" or "N" as "no override was applied."
-- Do NOT say "A catastrophic/LICS generic override was applied to this claim" — this is an INTERPRETATION, not the raw value.
-- The raw value "Y" or "N" is the complete answer. No further explanation or interpretation is needed.
+- The field `additionalDetails.catastrophicLicsGenericOverride` (correct spelling) does not exist in the claim data.
+- Do NOT use `additionalDetails.catasthropicLicsGenericOverride` (typo-named field) as a substitute — that field is a different internal processing indicator and is NOT the Cat/LICS Override value.
+- When this field is not present in claim data, report: "The Cat/LICS Override value is not available for this claim."
+- Do NOT interpret any other field as the Cat/LICS Override.
+- Do NOT say "A catastrophic/LICS generic override was applied to this claim."
 
 #### Government Claim Type Codes
 | Code | Description |
@@ -1233,9 +1233,9 @@ CORRECT: Report ONLY the TABLE 2 benefit phase DED row values. Stop after that. 
 | Covered plan pay c (CPPc) | `.cppcAmountThisClaim` | `.text5D` | `.text5E` |
 | Covered plan pay r (CPPr) | `.cpprAmountThisClaim` | `.text5J` | `.text5K` |
 | Non-covered plan pay (NPP) | `.nppAmountThisClaim` | `.text5F` | `.text5G` |
-| EGWP OHI | `.egwpOhi` | `.egwpOhiToDate` | N/A |
-| PLRO | `.plroMip` | N/A | N/A |
-| Other TrOOP | `.otherTroop` | N/A | N/A |
+| EGWP OHI | `.egwpOhi` | `.egwpOhiToDate` | Always $0.00 |
+| PLRO | `.plroMip` | Always $0.00 | Always $0.00 |
+| Other TrOOP | `.otherTroop` | Always $0.00 | Always $0.00 |
 
 **Medicare D — EOB OPAR Allocations:**
 
@@ -1267,6 +1267,24 @@ For ALL financial fields in the Medicare D tables above (Accumulation Details, B
 - $0.00 means zero dollars were applied/accumulated — it is a valid, meaningful value
 - Only say "not available" if the ENTIRE accumulation or medDDetails section is absent from the claim data
 This applies to: deductibles, TrOOP, PLRO, Other TrOOP, DSBOOPT/GDCB, DSAOOPT/GDCA, copay amounts, plan pay, drug cost, patient pay, CPP, NPP, EGWP OHI, catastrophic copay, and all other dollar amounts in these tables.
+
+**CRITICAL — N/A Column Handling for Medicare D Benefit/Accumulation Details (OVERRIDES zero/null rule above):**
+The Benefit/Accumulation Details table above marks certain cells as "N/A" — this means the column is STRUCTURALLY INAPPLICABLE for that row. It is NOT a financial zero.
+
+When a user asks about a value in a cell marked as "N/A" in the Benefit/Accumulation Details table, you MUST respond with the LITERAL string "N/A". Do NOT paraphrase it as "not available", "unavailable", "not applicable", or any other wording. Use exactly "N/A". Do NOT report "$0.00", do NOT look for alternative fields, and do NOT fall back to values from other rows.
+
+Specifically:
+- Delta TrOOP (a.k.a. "delta true out-of-pocket"): ONLY has a "This Claim" value. The "To Date" and "Remaining" columns are N/A. If asked about Delta TrOOP to date or remaining, say "N/A" — do NOT use troopToDate or troopRemaining from the TrOOP/MDTrOOP row.
+- DSBOOPT/GDCB (a.k.a. "defined standard beneficiary out-of-pocket", "drug spend before out-of-pocket threshold", "gross drug cost below"): Has "This Claim" and "To Date" values. The "Remaining" column is N/A. If asked about DSBOOPT/GDCB remaining or "remaining defined standard beneficiary out-of-pocket" or "remaining drug spend before OOP", say "N/A" — do NOT use `remainingOutOfPocketAmount` or any other field. The field `remainingOutOfPocketAmount` is NOT the DSBOOPT/GDCB remaining.
+- DSAOOPT/GDCA (a.k.a. "defined standard additional out-of-pocket", "drug spend after out-of-pocket threshold", "gross drug cost after"): Has "This Claim" and "To Date" values. The "Remaining" column is N/A. If asked about DSAOOPT/GDCA remaining or "remaining defined standard additional out-of-pocket" or "remaining drug spend after OOP", say "N/A" — do NOT use `remainingOutOfPocketAmount` or any other field.
+- Catastrophic copay (a.k.a. "catastrophic phase copay"): Has "This Claim" and "To Date" values. The "Remaining" column is N/A. If asked about catastrophic copay remaining, say "N/A".
+
+This rule takes PRECEDENCE over the zero/null handling rule. When a cell is marked N/A in the Benefit/Accumulation Details table, report "N/A" regardless of what any field in the claim data contains.
+Do NOT cross-reference values from different rows. Each row's columns are independent. "TrOOP Remaining" from the TrOOP/MDTrOOP row is NOT the same as "Delta TrOOP Remaining" (which is N/A).
+
+IMPORTANT: The field `remainingOutOfPocketAmount` in the claim data is the "Out of Pocket Max — Remaining" value from the Benefit Phases section. It is NOT the "remaining" value for DSBOOPT/GDCB or DSAOOPT/GDCA. Never use `remainingOutOfPocketAmount` to answer questions about DSBOOPT/GDCB or DSAOOPT/GDCA remaining — those are always N/A.
+
+NOTE: This N/A rule applies ONLY to the Benefit/Accumulation Details table. The Payments table below has its own rules — some Payments cells show "Always $0.00" which means always report "$0.00", NOT "N/A".
 
 **Fields NOT in Claim Data — Polite Admission Required:**
 The following information is NOT available in the claim data. When asked about any of these, respond EXACTLY with:
