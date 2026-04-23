@@ -21,7 +21,7 @@ Architecture:
 No torch, no transformers, no GPU. Pure sklearn + numpy + Vertex AI.
 """
 
-import os, sys, json, logging, time, pickle
+import os, sys, json, logging, time, pickle, re
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Tuple, Optional
@@ -38,6 +38,45 @@ EMBEDDINGS_PATH = os.path.join(ARTIFACTS, "intent_embeddings.json")
 MODEL_PKL = os.path.join(ARTIFACTS, "v3_pipeline.pkl")
 os.makedirs(ARTIFACTS, exist_ok=True)
 os.makedirs(OUTPUTS, exist_ok=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# QUERY NORMALIZER — strips claim numbers so training and test align
+# ═════════════════════════════════════════════════════════════════════════════
+#
+#  THE ROOT CAUSE OF 80% vs 95%:
+#  Training: "Generate the audit log for this claim"
+#  Test:     "Who last modified claim 201752592251000 sequence 001 and when?"
+#
+#  The 15-digit claim number DOMINATES the embedding vector, pushing the
+#  test query into a completely different region than the training template.
+#
+#  FIX: Strip claim numbers, sequence numbers, and filler before embedding.
+#  Both become: "who last modified claim and when" ≈ "generate audit log for claim"
+
+_CLAIM_NUM_PATTERN = re.compile(r'\b\d{12,18}\b')                    # 12-18 digit claim numbers
+_SEQ_PATTERN = re.compile(r'\bsequence\s+\d{1,3}\b', re.IGNORECASE)  # "sequence 001"
+_SEQ_NUM = re.compile(r'\bseq\s+\d{1,3}\b', re.IGNORECASE)           # "seq 001"
+_CLAIM_PREFIX = re.compile(r'\bclaim\s+\d{12,18}\b', re.IGNORECASE)   # "claim 123456..."
+_WHITESPACE = re.compile(r'\s+')
+
+def normalize_query(text: str) -> str:
+    """Strip claim/sequence numbers from query so embedding focuses on INTENT.
+    
+    Before: "Prescriber details for claim 132435151040074 sequence 001."
+    After:  "prescriber details for claim"
+    
+    This makes training templates and test queries land in the same
+    embedding region because the semantic content (not numeric IDs) drives
+    the vector.
+    """
+    t = text.lower().strip()
+    t = _SEQ_PATTERN.sub('', t)     # remove "sequence 001"
+    t = _SEQ_NUM.sub('', t)         # remove "seq 001"
+    t = _CLAIM_NUM_PATTERN.sub('', t)  # remove bare claim numbers
+    t = t.replace('.', ' ').replace('?', ' ').replace('!', ' ')
+    t = _WHITESPACE.sub(' ', t).strip()
+    return t
 
 # ── Embedding client ─────────────────────────────────────────────────────────
 class VertexEmbeddings:
@@ -224,11 +263,10 @@ AUGMENTED_EXAMPLES = {
 def augment_embeddings(embeddings: dict) -> dict:
     """Add augmented training examples to cached embeddings.
     
-    Only generates embeddings for examples not already cached.
-    This bridges the train/test distribution gap by adding
-    real-world phrasing patterns to the training set.
+    IMPORTANT: Normalizes examples (strips claim numbers) before embedding
+    so they match the normalized test query space.
     """
-    aug_cache_path = os.path.join(ARTIFACTS, "augmented_embeddings.json")
+    aug_cache_path = os.path.join(ARTIFACTS, "augmented_embeddings_v2.json")
 
     # Load previously generated augmented embeddings
     if os.path.exists(aug_cache_path):
@@ -244,12 +282,14 @@ def augment_embeddings(embeddings: dict) -> dict:
             break
 
     if needs_generation:
-        logger.info("Generating augmented training embeddings...")
+        logger.info("Generating augmented training embeddings (normalized)...")
         emb = get_embedder()
         for intent, examples in AUGMENTED_EXAMPLES.items():
             if intent not in aug_cached or len(aug_cached[intent]) != len(examples):
-                logger.info(f"  Augmenting '{intent}' with {len(examples)} real-world examples")
-                aug_cached[intent] = [list(v) for v in emb.embed(examples)]
+                # Normalize before embedding — strip claim numbers
+                normalized = [normalize_query(ex) for ex in examples]
+                logger.info(f"  Augmenting '{intent}' with {len(examples)} normalized examples")
+                aug_cached[intent] = [list(v) for v in emb.embed(normalized)]
         with open(aug_cache_path, "w") as f:
             json.dump(aug_cached, f)
         logger.info(f"Augmented embeddings saved → {aug_cache_path}")
@@ -558,13 +598,18 @@ Your task is to classify the user query into exactly ONE of the candidate intent
 def evaluate(test_data, pipeline, embedder, use_llm=True, conf_t=0.30, margin_t=0.05):
     results, llm_n = [], 0
     for idx, rec in enumerate(test_data):
-        vec = np.array(embedder.embed(rec["text"]))
+        # CRITICAL: Normalize query to strip claim numbers before embedding
+        # This makes test queries land in the same embedding region as training
+        # templates which don't contain claim numbers
+        normalized_text = normalize_query(rec["text"])
+        vec = np.array(embedder.embed(normalized_text))
         pred = pipeline.predict_single(vec)
         confident = pred["confidence"] >= conf_t and pred["margin"] >= margin_t
 
         if confident or not use_llm:
             final, src = pred["intent"], "ensemble"
         else:
+            # Send ORIGINAL text (with claim numbers) to LLM — it can extract entities
             final = llm_classify(
                 rec["text"],
                 [n for n, _ in pred["top_5"]],
