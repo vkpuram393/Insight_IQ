@@ -307,9 +307,10 @@ def augment_embeddings(embeddings: dict) -> dict:
 class IntentPipeline:
     """PCA → Ensemble (SVM-RBF + LogReg + kNN) with calibrated probabilities."""
 
-    def __init__(self, n_pca=50, knn_k=5):
+    def __init__(self, n_pca=50, knn_k=5, temperature=0.3):
         self.n_pca = n_pca
         self.knn_k = knn_k
+        self.temperature = temperature  # <1 = sharper, >1 = softer
         self.pca = self.scaler = None
         self.clfs = {}
         self.label_names = []
@@ -346,8 +347,26 @@ class IntentPipeline:
         return self.scaler.transform(self.pca.transform(X_n))
 
     def predict_proba(self, X):
+        """Ensemble probability with temperature scaling.
+        
+        Temperature scaling sharpens the probability distribution without
+        changing which intent is ranked #1 (preserves accuracy).
+        
+        temperature < 1.0 → sharper (more confident)
+        temperature = 1.0 → no change
+        temperature > 1.0 → softer (less confident)
+        
+        With 23 intents, the raw ensemble average is too flat.
+        Temperature=0.3 concentrates probability mass on the winning intent.
+        """
         X_f = self._transform(X)
         p = sum(clf.predict_proba(X_f) * self.weights[n] for n, clf in self.clfs.items())
+        
+        # Temperature scaling: raise to power 1/T, then renormalize
+        # This is equivalent to dividing logits by T before softmax
+        if self.temperature != 1.0:
+            p = np.power(p + 1e-10, 1.0 / self.temperature)
+        
         return p / (p.sum(axis=1, keepdims=True) + 1e-10)
 
     def predict_single(self, vec):
@@ -377,7 +396,7 @@ class IntentPipeline:
         accs = []
         for tr, va in cv.split(X_raw, y):
             Xtr, Xva, ytr, yva = X_raw[tr], X_raw[va], y[tr], y[va]
-            fp = IntentPipeline(self.n_pca, self.knn_k)
+            fp = IntentPipeline(self.n_pca, self.knn_k, self.temperature)
             fp.label_names = self.label_names
             Xn = Xtr / (np.linalg.norm(Xtr,axis=1,keepdims=True)+1e-10)
             d = min(self.n_pca, Xtr.shape[0]-1, Xtr.shape[1])
