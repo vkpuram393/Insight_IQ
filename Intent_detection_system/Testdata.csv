@@ -421,3 +421,83 @@ Settlement summary for claim 242831720377166 sequence 002.,claim_status,cap_api
 Codes sent to the pharmacy for claim 242831738080166 sequence 001.,settlement_info,cap_api
 Settlement feedback for claim 243122443413000 sequence 001.,claim_status,cap_api
 Response information for claim 250023213779000 sequence 001.,claim_status,cap_api
+What are the coverage dates for member 44781239?,member_coverage,member_domain
+Is member Smith currently eligible for pharmacy benefits?,member_coverage,member_domain
+Check if member 99123456 had active coverage on February 10th.,member_coverage,member_domain
+Can you confirm whether member 77234581 is enrolled and covered right now?,member_coverage,member_domain
+Look up the eligibility period for member Davis as of last Friday.,beneficiary_info,benefits_api
+What client is member 44781239 assigned to?,member_hierarchy,member_domain
+Show the account group structure for this member.,member_hierarchy,member_domain
+Which carrier account group does member 88654321 belong to?,member_hierarchy,member_domain
+Tell me the CAG chain that member 77234581 falls under.,member_hierarchy,member_domain
+What is the parent organization for this member's group?,member_hierarchy,member_domain
+When do the accumulators reset for member 44781239?,benefit_reset_date,member_domain
+What is the plan year start date for this member?,benefit_reset_date,member_domain
+Tell me the benefit renewal date for member 88654321.,benefit_reset_date,member_domain
+On what date does the new benefit cycle begin for member 77234581?,beneficiary_info,benefits_api
+Is member 44781239 on a family or individual plan?,family_type,member_domain
+Show the family coverage designation for this member.,family_type,member_domain
+What is the coverage tier classification for member 88654321?,beneficiary_info,benefits_api
+Is this member's plan set up as employee-plus-spouse or employee-only?,family_type,member_domain
+Who else is enrolled under the same family ID?,family_members,member_domain
+List the dependents for member 44781239.,family_members,member_domain
+Show me the subscriber and all dependents in this family.,family_members,member_domain
+How many people are covered under this member's household?,family_members,member_domain
+Does member 44781239 have other insurance on file?,alternate_insurance,member_domain
+Show secondary coverage details for this member.,alternate_insurance,member_domain
+Is there a second payer listed for member 88654321?,cob_info,cap_api
+Check if member 77234581 carries any supplemental pharmacy coverage.,alternate_insurance,member_domain
+Is this member enrolled in a Medicare drug plan?,medicare_coverage,member_domain
+Show Part D enrollment status for member 44781239.,medicare_coverage,member_domain
+Does member 88654321 have Med-D benefits?,medicare_part_d,cap_api
+Verify whether member 77234581 participates in a Medicare prescription program.,medicare_coverage,member_domain
+What is the low income subsidy level for this member?,lics_status,member_domain
+Is member 44781239 designated as LICS?,lics_status,member_domain
+Does this member qualify for low income cost sharing?,lics_status,member_domain
+Check whether member 88654321 has an LIS co-pay reduction on file.,beneficiary_info,benefits_api
+Show STCOB links for member 44781239.,stcob_linkage,member_domain
+Are there short-term COB records for this member?,stcob_linkage,member_domain
+Pull up the STCOB member connections for member 88654321.,stcob_linkage,member_domain
+Does member 77234581 have any active short-term coordination linkages?,stcob_linkage,member_domain
+What CVS ID is assigned to member 44781239?,cvs_id_lookup,member_domain
+Look up the CVS member identifier for this member.,cvs_id_lookup,member_domain
+What is the CVS number on file for member 88654321?,cvs_id_lookup,member_domain
+Retrieve the CVS identifier stored for member 77234581.,cvs_id_lookup,member_domain
+Show other CAGMs sharing the same CVS ID as this member.,related_cagm,member_domain
+List CAGMs by family ID under client code ABC.,related_cagm,member_domain
+Which members are linked by the same CVS identifier?,related_cagm,member_domain
+Find all CAGM records that match member 77234581 by family and client.,related_cagm,member_domain
+What other IDs are on file for member 44781239?,alternate_ids,member_domain
+List all cross-reference identifiers for this member.,alternate_ids,member_domain
+Show every alternate member number for member 88654321.,alternate_ids,member_domain
+Pull up the full list of supplemental IDs stored for member 77234581.,alternate_ids,member_domain
+Summarize the key fields on PA 78901.,pa_summary,override_domain
+Give me an overview of this prior authorization.,approval_info,benefits_api
+What are the critical attributes of PA 12345?,pa_summary,override_domain
+Show a high-level report of what PA 55432 covers and its effective dates.,pa_summary,override_domain
+Break down the most impactful settings on this PA for me.,pa_summary,override_domain
+Will this PA clear a 75 rejection?,pa_override_reject,override_domain
+Can this prior auth bypass a non-formulary reject 70?,pa_override_reject,override_domain
+Does this PA address reject code 76 plan limits?,pa_override_reject,override_domain
+If a claim rejects with code 75 PA required will this override fix it?,rejection_reasons,cap_api
+Tell me whether this PA handles both reject 70 and reject 76.,pa_override_reject,override_domain
+What does the formulary override indicator mean on a PA?,pa_field_help,override_domain
+How does the days supply cap setting work on a prior authorization?,pa_field_help,override_domain
+What is the purpose of the drug coverage code on a PA?,pa_field_help,override_domain
+Describe what the PA priority ranking field controls.,pa_field_help,override_domain
+Help me understand the GPI wildcard setting on a prior authorization.,pa_field_help,override_domain
+How does the copay on this PA change the total payment?,pa_copay_pricing,override_domain
+Will the PA copay override reduce the member cost?,pa_copay_pricing,override_domain
+Show the pricing impact of the copay fields on this PA.,pricing_info,cap_api
+If I change the copay override on this PA does it affect the ingredient cost or just the patient pay?,pa_copay_pricing,override_domain
+Explain how multiple copay fields on this PA interact to set the final price.,pa_copay_pricing,override_domain
+Which medications does this PA authorize?,pa_drug_coverage,override_domain
+Show the GPI range covered by PA 78901.,pa_drug_coverage,override_domain
+What NDC codes fall under this prior authorization?,pa_drug_coverage,override_domain
+List every drug group and NDC that PA 55432 applies to.,drug_info,claim_history_search
+Does this PA cover both brand and generic versions of the medication?,pa_drug_coverage,override_domain
+How many fills have been processed under this PA?,pa_claim_usage,override_domain
+Show the claim volume for PA 78901.,claim_status,cap_api
+What is the total utilization count for this prior auth?,pa_claim_usage,override_domain
+Tell me how many prescriptions were adjudicated against PA 55432.,pa_claim_usage,override_domain
+Give me the usage statistics showing how often this PA was referenced.,pa_claim_usage,override_domain

@@ -113,49 +113,121 @@ def get_embedder():
 
 # ── Domain mapping ───────────────────────────────────────────────────────────
 INTENT_TO_DOMAIN = {
+    # ── cap_api (single-claim operations) ─────────────────────────────────────
     "claim_status":"cap_api","multi_claim_summary":"cap_api","pharmacy_info":"cap_api",
     "prescriber_info":"cap_api","pricing_info":"cap_api","reimbursement_info":"cap_api",
     "rejection_reasons":"cap_api","settlement_info":"cap_api","rx_details":"cap_api",
     "reversal_info":"cap_api","cob_info":"cap_api","generic_availability":"cap_api",
     "daw_info":"cap_api","government_claim_type":"cap_api","mail_order_info":"cap_api",
     "medicare_part_d":"cap_api","network_info":"cap_api","prior_auth_info":"cap_api",
+    # ── benefits_api ─────────────────────────────────────────────────────────
     "approval_info":"benefits_api","audit_info":"benefits_api","beneficiary_info":"benefits_api",
+    "plan_summary":"benefits_api","plan_history":"benefits_api","plan_finder":"benefits_api",
+    # ── claim_history_search ─────────────────────────────────────────────────
     "compound_info":"claim_history_search","date_range_claims":"claim_history_search",
     "drug_info":"claim_history_search","drug_interaction_info":"claim_history_search",
     "fill_date_info":"claim_history_search",
+    "Refills":"claim_history_search","DaysSupply":"claim_history_search",
+    "PriorAuth":"claim_history_search","Diagnosis":"claim_history_search",
+    "Settlement":"claim_history_search","PharmType":"claim_history_search",
+    "Plan":"claim_history_search","Pharmacy":"claim_history_search",
+    "Prescriber":"claim_history_search","Pricing":"claim_history_search",
+    "Status":"claim_history_search","RejectCode":"claim_history_search",
+    "DrugLast":"claim_history_search","Month":"claim_history_search",
+    "ClaimNum":"claim_history_search","NDC":"claim_history_search",
+    "Manufacturer":"claim_history_search","Generic":"claim_history_search",
+    "Brand":"claim_history_search",
+    # ── general ──────────────────────────────────────────────────────────────
     "greeting":"general","help":"general","out_of_scope":"general",
+    # ── member_domain ────────────────────────────────────────────────────────
+    "member_coverage":"member_domain","member_hierarchy":"member_domain",
+    "benefit_reset_date":"member_domain","family_type":"member_domain",
+    "family_members":"member_domain","alternate_insurance":"member_domain",
+    "medicare_coverage":"member_domain","lics_status":"member_domain",
+    "stcob_linkage":"member_domain","cvs_id_lookup":"member_domain",
+    "related_cagm":"member_domain","alternate_ids":"member_domain",
+    # ── override_domain ──────────────────────────────────────────────────────
+    "pa_summary":"override_domain","pa_override_reject":"override_domain",
+    "pa_field_help":"override_domain","pa_copay_pricing":"override_domain",
+    "pa_drug_coverage":"override_domain","pa_claim_usage":"override_domain",
 }
 
 INTENT_DESC = {
+    # ── cap_api (single-claim) ────────────────────────────────────────────────
     "claim_status":"General claim status, adjudication outcome, paid/rejected/pending",
     "multi_claim_summary":"Summary of ALL/MULTIPLE claims for a member",
-    "pharmacy_info":"Dispensing pharmacy name, location, address, NCPDP, store",
-    "prescriber_info":"Prescribing physician/doctor name, NPI, credentials",
-    "pricing_info":"Copay, ingredient cost, dispensing fee, patient pay, cost breakdown",
+    "pharmacy_info":"Dispensing pharmacy name, location, address, NCPDP, store for ONE claim",
+    "prescriber_info":"Prescribing physician/doctor name, NPI, credentials for ONE claim",
+    "pricing_info":"Copay, ingredient cost, dispensing fee, patient pay breakdown for ONE claim",
     "reimbursement_info":"Amount paid TO pharmacy, reimbursement rationale, payment",
-    "rejection_reasons":"Rejection codes, failed edits, denial reasons, how to resolve",
-    "settlement_info":"Settlement codes, pharmacy response/feedback codes",
+    "rejection_reasons":"Rejection codes, failed edits, denial reasons, how to resolve for ONE claim",
+    "settlement_info":"Settlement codes, pharmacy response/feedback codes for ONE claim",
     "rx_details":"RX number, fill number, quantity, days supply, strength",
     "reversal_info":"Claim reversal, R&R, manual adjustments, resubmission",
     "cob_info":"Coordination of Benefits, other insurance, secondary payer, dual coverage",
     "generic_availability":"Generic alternatives, therapeutic equivalents, formulary substitutes",
+    "daw_info":"DAW status, brand vs generic requirement, substitution",
+    "government_claim_type":"Medicare/Medicaid claim type, government program",
+    "mail_order_info":"Mail order/home delivery prescription, shipping",
+    "medicare_part_d":"Medicare Part D summary, PDE, MEDD pricing, LICS for a claim",
+    "network_info":"Pharmacy network details, which network processed claim",
+    "prior_auth_info":"Prior authorization status, Smart PA, authorization requirements for ONE claim",
+    # ── benefits_api ─────────────────────────────────────────────────────────
     "approval_info":"Claim approval, plan overrides, transition fill (TF), BPG, Smart PA",
     "audit_info":"Audit trail, change history, modification records, timestamps",
     "beneficiary_info":"Member benefit phase, coverage tier, eligibility, accumulations",
+    "plan_summary":"Benefit plan overview, active plan snapshot, current coverage summary",
+    "plan_history":"Plan change log, revision history, amendment timeline, past plan updates",
+    "plan_finder":"Search/find available benefit plans, plan catalog lookup, plan matching",
+    # ── claim_history_search (SEARCH/FILTER multiple claims) ─────────────────
     "compound_info":"Compound medication, MIC breakdown, ingredient costs",
     "date_range_claims":"Claims within date range, deductible claims, accumulation history",
     "drug_info":"Drug name, NDC, GPI, therapeutic class, formulary status",
     "drug_interaction_info":"DUR edits, drug interaction alerts, clinical screening",
     "fill_date_info":"Date prescription was filled, dispensing date, service date",
+    "Refills":"Search claims by refill count, refill history, remaining refills",
+    "DaysSupply":"Filter claims by days supply duration (7, 14, 30, 60, 90 days)",
+    "PriorAuth":"Search claims that required prior authorization approval",
+    "Diagnosis":"Filter claims by ICD-10 diagnosis code",
+    "Settlement":"Search/filter claims by settlement response code NUMBER",
+    "PharmType":"Filter claims by pharmacy type/channel (retail, mail-order, specialty)",
+    "Plan":"Filter claims by insurance plan code",
+    "Pharmacy":"Search claims from a specific pharmacy name/store/location",
+    "Prescriber":"Search claims by prescriber name or NPI across claim history",
+    "Pricing":"Search claims by cost/pricing for a specific DRUG across MULTIPLE claims",
+    "Status":"Filter/list claims by status (paid, rejected, pending, reversed)",
+    "RejectCode":"Search claims by NCPDP rejection code number",
+    "DrugLast":"When was a specific drug last dispensed/filled for a member",
+    "Month":"Filter claims by calendar month (January, February, etc.)",
+    "ClaimNum":"Look up a specific claim by its claim number",
+    "NDC":"Search claims by NDC (National Drug Code) number",
+    "Manufacturer":"Filter claims by drug manufacturer name",
+    "Generic":"Filter for generic drug claims only",
+    "Brand":"Filter for brand name drug claims only",
+    # ── general ──────────────────────────────────────────────────────────────
     "greeting":"Hello, hi, welcome, good morning/afternoon/evening",
     "help":"How to submit claims, steps to avoid rejection, filing guidance",
     "out_of_scope":"Unrelated to pharmacy — weather, recipes, sports, gibberish",
-    "daw_info":"DAW status, brand vs generic requirement, substitution",
-    "government_claim_type":"Medicare/Medicaid claim type, government program",
-    "mail_order_info":"Mail order/home delivery prescription, shipping",
-    "medicare_part_d":"Medicare Part D summary, PDE, MEDD pricing, LICS",
-    "network_info":"Pharmacy network details, which network processed claim",
-    "prior_auth_info":"Prior authorization status, Smart PA, authorization requirements",
+    # ── member_domain ────────────────────────────────────────────────────────
+    "member_coverage":"Member coverage eligibility windows, active coverage status, enrollment dates",
+    "member_hierarchy":"Client/CAG hierarchy, client-account-group membership, organizational structure",
+    "benefit_reset_date":"Benefit year reset date, accumulator reset, plan year anniversary",
+    "family_type":"Individual vs family plan classification, coverage tier type",
+    "family_members":"List family members, dependents, subscriber and dependents on same plan",
+    "alternate_insurance":"Other/secondary insurance on file, dual coverage, alternate payer",
+    "medicare_coverage":"Medicare Part D enrollment status, Med-D plan assignment for a MEMBER",
+    "lics_status":"Low Income Subsidy (LICS/LIS) status, subsidy level, cost-sharing reduction",
+    "stcob_linkage":"Short-term COB linkage, STCOB member links and records",
+    "cvs_id_lookup":"CVS ID associated with the member, CVS member identifier",
+    "related_cagm":"Related CAGMs by CVS ID or family ID, linked CAGM records",
+    "alternate_ids":"All alternate IDs on file for the member, cross-reference identifiers",
+    # ── override_domain ──────────────────────────────────────────────────────
+    "pa_summary":"Prior authorization summary of key fields, PA overview and configuration",
+    "pa_override_reject":"Will PA override specific reject codes (75, 70, 76), PA reject handling",
+    "pa_field_help":"Explanation of what a specific PA field does, PA field documentation",
+    "pa_copay_pricing":"PA copay override impact on pricing, copay influence on cost",
+    "pa_drug_coverage":"Drugs covered by this PA (GPI/NDC lists), PA drug scope",
+    "pa_claim_usage":"How many claims used/referenced this PA, PA utilization count",
 }
 
 # ── Load embeddings (with stale cache fix) ───────────────────────────────────
@@ -194,6 +266,7 @@ def build_Xy(embeddings, filter_intents=None):
 # VamsiSir.py templates don't cover. They address the top confusion pairs.
 
 AUGMENTED_EXAMPLES = {
+    # ── cap_api anchors (single-claim operations) ──────────────────────────
     # prescriber_info: test queries use "Prescriber details for claim XXXXX"
     "prescriber_info": [
         "Prescriber details for claim 132435151040074 sequence 001.",
@@ -217,7 +290,7 @@ AUGMENTED_EXAMPLES = {
         "Settlement feedback for claim 243122443413000 sequence 001.",
         "Response information for claim 250023213779000 sequence 001.",
     ],
-    # audit_info: test queries include "when was X created", "add date and change date"
+    # audit_info: includes "when was X created", "add date and change date"
     "audit_info": [
         "When was claim 132435151040074 sequence 001 first created?",
         "Claim 201503823714118 sequence 001 add date and change date.",
@@ -225,7 +298,7 @@ AUGMENTED_EXAMPLES = {
         "What is the creation timestamp of claim 211263773300000 sequence 004?",
         "When was claim 221172865083001 sequence 001 added to the system?",
     ],
-    # reversal_info: test queries use "R&R information", "R&R status"
+    # reversal_info: "R&R information", "R&R status"
     "reversal_info": [
         "R&R information for claim 242905816136000 sequence 001.",
         "R&R status for claim 242905816136000 sequence 001.",
@@ -233,7 +306,7 @@ AUGMENTED_EXAMPLES = {
         "Was claim 231181462825000 sequence 001 reversed?",
         "Claim modifications for claim 260021649904000 sequence 005.",
     ],
-    # claim_status: test queries use "Fill details" (ambiguous) — anchor these
+    # claim_status: "Fill details" (ambiguous) — anchor these
     "claim_status": [
         "What is the current status of claim 130041467416065 sequence 001?",
         "Is claim 220133725669000 sequence 001 paid, rejected, or pending?",
@@ -241,7 +314,82 @@ AUGMENTED_EXAMPLES = {
         "What was the result of processing claim 230624075311000 sequence 002?",
         "Adjudication outcome for claim 191406379285000 sequence 001.",
     ],
-    # greeting vs out_of_scope boundary
+    # pricing_info: single-claim pricing (vs Pricing = search across claims)
+    "pricing_info": [
+        "What is the copay on claim 132435151040074 sequence 001?",
+        "Show the pricing breakdown for claim 220133725669000 sequence 001.",
+        "What did the patient pay on this specific claim?",
+        "Ingredient cost and fees for claim 191406379285000 sequence 001.",
+        "Copay calculation steps for this claim.",
+    ],
+    # pharmacy_info: single-claim pharmacy details (vs Pharmacy = search claims by pharmacy)
+    "pharmacy_info": [
+        "Which pharmacy dispensed claim 132435151040074 sequence 001?",
+        "Pharmacy details for claim 220133725669000 sequence 001.",
+        "Where was this specific claim filled?",
+        "Dispensing pharmacy name for this claim.",
+        "Store location for claim 191406379285000 sequence 001.",
+    ],
+
+    # ── claim_history_search anchors (SEARCH/FILTER multiple claims) ───────
+    # Pricing (search): cost across MULTIPLE claims for a DRUG
+    "Pricing": [
+        "How much did the member pay for METFORMIN across all fills?",
+        "Show me the total spent on ATORVASTATIN prescriptions.",
+        "What was the copay trend for LISINOPRIL fills over time?",
+        "Compare costs across multiple SERTRALINE claims.",
+        "List the pricing for all GABAPENTIN claims this year.",
+    ],
+    # Settlement (search): filter claims by settlement CODE number
+    "Settlement": [
+        "Show claims with settlement code 358.",
+        "Filter by settlement code 001 across all claims.",
+        "Which claims returned settlement code 425?",
+        "List fills that received settlement code 310.",
+        "Retrieve claims with pharmacy settlement response 200.",
+    ],
+    # Pharmacy (search): search claims FROM a specific pharmacy
+    "Pharmacy": [
+        "Show claims filled at CVS PHARMACY 00610.",
+        "List fills dispensed by WALGREENS 04528.",
+        "Retrieve claims from RITE AID 11237.",
+        "Which fills were filled at TARGET PHARMACY 01893?",
+        "Give me claims processed at WALMART PHARMACY 10340.",
+    ],
+    # Prescriber (search): search claims BY a prescriber
+    "Prescriber": [
+        "Show claims by prescriber NOEUV.",
+        "List claims written by Dr. PATEL.",
+        "Retrieve fills prescribed by NPI 1234567890.",
+        "Which claims were ordered by prescriber SMITH?",
+        "Display claims from prescriber Dr. JOHNSON.",
+    ],
+    # Status (search): filter/list claims by status
+    "Status": [
+        "Show all rejected claims for this member.",
+        "List claims in paid status this year.",
+        "Which claims are currently pending?",
+        "Display all denied claims across all drugs.",
+        "Give me claims in reversed status.",
+    ],
+    # RejectCode (search): filter claims by reject code
+    "RejectCode": [
+        "Show claims with reject code 79.",
+        "Filter claims by rejection code 75.",
+        "Which claims have NCPDP reject code MR?",
+        "List claims rejected under code 76.",
+        "Retrieve claims with reject code 70.",
+    ],
+    # PriorAuth (search): search claims that required PA
+    "PriorAuth": [
+        "Which claims required prior authorization?",
+        "Show fills that went through a PA process.",
+        "List claims where PA was approved.",
+        "Retrieve prescriptions with an active prior auth on file.",
+        "Display PA-approved claims for specialty drugs.",
+    ],
+
+    # ── general ────────────────────────────────────────────────────────────
     "greeting": [
         "Hello",
         "Hi there",
@@ -257,6 +405,124 @@ AUGMENTED_EXAMPLES = {
         "What's up",
         "How do I cook pasta?",
     ],
+
+    # ── member_domain anchors ──────────────────────────────────────────────
+    "member_coverage": [
+        "Does this member have active coverage as of today?",
+        "Show me the coverage eligibility windows for this member.",
+        "What are the eligibility dates for member John Doe?",
+        "When does this member's coverage begin and end?",
+        "Is member 555123456 eligible right now?",
+    ],
+    "member_hierarchy": [
+        "Which client does this member belong to?",
+        "Show me the CAG hierarchy for this member.",
+        "What client account group is this member under?",
+        "Display the hierarchy information for this member.",
+        "Give me the client and group assignment for this member.",
+    ],
+    "benefit_reset_date": [
+        "What is the benefit reset date for this member?",
+        "When does the benefit year reset for this member?",
+        "Tell me when the accumulators reset for this member.",
+        "Show me the plan year reset date for this member.",
+        "When do the deductible and OOP accumulators reset?",
+    ],
+    "medicare_coverage": [
+        "Does this member have Part D coverage?",
+        "Is this member enrolled in Medicare?",
+        "Show the Medicare Part D status for this member.",
+        "Is this member a Medicare beneficiary?",
+        "Tell me the Medicare coverage status for this member.",
+    ],
+    "lics_status": [
+        "Is this member LICS?",
+        "Does this member qualify for low income subsidy?",
+        "Show the LICS status for this member.",
+        "What LICS level is assigned to this member?",
+        "Tell me if this member is receiving low income cost sharing.",
+    ],
+    "cvs_id_lookup": [
+        "What is the CVS ID for this member?",
+        "Show the CVS ID associated with this member.",
+        "Retrieve the CVS ID for member John Doe.",
+        "Give me the CVS identifier for this member.",
+        "Look up the CVS ID for this member.",
+    ],
+    "alternate_ids": [
+        "List all alternate IDs for this member.",
+        "Show the alternate identifiers on file for this member.",
+        "What alternate IDs are assigned to this member?",
+        "Retrieve all alternate member IDs for this member.",
+        "Give me all alternate IDs associated with this member.",
+    ],
+
+    # ── override_domain anchors ────────────────────────────────────────────
+    "pa_summary": [
+        "Give me a summary of this prior authorization.",
+        "Summarize the key details of this PA.",
+        "Show the most important fields on this PA.",
+        "Display a high-level overview of this prior authorization.",
+        "Provide the PA summary including effective dates and drug coverage.",
+    ],
+    "pa_override_reject": [
+        "Will this PA override a reject 75 PA required?",
+        "Does this PA handle reject code 75?",
+        "Will this prior authorization bypass a reject 70 non-formulary?",
+        "Does this PA override reject 70 plan exclusion?",
+        "Show me which reject codes this PA can override.",
+    ],
+    "pa_field_help": [
+        "What does the PA type field do?",
+        "Explain the purpose of the effective date field on a PA.",
+        "What is the GPI override field used for?",
+        "Describe what the PA status indicator means.",
+        "What does the quantity limit override field do on this PA?",
+    ],
+    "pa_copay_pricing": [
+        "Does this copay override influence the price?",
+        "How does the copay on this PA affect pricing?",
+        "Will the PA copay change the member's out-of-pocket cost?",
+        "Show me how the copay override impacts the final price.",
+        "Does the copay field on this PA modify the claim price?",
+    ],
+    "pa_drug_coverage": [
+        "What drugs will this PA cover?",
+        "Show me the drug list covered by this prior authorization.",
+        "Which medications are included under this PA?",
+        "List the drugs that this PA authorizes.",
+        "Display the GPI range covered by this PA.",
+    ],
+    "pa_claim_usage": [
+        "How many claims used this PA?",
+        "Show the claim count for this prior authorization.",
+        "How many times has this PA been applied to claims?",
+        "Display the number of claims processed under this PA.",
+        "Retrieve the claim usage count for this PA.",
+    ],
+
+    # ── benefits_api new intent anchors ────────────────────────────────────
+    "plan_summary": [
+        "Show the current benefit plan overview for this member.",
+        "Give me a snapshot of the member's active plan.",
+        "What does this member's benefit plan cover?",
+        "Display the current plan summary.",
+        "Summarize the active benefit plan for this member.",
+    ],
+    "plan_history": [
+        "Show the change log of this member's benefit plan.",
+        "What modifications have been made to the plan over time?",
+        "List past revisions of the benefits plan.",
+        "Display the audit trail of plan changes.",
+        "Give me the timeline of updates to the plan.",
+    ],
+    "plan_finder": [
+        "Help me locate an available benefit plan.",
+        "Search for plans that match this client.",
+        "Which plans are offered to this member's group?",
+        "Find a matching benefits plan.",
+        "Look up what plans exist for this client.",
+    ],
 }
 
 
@@ -266,7 +532,7 @@ def augment_embeddings(embeddings: dict) -> dict:
     IMPORTANT: Normalizes examples (strips claim numbers) before embedding
     so they match the normalized test query space.
     """
-    aug_cache_path = os.path.join(ARTIFACTS, "augmented_embeddings_v2.json")
+    aug_cache_path = os.path.join(ARTIFACTS, "augmented_embeddings_v3.json")
 
     # Load previously generated augmented embeddings
     if os.path.exists(aug_cache_path):
@@ -426,7 +692,7 @@ def search_pca(X, y, labels):
     print(f"  {'Dims':>8} {'CV Acc':>10} {'Std':>8}")
     print(f"  {'-'*28}")
     best_d, best_a = 50, 0
-    for d in [20,30,40,50,75,100,150,200]:
+    for d in [20,30,40,50,75,100,150,200,250,300]:
         if d >= X.shape[0]: continue
         p = IntentPipeline(n_pca=d); p.label_names = labels
         a, s, _ = p.cross_validate(X, y)
@@ -521,26 +787,74 @@ Your task is to classify the user query into exactly ONE of the candidate intent
 ## CANDIDATE INTENTS (choose ONE):
 {candidate_desc}
 
-## CRITICAL DISTINCTIONS:
-- prescriber_info = who PRESCRIBED/WROTE the medication (doctor name, NPI, physician, "who prescribed", "ordering provider")
+## KEY RULE — Single Claim (cap_api) vs Claim History Search:
+- cap_api intents (claim_status, pricing_info, pharmacy_info, prescriber_info, settlement_info,
+  rejection_reasons, prior_auth_info, etc.) = details about ONE specific claim
+- claim_history_search intents (Pricing, Pharmacy, Prescriber, Settlement, Status, RejectCode,
+  PriorAuth, Refills, DaysSupply, Diagnosis, DrugLast, Month, NDC, etc.) = SEARCH/FILTER across
+  MULTIPLE claims in history
+- If the query references a SPECIFIC claim number or "this claim", lean toward cap_api
+- If the query asks to LIST, FILTER, SEARCH, or COMPARE claims, lean toward claim_history_search
+
+## CRITICAL DISTINCTIONS — cap_api (single claim):
+- prescriber_info = who PRESCRIBED/WROTE the medication (doctor name, NPI, physician)
 - rx_details = prescription NUMBER, quantity dispensed, days supply, fill number, drug strength
-- pricing_info = copay, ingredient cost, dispensing fee, patient pay (what the PATIENT pays)
+- pricing_info = copay, ingredient cost, dispensing fee, patient pay for ONE claim
 - reimbursement_info = what the PHARMACY was paid/reimbursed, payment to pharmacy
-- settlement_info = settlement CODES, pharmacy RESPONSE codes sent back AFTER adjudication
-- claim_status = overall claim status (paid/rejected/pending), adjudication outcome, claim summary
-- approval_info = plan OVERRIDES, transition fill (TF), BPG configuration, why claim was APPROVED
-- rejection_reasons = why claim was DENIED/REJECTED, failed edit codes, how to FIX rejection
-- audit_info = audit TRAIL, change LOG, modification HISTORY, add/change dates, who changed what
-- reversal_info = claim REVERSAL, R&R (reverse & resubmit), manual adjustments, resubmission
+- settlement_info = settlement CODES, pharmacy RESPONSE codes for ONE claim
+- claim_status = overall claim status (paid/rejected/pending), adjudication outcome
+- approval_info = plan OVERRIDES, transition fill (TF), BPG configuration
+- rejection_reasons = why claim was DENIED/REJECTED, failed edit codes, how to FIX
+- audit_info = audit TRAIL, change LOG, modification HISTORY, add/change dates
+- reversal_info = claim REVERSAL, R&R (reverse & resubmit), manual adjustments
+- prior_auth_info = PA status for ONE specific claim
+
+## CRITICAL DISTINCTIONS — claim_history_search (multi-claim search):
+- Pricing = cost/copay for a specific DRUG across MULTIPLE claims
+- Pharmacy = search claims FROM a specific pharmacy name/store
+- Prescriber = search claims BY a specific prescriber name/NPI
+- Settlement = filter claims by settlement CODE NUMBER
+- Status = filter/list claims by status (paid, rejected, pending)
+- RejectCode = search claims by NCPDP rejection code number
+- PriorAuth = search claims that REQUIRED prior authorization
+- Refills = refill counts, remaining refills across prescriptions
+- DaysSupply = filter claims by days supply duration (30, 60, 90 days)
+- DrugLast = when was a specific drug LAST dispensed for a member
+- NDC = search claims by NDC number
+- ClaimNum = look up a specific claim by claim number
+- Month = filter claims by calendar month
+
+## CRITICAL DISTINCTIONS — member_domain:
+- member_coverage = coverage ELIGIBILITY windows, enrollment dates, active status for a MEMBER
+- medicare_coverage = Medicare Part-D enrollment status for a MEMBER (not claim-level)
+- member_hierarchy = Client/CAG hierarchy, organizational structure
+- lics_status = Low Income Subsidy level/status
+- cvs_id_lookup = CVS ID for the member
+- alternate_ids = all alternate IDs on file
+
+## CRITICAL DISTINCTIONS — override_domain (PA management):
+- pa_summary = high-level PA overview, key fields, configuration
+- pa_override_reject = will this PA override reject codes 75/70/76
+- pa_field_help = what does a specific PA FIELD do (documentation)
+- pa_copay_pricing = copay override IMPACT on pricing
+- pa_drug_coverage = drugs COVERED by this PA (GPI/NDC lists)
+- pa_claim_usage = how many CLAIMS used this PA
+
+## CRITICAL DISTINCTIONS — benefits_api:
+- plan_summary = benefit plan OVERVIEW, current coverage snapshot
+- plan_history = plan CHANGE LOG, revision history, amendments
+- plan_finder = SEARCH for available benefit plans, plan catalog
+
+## OTHER DISTINCTIONS:
 - compound_info = compound MEDICATION, MIC breakdown, individual INGREDIENT costs
-- drug_info = drug NAME, NDC code, GPI, therapeutic class, formulary status, medication tier
+- drug_info = drug NAME, NDC code, GPI, therapeutic class, formulary status
 - fill_date_info = DATE prescription was filled, dispense DATE, service date
-- generic_availability = generic ALTERNATIVES, therapeutic equivalents, cheaper drug OPTIONS
-- cob_info = Coordination of Benefits (COB), OTHER insurance, secondary payer, dual coverage
-- beneficiary_info = member BENEFIT phase, coverage TIER, eligibility, accumulations
+- generic_availability = generic ALTERNATIVES, therapeutic equivalents
+- cob_info = Coordination of Benefits (COB), OTHER insurance, secondary payer
+- beneficiary_info = member BENEFIT phase, coverage TIER, accumulations
 - greeting = hello, hi, good morning (casual greeting)
-- out_of_scope = completely unrelated to pharmacy claims (weather, recipes, sports, gibberish)
-- help = how to submit claims, filing guidance, steps to avoid rejection
+- out_of_scope = completely unrelated to pharmacy (weather, recipes, sports, gibberish)
+- help = how to submit claims, filing guidance
 
 ## ENTITY EXTRACTION:
 - claim_number: 15-digit number (required for claim-related intents)
@@ -717,8 +1031,10 @@ def evaluate(test_data, pipeline, embedder, use_llm=True, conf_t=0.30, margin_t=
 
 if __name__ == "__main__":
     print("="*65)
-    print("  Intent Detection v3")
+    print("  Intent Detection v3 — All Domains")
     print("  PCA + Ensemble (SVM-RBF / LogReg / kNN) + LLM Fallback")
+    print("  Domains: cap_api, benefits_api, claim_history_search,")
+    print("           member_domain, override_domain, general")
     print("="*65)
 
     print("\nStep 1 — Loading cached embeddings...")
