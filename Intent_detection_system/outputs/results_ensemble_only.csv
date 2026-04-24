@@ -1,0 +1,503 @@
+text,actual_intent,predicted_intent,intent_match,actual_domain,predicted_domain,domain_match,confidence,margin,source,agreement
+What is the approval status of claim 132435151040074 sequence 001?,approval_info,claim_status,False,benefits_api,cap_api,False,0.9890505025070441,0.9810474895285896,ensemble,False
+Is claim 180571470939000 sequence 001 approved or denied?,rejection_reasons,claim_status,False,cap_api,cap_api,True,0.9840375717415861,0.9726378982945353,ensemble,False
+Approval summary for claim 201503823714118 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.997221612787708,0.9959117019375597,ensemble,True
+Check the approval reason for claim 201752592251000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9976468263307874,0.9963757964686593,ensemble,True
+"Was claim 201990819198000 sequence 001 approved? If so, what were the approval messages?",approval_info,approval_info,True,benefits_api,benefits_api,True,0.8858816516032998,0.8060516168522271,ensemble,False
+List the plan overrides that led to approval of claim 211263773300000 sequence 004.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9997838246769416,0.9995699680957595,ensemble,True
+What BPG configuration was used to approve claim 220133725669000 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9998511908443076,0.9997430340474337,ensemble,True
+Claim 220992183436835 sequence 002 approval details.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9931015642914438,0.989294163361273,ensemble,False
+Did claim 221172865083001 sequence 001 pass adjudication? Show the approval logic.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.999742431889727,0.9994900247823555,ensemble,True
+What override codes were applied to approve claim 221663541811000 sequence 001?,rejection_reasons,approval_info,False,cap_api,benefits_api,False,0.9996033842531282,0.9993981236280329,ensemble,True
+Approval status and messages for claim 222492018072002 sequence 001.,approval_info,prior_auth_info,False,benefits_api,cap_api,False,0.7024587679972262,0.5462120924131013,ensemble,False
+Explain the approval decision for claim 222492117457002 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9995914354687927,0.9993811260591549,ensemble,True
+What plan options led to approval on claim 230624075311000 sequence 002?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9989886955270156,0.9983564415165864,ensemble,True
+Lookup approval information for claim 231865207544000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9858278958367097,0.9792105509489952,ensemble,False
+Show the approval codes associated with claim 231912348363000 sequence 002.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9858589492895447,0.9791539504522279,ensemble,False
+Claim 240051073172000 sequence 001: approval or rejection?,rejection_reasons,claim_status,False,cap_api,cap_api,True,0.8772198030623267,0.7775084513272428,ensemble,False
+What were the accumulation overrides on approved claim 240063508485000 sequence 001?,beneficiary_info,approval_info,False,benefits_api,benefits_api,True,0.9889952990443743,0.9831058388967501,ensemble,False
+Adjudication outcome and approval details for claim 240063519295000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9960524958401142,0.9921400401828784,ensemble,True
+Pull the approval summary and override details for claim 240094966940000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9934812706550773,0.9888250246598166,ensemble,True
+What is the transition fill status of claim 130041467416065 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999904273530327,0.9999834457457075,ensemble,True
+Is claim 132435151040074 sequence 001 a transition fill?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999515075992194,0.9999317854564138,ensemble,True
+Transition fill details for claim 150692388845000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999997861811057,0.999999766791088,ensemble,True
+Was a TF applied to claim 160060096136030 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999901873912214,0.9999873362441267,ensemble,True
+Check if transition fill was triggered for claim 180571470939000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999986505295915,0.9999985010132749,ensemble,True
+What type of transition fill was applied to claim 191406379285000 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999995854459178,0.9999995120628355,ensemble,True
+Claim 201503823714118 sequence 001 TF eligibility status.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999954201590423,0.9999926755781791,ensemble,True
+Transition fill configuration for claim 201752592251000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999988487244607,0.9999985306171922,ensemble,True
+Did this member qualify for transition fill on claim 201990819198000 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.999998616344261,0.9999983482439345,ensemble,True
+TF override details for claim 211263773300000 sequence 004.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999999393519449,0.9999999194447015,ensemble,True
+What plan configuration overrides affected claim 220133725669000 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.888514476482545,0.8460988791238719,ensemble,True
+Adjudication pathway for claim 220992183436835 sequence 002.,approval_info,claim_status,False,benefits_api,cap_api,False,0.9510256617762909,0.9022550337484514,ensemble,False
+Transition fill approval information for claim 221172865083001 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999999455068158,0.9999999303607999,ensemble,True
+Was claim 221663541811000 sequence 001 processed under a TF exception?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.999855300343097,0.9997191319575021,ensemble,True
+Claim 221775171449000 sequence 003: transition fill type and eligibility.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999983564522436,0.9999979836805862,ensemble,True
+Show TF status for claim 222492018072002 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999998132876254,0.9999997785759894,ensemble,True
+List all plan overrides on claim 222492117457002 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9986107364540008,0.9978118620467608,ensemble,True
+Check transition fill override details for claim 230381673488000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999999487578265,0.999999939876524,ensemble,True
+TF type applied to claim 230624075311000 sequence 002.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999993709338603,0.9999992245146206,ensemble,True
+Plan configuration that affected TF on claim 231181462825000 sequence 001.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9999935943389735,0.9999912622896856,ensemble,True
+What is the audit trail for claim 130041467416065 sequence 001?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9991742952075032,0.9983561117487073,ensemble,True
+When was claim 132435151040074 sequence 001 first created?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999999585136475,0.999999944816038,ensemble,True
+Audit log for claim 150692388845000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999985366549876,0.9999983408036172,ensemble,True
+Show the change history of claim 160060096136030 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9994862023100842,0.9989729584548448,ensemble,True
+What modifications were made to claim 180571470939000 sequence 001?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9929530053757403,0.9863716293266629,ensemble,True
+When was claim 191406379285000 sequence 001 last updated?,claim_status,audit_info,False,cap_api,benefits_api,False,0.9590823772372034,0.9258853053678602,ensemble,True
+Claim 201503823714118 sequence 001 add date and change date.,fill_date_info,audit_info,False,claim_history_search,benefits_api,False,0.99999992898265,0.9999999063759402,ensemble,True
+Who last modified claim 201752592251000 sequence 001 and when?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999998709100025,0.9999997811564466,ensemble,True
+List all audit entries for claim 201990819198000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999891937086304,0.9999853469871037,ensemble,True
+What is the creation timestamp of claim 211263773300000 sequence 004?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999999549808736,0.9999999415188221,ensemble,True
+Modification record for claim 220133725669000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9986275465935102,0.9972558732462808,ensemble,True
+Claim 220992183436835 sequence 002: edit history and change log.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999997978357146,0.9999997428607693,ensemble,True
+When was claim 221172865083001 sequence 001 added to the system?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999999483571441,0.999999937246504,ensemble,True
+Full audit report for claim 221663541811000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999875848934359,0.9999783257870508,ensemble,True
+What is the audit add time for claim 221775171449000 sequence 003?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9997817386359436,0.9996831570805195,ensemble,False
+History of changes on claim 222492018072002 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9975958603467735,0.9951988564017851,ensemble,True
+Claim 222492117457002 sequence 001 audit summary.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999228052221772,0.9998586213124785,ensemble,True
+Audit information including add date and change date for claim 230381673488000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999982254043618,0.9999979237530604,ensemble,True
+Show the modification details for claim 230624075311000 sequence 002.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9982662055341063,0.9965325432908263,ensemble,True
+Claim audit record for 231181462825000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999976177816657,0.9999967039526719,ensemble,True
+What is the member's benefit phase for claim 130041467416065 sequence 001?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9995195070361589,0.9990418002892024,ensemble,True
+Member coverage details for claim 150692388845000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9998659477678499,0.9997537199732894,ensemble,True
+Benefit type and coverage tier for claim 180571470939000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9841200020271103,0.9759908096037511,ensemble,False
+Is the member eligible for benefits on claim 191406379285000 sequence 001?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9980089360942671,0.9964202597539484,ensemble,True
+What benefit phase is the member in for claim 201503823714118 sequence 001?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9999409644604196,0.9998823175562919,ensemble,True
+Member plan details for claim 201752592251000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9907033853878902,0.9834236552543266,ensemble,True
+Accumulation status for the member on claim 201990819198000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9987371613707448,0.9975549917553302,ensemble,True
+Does medical dollar accumulation apply to claim 211263773300000 sequence 004?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.999830452979088,0.9996972038973894,ensemble,True
+Member's coverage classification for claim 220992183436835 sequence 002.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9996066486547153,0.9993816458102096,ensemble,True
+Claim 221663541811000 sequence 001: member's insurance coverage type.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9998064625084966,0.9996801271932216,ensemble,True
+Member eligibility information for claim 222492018072002 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.980365110304881,0.9638556975807814,ensemble,True
+What plan is the member enrolled in for claim 222492117457002 sequence 001?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9884220871811857,0.9847215890557217,ensemble,True
+Benefit plan configuration for claim 230381673488000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9850914969963502,0.9762775730540961,ensemble,True
+Member accumulation rules for claim 230624075311000 sequence 002.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9990670382415564,0.9981361614327713,ensemble,True
+Coverage details and benefit phase for claim 231181462825000 sequence 001.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.999576173686238,0.9992043458134664,ensemble,True
+What is the current status of claim 130041467416065 sequence 001?,claim_status,claim_status,True,cap_api,cap_api,True,0.9999999742000495,0.9999999592745613,ensemble,True
+Claim summary for 132435151040074 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9981409608457839,0.9962856069998857,ensemble,True
+Full details of claim 150692388845000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9955996669319305,0.9920060384694758,ensemble,True
+What happened on claim 160060096136030 sequence 001?,claim_status,claim_status,True,cap_api,cap_api,True,0.8772619364523189,0.7554870392123425,ensemble,True
+Processing status of claim 180571470939000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.999987167392248,0.999974410005242,ensemble,True
+Adjudication outcome for claim 191406379285000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9999999633891402,0.999999940503624,ensemble,True
+Complete claim record for 201503823714118 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9996933593542323,0.9995267058539519,ensemble,True
+Breakdown of claim 201752592251000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9876019828685338,0.9810908347616122,ensemble,False
+Status update for claim 201990819198000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9999527017296979,0.9999055256819399,ensemble,True
+Comprehensive summary of claim 211263773300000 sequence 004.,approval_info,claim_status,False,benefits_api,cap_api,False,0.9997802844960396,0.9995721060625191,ensemble,True
+"Is claim 220133725669000 sequence 001 paid, rejected, or pending?",claim_status,claim_status,True,cap_api,cap_api,True,0.9999999859447137,0.9999999783377775,ensemble,True
+Claim 220992183436835 sequence 002 status and processing details.,claim_status,claim_status,True,cap_api,cap_api,True,0.999951808114427,0.9999040936339645,ensemble,True
+Claim 221663541811000 sequence 001 overview.,claim_status,claim_status,True,cap_api,cap_api,True,0.9979100586901088,0.9971179900696304,ensemble,True
+Show the full record for claim 221775171449000 sequence 003.,claim_status,claim_status,True,cap_api,cap_api,True,0.9995166023541104,0.9990758176652468,ensemble,True
+Adjudication details for claim 222492018072002 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9999324556265965,0.999895456070271,ensemble,True
+Claim 222492117457002 sequence 001: status and outcome.,claim_status,claim_status,True,cap_api,cap_api,True,0.9995726831222207,0.9991460556658285,ensemble,True
+Quick status check on claim 230381673488000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9999999762804885,0.9999999706790275,ensemble,True
+What was the result of processing claim 230624075311000 sequence 002?,claim_status,claim_status,True,cap_api,cap_api,True,0.9999999745499807,0.9999999678729342,ensemble,True
+Claim details and status for 231181462825000 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9891292662322724,0.9782610869750481,ensemble,False
+Does claim 132435151040074 sequence 001 have coordination of benefits?,cob_info,cob_info,True,cap_api,cap_api,True,0.9999236492994424,0.9998530612388872,ensemble,True
+COB summary for claim 150692388845000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999991714364999,0.9999987677640638,ensemble,True
+What other insurance information exists for claim 211263773300000 sequence 004?,cob_info,cob_info,True,cap_api,cap_api,True,0.844965804328135,0.6918822468275365,ensemble,False
+Is there a secondary payer on claim 242055403386000 sequence 001?,cob_info,cob_info,True,cap_api,cap_api,True,0.8249675548507119,0.6499470025060632,ensemble,False
+Coordination of benefits details for claim 242831720377166 sequence 002.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999867086055692,0.9999735500478899,ensemble,True
+COB pricing breakdown for claim 242831738080166 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999162728691336,0.999832848387179,ensemble,True
+How did other insurance affect claim 243102333796000 sequence 003?,cob_info,cob_info,True,cap_api,cap_api,True,0.9995569327218334,0.9991154284047588,ensemble,True
+Secondary insurance details for claim 243122443413000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9991501434831619,0.9983003773318951,ensemble,True
+COB calculation for claim 252611736720000 sequence 002.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999980489559418,0.9999974918964641,ensemble,True
+Coordination details for claim 252952886196000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999990494667702,0.9999989441898229,ensemble,True
+Other payer information for claim 253091241600000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9932563797470256,0.9865539014704144,ensemble,True
+Dual coverage details for claim 253136857840000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9976877690823353,0.9953836274340976,ensemble,True
+COB setup for claim 132435151040074 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999904812382886,0.999987502546332,ensemble,True
+Secondary payer information for claim 150692388845000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9977347950603411,0.9954697610941241,ensemble,True
+COB report for claim 211263773300000 sequence 004.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999988247959071,0.9999986648212379,ensemble,True
+Impact of other insurance on claim 242055403386000 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9993783295186273,0.9987607853972756,ensemble,True
+COB adjudication details for claim 242831720377166 sequence 002.,claim_status,cob_info,False,cap_api,cap_api,True,0.9780331842060165,0.9560807259996781,ensemble,False
+Primary and secondary insurance breakdown for claim 242831738080166 sequence 001.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999234760707579,0.9998730123944959,ensemble,True
+COB configuration for claim 243102333796000 sequence 003.,cob_info,cob_info,True,cap_api,cap_api,True,0.9999597552253897,0.999921034378097,ensemble,True
+Coordination pricing summary for claim 243122443413000 sequence 001.,pricing_info,cob_info,False,cap_api,cap_api,True,0.9999082219465616,0.9998167226634199,ensemble,True
+Is claim 130041467416065 sequence 001 for a compound medication?,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999936550905566,0.9999923095499829,ensemble,True
+Compound details for claim 132435151040074 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999994587663236,0.9999993961608266,ensemble,True
+What is the compound code on claim 150692388845000 sequence 001?,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9993694695439531,0.9987453224860244,ensemble,True
+Ingredient breakdown for compound claim 160060096136030 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999999588457463,0.99999995206387,ensemble,True
+MIC information for claim 180571470939000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999491914373357,0.9999189621039298,ensemble,True
+Compound ingredient costs for claim 191406379285000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9996809779939202,0.9993621021673321,ensemble,True
+Is this a compounded prescription? Claim 201503823714118 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9998454369439819,0.9996915033180191,ensemble,True
+Funded and unfunded costs for compound claim 201752592251000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999963310634205,0.9999949412941382,ensemble,True
+Ingredient list for compound claim 201990819198000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999999636578026,0.9999999583771574,ensemble,True
+Compound drug details for claim 211263773300000 sequence 004.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999997548812688,0.9999996936801487,ensemble,True
+MIC cost breakdown for claim 220133725669000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9986413079009259,0.9972993472201599,ensemble,True
+Individual ingredient pricing for claim 220992183436835 sequence 002.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.8660585603408312,0.7321531995072071,ensemble,True
+Compound formulation details for claim 221172865083001 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999985130911493,0.9999979414391041,ensemble,True
+Compound medication summary for claim 221663541811000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999043410304881,0.999809155212097,ensemble,True
+MIC details and ingredient breakdown for claim 221775171449000 sequence 003.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.999997307872498,0.9999970700235279,ensemble,True
+Compound pricing information for claim 222492018072002 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9914676837181038,0.9829377442808015,ensemble,True
+Ingredient cost report for claim 222492117457002 sequence 001.,pricing_info,compound_info,False,cap_api,claim_history_search,False,0.995051820762264,0.9902092005957268,ensemble,True
+Compound claim details for 230624075311000 sequence 002.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9999503053041136,0.9999007932722453,ensemble,True
+MIC summary for claim 231181462825000 sequence 001.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9969618155070283,0.9942900097469429,ensemble,True
+Claim history for the member on claim 132435151040074 sequence 001.,audit_info,date_range_claims,False,benefits_api,claim_history_search,False,0.9885854118429082,0.9774045825579722,ensemble,True
+Member's claim history for the drug on claim 220133725669000 sequence 001.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9999928441967513,0.9999888261291258,ensemble,True
+Claim list for this year related to 221775171449000 sequence 003.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.8756350771803972,0.7567450518331988,ensemble,True
+Claim history for this member and drug for 222492117457002 sequence 001.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9998161736266731,0.9996485720138477,ensemble,True
+Member prescription history for 231181462825000 sequence 001.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.999840640650812,0.999703171454664,ensemble,True
+Brand vs generic information for claim 191406379285000 sequence 001.,drug_info,daw_info,False,claim_history_search,cap_api,False,0.9978230945214858,0.9956671720576988,ensemble,True
+What drug was dispensed on claim 130041467416065 sequence 001?,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9921361863658885,0.9852717256188576,ensemble,False
+Drug name and NDC for claim 132435151040074 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9974062914782946,0.9951159940576624,ensemble,True
+Medication details for claim 150692388845000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9991444898733377,0.998679133082844,ensemble,True
+Formulary status of the drug on claim 160060096136030 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9999684273111151,0.9999370930443376,ensemble,True
+What is the GPI number for claim 180571470939000 sequence 001?,drug_info,pa_drug_coverage,False,claim_history_search,override_domain,False,0.3479982838804147,0.030092207883174127,ensemble,False
+Drug classification for claim 191406379285000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9996920451026711,0.9994457095249365,ensemble,True
+Drug setup used in RxClaim for claim 201503823714118 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9997788484381915,0.9996697972865962,ensemble,True
+Drug category details for claim 201752592251000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9997672019312754,0.9996486237031023,ensemble,True
+Formulary position for the medication on claim 201990819198000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9999681322986973,0.9999368277256698,ensemble,True
+Drug type and classification for claim 211263773300000 sequence 004.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9996102438025727,0.9993266391674307,ensemble,True
+GPI and therapeutic class for claim 220133725669000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9897749766087509,0.9808786213224698,ensemble,True
+Drug status assigned by RxClaim for claim 220992183436835 sequence 002.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9999773336115743,0.999955007803265,ensemble,True
+Medication tier information for claim 221172865083001 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9995291996919409,0.9991478879715014,ensemble,True
+Drug configuration from claim 221663541811000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.999544069631511,0.9994100657501297,ensemble,True
+Formulary report for the drug on claim 221775171449000 sequence 003.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9996129209667154,0.9992261808730907,ensemble,True
+Drug classification details for claim 222492018072002 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998918797821001,0.9997841190348224,ensemble,True
+Medication status for claim 222492117457002 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998951745518895,0.9997926598731706,ensemble,True
+Drug tier and formulary placement for claim 230381673488000 sequence 001.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9995563014295615,0.9991956104774793,ensemble,True
+Product name and product ID for claim 230624075311000 sequence 002.,rx_details,Brand,False,cap_api,claim_history_search,False,0.9442459817072304,0.9148453633182568,ensemble,False
+What medication was prescribed on claim 231181462825000 sequence 001?,prescriber_info,drug_info,False,cap_api,claim_history_search,False,0.9804305401602716,0.9608681743964108,ensemble,False
+What DUR edits were triggered on claim 191406379285000 sequence 001?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999989112581413,0.9999985303551469,ensemble,True
+Drug utilization review details for claim 201503823714118 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999931060432188,0.9999862758834688,ensemble,True
+DUR outcomes for claim 221663541811000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999998178948452,0.9999997493145716,ensemble,True
+Were there any drug interaction alerts on claim 222492018072002 sequence 001?,compound_info,drug_interaction_info,False,claim_history_search,claim_history_search,True,0.9998986014772497,0.9998144780433723,ensemble,True
+Which DUR edits applied to claim 222492117457002 sequence 001?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999994750449948,0.9999993493244332,ensemble,True
+Drug interaction warnings for claim 240104527633005 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999667568419004,0.9999396362376989,ensemble,True
+DUR edit results for claim 241774768475148 sequence 003.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999993206202347,0.9999990977329105,ensemble,True
+Utilization review information for claim 243122443413000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999906538793017,0.999981442345942,ensemble,True
+DUR report for claim 251283241791195 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999636947793766,0.999927805089819,ensemble,True
+Drug interaction outcomes for claim 252045320000000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999968217065527,0.9999961412872681,ensemble,True
+Clinical edits triggered on claim 252453396162000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9939176948258708,0.9886929312990828,ensemble,True
+DUR override details for claim 253361498968006 sequence 017.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999988802442181,0.9999985581705534,ensemble,True
+Utilization review results for claim 260054207073000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999889498757489,0.9999780461411609,ensemble,True
+Interaction screening outcomes for claim 260682712742000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999979624871381,0.9999974316617961,ensemble,True
+DUR edit codes for claim 191406379285000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999994590337792,0.9999993816750254,ensemble,True
+Drug utilization details for claim 201503823714118 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999241013321752,0.9998593783072689,ensemble,True
+Interaction alert summary for claim 221663541811000 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999997702650926,0.9999997335807397,ensemble,True
+Clinical screening results for claim 222492018072002 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998140124342477,0.9997162634557852,ensemble,True
+DUR processing details for claim 222492117457002 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999993193245389,0.9999991677384981,ensemble,True
+Drug interaction report for claim 240104527633005 sequence 001.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9999031972452223,0.999855585364051,ensemble,True
+When was claim 130041467416065 sequence 001 filled?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9992767669718434,0.9986979213701118,ensemble,True
+Fill date for claim 132435151040074 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.999994977120675,0.9999939812023662,ensemble,True
+What is the date of service for claim 150692388845000 sequence 001?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.999846937760949,0.9997160444053148,ensemble,True
+Dispense date for claim 160060096136030 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9998752674333592,0.9997544507222812,ensemble,True
+When was the medication dispensed on claim 180571470939000 sequence 001?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9996240645523868,0.999443504459195,ensemble,True
+Date the prescription was filled for claim 191406379285000 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999988590483926,0.9999986338341447,ensemble,True
+Fill date details for claim 201503823714118 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9992337049151473,0.9984920893166215,ensemble,True
+Dispensing date for claim 201752592251000 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999250054774496,0.999855026815348,ensemble,True
+Date of service for claim 201990819198000 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999445508830473,0.9999031118707957,ensemble,True
+Fill date information for claim 211263773300000 sequence 004.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.999998096860439,0.9999976757124331,ensemble,True
+When did the pharmacy fill claim 220133725669000 sequence 001?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9582852744317798,0.9179992931977441,ensemble,True
+Date the medication was picked up for claim 220992183436835 sequence 002.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9995145265477104,0.9990385545808946,ensemble,True
+Dispensing date for claim 221172865083001 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999250054774496,0.999855026815348,ensemble,True
+Fill date and time for claim 221663541811000 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9957934430670726,0.9916141705268997,ensemble,True
+Service date for claim 221775171449000 sequence 003.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.999918832586872,0.9998778897937145,ensemble,True
+When was claim 222492018072002 sequence 001 dispensed?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9986938299373394,0.9978151587529022,ensemble,True
+Fill timestamp for claim 222492117457002 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9954535833484847,0.9909670778311345,ensemble,True
+Prescription fill date for claim 230381673488000 sequence 001.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999963064604093,0.9999949809466727,ensemble,True
+Date of fill for claim 230624075311000 sequence 002.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9999843852729655,0.9999818088867346,ensemble,True
+Claim 231181462825000 sequence 001: when was this filled?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9126742539331916,0.8253933847678494,ensemble,True
+Are there generic alternatives for the drug on claim 130041467416065 sequence 001?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9999908339195475,0.9999870160733129,ensemble,True
+Generic substitutes available for claim 132435151040074 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9815087469770251,0.965709516587093,ensemble,True
+What generic options exist for claim 160060096136030 sequence 001?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9807599128617162,0.96569262538369,ensemble,True
+Alternative medications for claim 180571470939000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9999942464113584,0.9999926070648159,ensemble,True
+What generic drugs are available for claim 191406379285000 sequence 001?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9991026672884711,0.9986542761268108,ensemble,True
+Therapeutic alternatives for claim 201503823714118 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9999264308141073,0.9998595286135168,ensemble,True
+Substitute drug list for claim 201752592251000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9990168714991923,0.9984833054759498,ensemble,True
+Generic availability information for claim 201990819198000 sequence 001.,generic_availability,daw_info,False,cap_api,cap_api,True,0.946440811942197,0.8928931491636819,ensemble,False
+Alternative medication options for claim 211263773300000 sequence 004.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9999005262395911,0.9998052658425703,ensemble,True
+Formulary alternatives for the drug on claim 220133725669000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9992215170669416,0.9984436086537184,ensemble,True
+Generic substitutes for claim 220992183436835 sequence 002.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9460065290945009,0.8969272172980916,ensemble,True
+Cheaper drug options for claim 221172865083001 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9998594946908493,0.9997303021302274,ensemble,True
+Available generic medications for claim 221663541811000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9983981674262802,0.9968159772741838,ensemble,True
+Therapeutic equivalent drugs for claim 222492018072002 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9718011769335365,0.94364656836212,ensemble,True
+Substitute options for claim 222492117457002 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9987252249719172,0.997717355562859,ensemble,True
+Generic alternative details for claim 230381673488000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8737761618379425,0.7535836346508025,ensemble,True
+Formulary-approved alternatives for claim 231181462825000 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9991278745350112,0.9982704574564217,ensemble,True
+Generic medication options for claim 231515053947011 sequence 001.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9999663488514976,0.9999341019302269,ensemble,True
+Substitute drug information for claim 231865207544000 sequence 001.,generic_availability,Generic,False,cap_api,claim_history_search,False,0.38395459056892617,0.029510729018000337,ensemble,False
+Hello,greeting,greeting,True,general,general,True,0.9999999732490698,0.9999999708718069,ensemble,True
+Hi there,greeting,greeting,True,general,general,True,0.9999999724373019,0.9999999673914576,ensemble,True
+Good morning,greeting,greeting,True,general,general,True,0.9999973299460012,0.9999962633328633,ensemble,True
+Good afternoon,greeting,greeting,True,general,general,True,0.9999989034275922,0.9999984201004982,ensemble,True
+Good evening,greeting,greeting,True,general,general,True,0.999930477036514,0.9998617270216988,ensemble,True
+Hey,greeting,greeting,True,general,general,True,0.9999942170253907,0.9999914412384119,ensemble,True
+Greetings,greeting,greeting,True,general,general,True,0.9999996412594212,0.9999995424449915,ensemble,True
+Hi,greeting,greeting,True,general,general,True,0.9999988606562592,0.9999987396296722,ensemble,True
+Welcome,greeting,greeting,True,general,general,True,0.9999999879594869,0.9999999808422005,ensemble,True
+Hello there,greeting,greeting,True,general,general,True,0.9999940247320989,0.9999880897707588,ensemble,True
+Good day,greeting,greeting,True,general,general,True,0.9999988823646833,0.9999984243843104,ensemble,True
+Howdy,greeting,greeting,True,general,general,True,0.9999991762558845,0.9999989398287307,ensemble,True
+Hey there,greeting,greeting,True,general,general,True,0.9999997887344206,0.9999997536765424,ensemble,True
+What's up,out_of_scope,out_of_scope,True,general,general,True,0.9999999414751414,0.9999999227483031,ensemble,True
+Morning,greeting,greeting,True,general,general,True,0.9929802136666378,0.9863577795653865,ensemble,False
+Afternoon,greeting,greeting,True,general,general,True,0.9955636249838297,0.9917896281082921,ensemble,False
+Evening,greeting,greeting,True,general,general,True,0.9023173440051202,0.8050021919589097,ensemble,False
+Hiya,greeting,greeting,True,general,general,True,0.9999999970064561,0.9999999958368956,ensemble,True
+"Hello, how are you?",greeting,greeting,True,general,general,True,0.999999981995436,0.9999999784947378,ensemble,True
+"Hi, good to see you",greeting,greeting,True,general,general,True,0.9999999868693933,0.9999999840449385,ensemble,True
+How do I submit a claim correctly for claim 130041467416065 sequence 001?,help,help,True,general,general,True,0.999998819597937,0.9999985168921453,ensemble,True
+Steps to avoid claim rejection for claim 132435151040074 sequence 001.,rejection_reasons,help,False,cap_api,general,False,0.9999947391400344,0.9999911838053155,ensemble,True
+Guidance on filing claims like claim 160060096136030 sequence 001.,help,help,True,general,general,True,0.9999970814957578,0.9999966181513277,ensemble,True
+Guidelines for avoiding rejections for claim 201990819198000 sequence 001.,rejection_reasons,help,False,cap_api,general,False,0.9999995971049183,0.9999995032515435,ensemble,True
+Best practices for claim submission for claim 211263773300000 sequence 004.,help,help,True,general,general,True,0.9999998429740505,0.9999998059550369,ensemble,True
+Claim submission help for 221663541811000 sequence 001.,help,help,True,general,general,True,0.9999999100698335,0.9999998967025451,ensemble,True
+Instructions to prevent denials for claim 221775171449000 sequence 003.,rejection_reasons,help,False,cap_api,general,False,0.9999994602947071,0.9999993936796674,ensemble,True
+Help for proper claim filing for claim 230624075311000 sequence 002.,help,help,True,general,general,True,0.9999952803494363,0.9999945115279262,ensemble,True
+Part D summary for claim 201752592251000 sequence 001.,claim_status,medicare_part_d,False,cap_api,cap_api,True,0.8408912608274983,0.6979928303489729,ensemble,True
+MEDD pricing summary for claim 221663541811000 sequence 001.,pricing_info,medicare_part_d,False,cap_api,cap_api,True,0.9983302935500479,0.9967162271853529,ensemble,True
+Part D pricing breakdown for claim 230624075311000 sequence 002.,pricing_info,medicare_part_d,False,cap_api,cap_api,True,0.8259395500597005,0.6654079308140896,ensemble,True
+All claim records in the system for claim 150692388845000 sequence 001.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9891982439813526,0.9820460542029121,ensemble,True
+All claim records for claim 222492018072002 sequence 001.,claim_status,claim_status,True,cap_api,cap_api,True,0.9970141532105745,0.9940897176183385,ensemble,True
+What is the weather today?,out_of_scope,out_of_scope,True,general,general,True,0.999999916283463,0.9999998969962298,ensemble,True
+Tell me a joke.,out_of_scope,out_of_scope,True,general,general,True,0.9999999830669257,0.9999999767188569,ensemble,True
+Who won the Super Bowl?,out_of_scope,out_of_scope,True,general,general,True,0.9999999861795863,0.9999999806117775,ensemble,True
+What is the capital of France?,out_of_scope,out_of_scope,True,general,general,True,0.9999974666554667,0.9999963237991639,ensemble,True
+How do I cook pasta?,out_of_scope,out_of_scope,True,general,general,True,0.9999999812759718,0.999999975327418,ensemble,True
+What time is it?,out_of_scope,out_of_scope,True,general,general,True,0.8147350074156406,0.6317657627452796,ensemble,False
+Who is the president?,out_of_scope,out_of_scope,True,general,general,True,0.5404889895861796,0.1959808151478873,ensemble,False
+What movies are playing?,out_of_scope,out_of_scope,True,general,general,True,0.9999746598670474,0.9999514421225036,ensemble,True
+How do I fix my car?,out_of_scope,out_of_scope,True,general,general,True,0.4683952693152003,0.1118587756200391,ensemble,False
+What is the stock price of Apple?,out_of_scope,out_of_scope,True,general,general,True,0.9987465810368986,0.9980415418435893,ensemble,True
+Tell me about history.,out_of_scope,audit_info,False,general,benefits_api,False,0.9827096489906122,0.968296419161789,ensemble,False
+What are good restaurants nearby?,out_of_scope,out_of_scope,True,general,general,True,0.9999647334398181,0.9999453973083873,ensemble,True
+How does gravity work?,out_of_scope,out_of_scope,True,general,general,True,0.9999998403578114,0.9999997228323074,ensemble,True
+What is the meaning of life?,out_of_scope,out_of_scope,True,general,general,True,0.999526711567373,0.9993306738712057,ensemble,True
+Show me sports scores.,out_of_scope,out_of_scope,True,general,general,True,0.999680163126607,0.999579946024159,ensemble,True
+What is machine learning?,out_of_scope,out_of_scope,True,general,general,True,0.99449115653273,0.9924494850625649,ensemble,False
+How do I learn Python?,out_of_scope,out_of_scope,True,general,general,True,0.6111604892147997,0.2288151102928505,ensemble,False
+What books should I read?,out_of_scope,out_of_scope,True,general,general,True,0.9973544232386449,0.9959694235009057,ensemble,True
+What is the best vacation spot?,out_of_scope,out_of_scope,True,general,general,True,0.9996680946647556,0.9995138144519805,ensemble,True
+How do I change a tire?,reversal_info,out_of_scope,False,cap_api,general,False,0.969007067661146,0.9487551213776387,ensemble,False
+Which pharmacy dispensed claim 130041467416065 sequence 001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999734275238,0.999999966804002,ensemble,True
+Pharmacy details for claim 132435151040074 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999797994475,0.9999999767932279,ensemble,True
+Where was the prescription filled for claim 150692388845000 sequence 001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999623081960778,0.9999246701755864,ensemble,True
+Dispensing pharmacy for claim 160060096136030 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999942399680453,0.9999897689330222,ensemble,True
+Pharmacy location information for claim 191406379285000 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999923498802,0.9999999909470052,ensemble,True
+Dispensing pharmacy details for claim 201503823714118 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999782718273,0.9999999712495579,ensemble,True
+Store location where claim 201752592251000 sequence 001 was filled.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999942895446,0.9999999929847305,ensemble,True
+Pharmacy name and address for claim 201990819198000 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999205669915,0.9999999118623059,ensemble,True
+Dispensing location for claim 211263773300000 sequence 004.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999998602308747,0.9999998433716503,ensemble,True
+Where did the member get this prescription? Claim 220133725669000 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9416005169139251,0.8855505469291879,ensemble,True
+Dispensing pharmacy location for claim 221172865083001 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999954056084,0.9999999941664472,ensemble,True
+Store information for claim 221663541811000 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9997949452738105,0.9996048817199482,ensemble,True
+Pharmacy report for claim 221775171449000 sequence 003.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.999183471507195,0.9985892323452966,ensemble,True
+Where was the medication dispensed for claim 222492018072002 sequence 001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999998929429389,0.9999998250695531,ensemble,True
+Pharmacy details for claim 222492117457002 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999999797994475,0.9999999767932279,ensemble,True
+Filling pharmacy information for claim 230381673488000 sequence 001.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9998669533248512,0.9997620171859423,ensemble,True
+Pharmacy city and state for claim 230624075311000 sequence 002.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999935489811765,0.9999924651414832,ensemble,True
+Which pharmacy filled claim 231181462825000 sequence 001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9999989620975109,0.9999985988746095,ensemble,True
+Who prescribed the medication on claim 130041467416065 sequence 001?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999087816219,0.9999998638927186,ensemble,True
+Prescriber details for claim 132435151040074 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.999999922776344,0.9999999012329124,ensemble,True
+Physician information for claim 150692388845000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999215696895,0.9999999068304332,ensemble,True
+Doctor's name for claim 160060096136030 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999368211726,0.9999999256647768,ensemble,True
+Which physician wrote the prescription for claim 180571470939000 sequence 001?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999113924845,0.9999998936415196,ensemble,True
+Prescriber NPI for claim 191406379285000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999100026916,0.9999998858616858,ensemble,True
+Prescriber information for claim 201752592251000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999947598093915,0.9999927378273611,ensemble,True
+Physician report for claim 201990819198000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9998160481751149,0.9997232215733078,ensemble,True
+Prescriber's name and credentials for claim 220133725669000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999997028100338,0.999999664452364,ensemble,True
+Who ordered the medication on claim 221172865083001 sequence 001?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999998849378668,0.9999998264492704,ensemble,True
+Prescribing physician information for claim 221663541811000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999085366728,0.999999878558699,ensemble,True
+Prescriber NPI and name for claim 221775171449000 sequence 003.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999244790586,0.9999999144122939,ensemble,True
+Doctor's details for claim 222492018072002 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999995871591968,0.9999994847424771,ensemble,True
+Prescribing physician for claim 230381673488000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999997885439426,0.9999997452493926,ensemble,True
+Ordering provider information for claim 230624075311000 sequence 002.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999999265765118,0.9999999157045668,ensemble,True
+Prescriber name for claim 231181462825000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9999998845510425,0.9999998661290166,ensemble,True
+Pricing breakdown for claim 240060164045000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999722069621563,0.9999445609878055,ensemble,True
+Copay calculation for claim 242831738080166 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999758313783326,0.9999522372063527,ensemble,True
+Ingredient cost and fees for claim 252460261210000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999999641683601,0.9999999343305978,ensemble,True
+Pricing schedule used for claim 252621948076000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999974711339061,0.9999968217802655,ensemble,True
+Patient pay details for claim 240051073172000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9985404572167593,0.9972000625093254,ensemble,True
+Final out-of-pocket amount for claim 240060164045000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9994854809760599,0.9991497019417704,ensemble,True
+All pricing components for claim 242831738080166 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999993964880953,0.9999993002148504,ensemble,True
+Co-pay modifier impact on claim 252460261210000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9872029853091844,0.9750797605840221,ensemble,True
+Pricing summary for claim 240051073172000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999998308118337,0.9999997457774285,ensemble,True
+Cost of claim 240060164045000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9998172136821915,0.9996431837660482,ensemble,True
+How much was paid on claim 242831738080166 sequence 001?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9982836263024452,0.9966560833859679,ensemble,True
+Pricing details for claim 252460261210000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999994142305292,0.9999991744346989,ensemble,True
+Final copay amount for claim 240051073172000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999114142345238,0.9998233220433489,ensemble,True
+Pricing information for claim 240060164045000 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9999984495321332,0.9999979592470686,ensemble,True
+Approved ingredient cost for claim 242831738080166 sequence 001.,pricing_info,compound_info,False,cap_api,claim_history_search,False,0.6035049663726438,0.20706531625997582,ensemble,False
+PA summary for claim 251271743818195 sequence 001.,claim_status,pa_summary,False,cap_api,override_domain,False,0.8815296812547783,0.7864734908363751,ensemble,False
+PA approval details for claim 253603736282009 sequence 001.,approval_info,prior_auth_info,False,benefits_api,cap_api,False,0.8869666243165002,0.7815866362320051,ensemble,False
+PA type and approval for claim 201990819198000 sequence 001.,approval_info,prior_auth_info,False,benefits_api,cap_api,False,0.9936199835085777,0.9887277595566407,ensemble,True
+Authorization details for claim 220133725669000 sequence 001.,approval_info,prior_auth_info,False,benefits_api,cap_api,False,0.9977944021715563,0.9958074250761911,ensemble,True
+Reimbursement details for claim 130041467416065 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9999993598236416,0.9999992026807882,ensemble,True
+What was reimbursed on claim 132435151040074 sequence 001?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998458726307411,0.9997056792401425,ensemble,True
+Payment information for claim 150692388845000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9997316085082109,0.9996010159025114,ensemble,True
+Reimbursement amount for claim 160060096136030 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9999989976838142,0.9999982165659931,ensemble,True
+What was paid on claim 180571470939000 sequence 001?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.997473045678633,0.9951735296860891,ensemble,True
+Reimbursement breakdown for claim 191406379285000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9996243721669529,0.9994269030341272,ensemble,True
+Payment details for claim 201503823714118 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.999974678575342,0.9999512704541781,ensemble,True
+Payment summary for claim 201990819198000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9997421879525037,0.9996084674457568,ensemble,True
+Reimbursed amount for claim 211263773300000 sequence 004.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9999962982342473,0.9999940336993697,ensemble,True
+Payment calculation for claim 220133725669000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9963381289249641,0.9928662844695344,ensemble,True
+Reimbursement rationale for claim 220992183436835 sequence 002.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998206944896263,0.9996830263879964,ensemble,True
+Why was this amount reimbursed on claim 221172865083001 sequence 001?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9999992513408401,0.9999991010999156,ensemble,True
+Payment details for paper claim 221663541811000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9999735067050272,0.9999490037680943,ensemble,True
+Reimbursement report for claim 221775171449000 sequence 003.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998192385826424,0.9996434372769076,ensemble,True
+Payment information for claim 222492018072002 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9997316085082109,0.9996010159025114,ensemble,True
+Reimbursement summary for claim 222492117457002 sequence 001.,approval_info,reimbursement_info,False,benefits_api,cap_api,False,0.9999942494491588,0.9999912146224266,ensemble,True
+What was the pharmacy paid for claim 230381673488000 sequence 001?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9836739146395513,0.9712780650602396,ensemble,True
+Reimbursement calculation for claim 230624075311000 sequence 002.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9981690808894693,0.9963442336206149,ensemble,True
+Payment breakdown for claim 231181462825000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9962923614293037,0.9930520896396858,ensemble,True
+Why was claim 130041467416065 sequence 001 rejected?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999998899172909,0.9999998397202544,ensemble,True
+Rejection reasons for claim 150692388845000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.999999965835565,0.9999999446968154,ensemble,True
+What edits caused claim 160060096136030 sequence 001 to reject?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999564515586564,0.9999147852628578,ensemble,True
+Rejection details for claim 191406379285000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999978670642495,0.999995830503726,ensemble,True
+List of rejection codes for claim 221775171449000 sequence 003.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.993264274102595,0.9865306673383161,ensemble,True
+Why was claim 230381673488000 sequence 001 denied?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.999891142306863,0.9998368951150572,ensemble,True
+Rejection explanation for claim 241770599260003 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999993880972335,0.99999894151111,ensemble,True
+Failed edits for claim 241771076695002 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999947254585398,0.9999926683649232,ensemble,True
+Reason codes for the rejection of claim 242005504278000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999994715007546,0.9999990465668644,ensemble,True
+Rejection rationale for claim 242055403386000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999987043403671,0.9999980096899046,ensemble,True
+Specific edits that led to rejection of claim 242772404022000 sequence 003.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999449273792285,0.9998931305739378,ensemble,True
+Denial reasons for claim 243102333796000 sequence 003.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999106264721468,0.9998218782902963,ensemble,True
+Claim 243122443413000 sequence 001 rejection breakdown.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9997880336166064,0.9996656033381568,ensemble,True
+Which edits triggered the rejection for claim 251283249876195 sequence 001?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999614615219421,0.9999246966492216,ensemble,True
+Details on why claim 252611736720000 sequence 002 was not accepted.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9998812251589354,0.9997972303512815,ensemble,True
+Rejection information for claim 252964403388000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9997234642567127,0.9994473139553148,ensemble,True
+Failed edit codes for claim 252965483598001 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9972431816491069,0.9951306500235984,ensemble,True
+Summary of rejection reasons for claim 130041467416065 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999995915376563,0.9999994414705873,ensemble,True
+What can be done to fix rejected claim 150692388845000 sequence 001?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.999903206198515,0.9998111420171826,ensemble,True
+How to resolve rejected claim 160060096136030 sequence 001?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9999740442600333,0.9999610120486824,ensemble,True
+Was claim 231181462825000 sequence 001 reversed?,claim_status,reversal_info,False,cap_api,cap_api,True,0.9999999591699074,0.9999999411713899,ensemble,True
+Reversal details for claim 240060164045000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999488515103,0.9999999417081858,ensemble,True
+Adjustments made to claim 242831720377166 sequence 002.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999982006985717,0.9999978616037769,ensemble,True
+R&R information for claim 242905816136000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999692366472,0.9999999656722427,ensemble,True
+Manual adjustment details for claim 251838615925008 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999936132738674,0.999990140854734,ensemble,True
+Is claim 253136857840000 sequence 001 a reversal?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999976680647398,0.9999970557413163,ensemble,True
+Reversal and resubmission details for claim 253361498968006 sequence 017.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.999999185599239,0.9999990561235867,ensemble,True
+Adjustment information for claim 253491357048008 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999436146564721,0.999892762708552,ensemble,True
+R&R report for claim 253603736282009 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999695737928,0.999999966417178,ensemble,True
+Claim modifications for claim 260021649904000 sequence 005.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.999999838667747,0.9999996878531874,ensemble,True
+Reversal status for claim 260054207073000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999996454412787,0.9999994932946505,ensemble,True
+Adjustment details for claim 260061828565000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.999949025416496,0.9999090487346514,ensemble,True
+Manual changes on claim 231181462825000 sequence 001.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.8129311828655758,0.6267602460040375,ensemble,False
+Reversal information for claim 240060164045000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999079708874,0.9999998998747767,ensemble,True
+Modification details for claim 242831720377166 sequence 002.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.8934648611297502,0.7869308565228628,ensemble,True
+R&R status for claim 242905816136000 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999683113203,0.9999999601782642,ensemble,True
+Adjustment summary for claim 251838615925008 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9993509743922363,0.9987816032899577,ensemble,True
+Claim 253136857840000 sequence 001 reversal details.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999997470382279,0.9999996865207624,ensemble,True
+Resubmissions for claim 253361498968006 sequence 017.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9969521046209896,0.9944069945867187,ensemble,True
+Reversal report for claim 253491357048008 sequence 001.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9999999134858788,0.9999999026764252,ensemble,True
+What is the RX number for claim 130041467416065 sequence 001?,rx_details,rx_details,True,cap_api,cap_api,True,0.9999967385367258,0.999996088497566,ensemble,True
+Prescription details for claim 132435151040074 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9976487969681153,0.9958345021963485,ensemble,True
+Quantity dispensed on claim 150692388845000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9996803854855423,0.999363244118202,ensemble,True
+Days supply for claim 160060096136030 sequence 001.,rx_details,DaysSupply,False,cap_api,claim_history_search,False,0.7764587827264187,0.5539429878516967,ensemble,False
+Fill number for claim 180571470939000 sequence 001.,fill_date_info,rx_details,False,claim_history_search,cap_api,False,0.9997413102486561,0.9994992767949896,ensemble,True
+RX details for claim 191406379285000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999442956842978,0.999889066777791,ensemble,True
+Prescription number for claim 201503823714118 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999987453795247,0.9999985225536698,ensemble,True
+Quantity and days supply for claim 201752592251000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999194136853072,0.9998403131454678,ensemble,True
+RX information for claim 201990819198000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9985755492857239,0.9971615508959196,ensemble,True
+Prescription fill details for claim 211263773300000 sequence 004.,rx_details,rx_details,True,cap_api,cap_api,True,0.9997418508653786,0.9995812415755919,ensemble,True
+RX number and fill count for claim 220133725669000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999989856670882,0.9999982595242883,ensemble,True
+Dispensing quantity for claim 220992183436835 sequence 002.,rx_details,rx_details,True,cap_api,cap_api,True,0.9991500061568322,0.9984034877808162,ensemble,True
+Days supply for this prescription for claim 221172865083001 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.999821805320536,0.9996940201582687,ensemble,True
+Fill number information for claim 221663541811000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9998349427947455,0.9997240904170751,ensemble,True
+RX details for claim 221775171449000 sequence 003.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999442956842978,0.999889066777791,ensemble,True
+Prescription strength and quantity for claim 222492018072002 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999961251243964,0.9999956343420581,ensemble,True
+Prescription summary for claim 222492117457002 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9990810552330867,0.9984321481220675,ensemble,True
+RX number for claim 230381673488000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999990546300102,0.9999989288590019,ensemble,True
+Fill details for claim 230624075311000 sequence 002.,rx_details,rx_details,True,cap_api,cap_api,True,0.7684136575630375,0.7127076509339166,ensemble,False
+Prescription information for claim 231181462825000 sequence 001.,rx_details,rx_details,True,cap_api,cap_api,True,0.9971148018159526,0.9947873431417,ensemble,True
+What are the settlement codes for claim 130041467416065 sequence 001?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.999804916956104,0.9997119462583126,ensemble,True
+Pharmacy response for claim 150692388845000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999995274616479,0.9999992763478536,ensemble,True
+Settlement information sent to the pharmacy for claim 160060096136030 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999936729570347,0.9999910898662211,ensemble,True
+Feedback codes for claim 180571470939000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999887527254581,0.9999786931425966,ensemble,True
+What was sent back to the pharmacy for claim 191406379285000 sequence 001?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999650163072775,0.9999325463312375,ensemble,True
+Settlement details for claim 220133725669000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.999999926090534,0.9999998903807262,ensemble,True
+Pharmacy response codes for claim 220992183436835 sequence 002.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999988920885956,0.9999984563925559,ensemble,True
+Settlement information for claim 222492018072002 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999465441318,0.9999999219089319,ensemble,True
+Settlement report for claim 222492117457002 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999298329794,0.99999989991631,ensemble,True
+Response sent to the pharmacy for claim 230381673488000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999985646400833,0.9999982369193947,ensemble,True
+Settlement codes for claim 241770599260003 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999973468081578,0.9999948774655093,ensemble,True
+Pharmacy feedback for claim 241771076695002 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999534393086216,0.9999128193836802,ensemble,True
+Settlement status for claim 241774768475148 sequence 003.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999578888835,0.9999999333824229,ensemble,True
+Response codes for claim 242005504278000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999992820913182,0.9999990243346623,ensemble,True
+Settlement details for claim 242055403386000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.999999926090534,0.9999998903807262,ensemble,True
+Pharmacy response for claim 242772404022000 sequence 003.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999995274616479,0.9999992763478536,ensemble,True
+Settlement summary for claim 242831720377166 sequence 002.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999407632036,0.9999999056993355,ensemble,True
+Codes sent to the pharmacy for claim 242831738080166 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9993476617428363,0.9989502363766143,ensemble,True
+Settlement feedback for claim 243122443413000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999455256139,0.9999999385026594,ensemble,True
+Response information for claim 250023213779000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9999999303576392,0.9999999012768475,ensemble,True
+What are the coverage dates for member 44781239?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9980950607915662,0.9963319379095866,ensemble,False
+Is member Smith currently eligible for pharmacy benefits?,member_coverage,Prescriber,False,member_domain,claim_history_search,False,0.8926159987308152,0.7959885736750784,ensemble,False
+Check if member 99123456 had active coverage on February 10th.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9982082614347301,0.9971089734954747,ensemble,True
+Can you confirm whether member 77234581 is enrolled and covered right now?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9980554583257417,0.9971496572504875,ensemble,True
+Look up the eligibility period for member Davis as of last Friday.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9919820221095911,0.9868002036314499,ensemble,False
+What client is member 44781239 assigned to?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.8865229360533253,0.8006008324290075,ensemble,False
+Show the account group structure for this member.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.999999703695103,0.9999996746426388,ensemble,True
+Which carrier account group does member 88654321 belong to?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.998403868115972,0.9979082008743198,ensemble,False
+Tell me the CAG chain that member 77234581 falls under.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.998748713280331,0.9978919109401531,ensemble,False
+What is the parent organization for this member's group?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9823302538143485,0.9681530647116253,ensemble,False
+When do the accumulators reset for member 44781239?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9999265894936556,0.9999094405557708,ensemble,True
+What is the plan year start date for this member?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.99999960999453,0.9999994517073945,ensemble,True
+Tell me the benefit renewal date for member 88654321.,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9980706641570912,0.9973750568544341,ensemble,True
+On what date does the new benefit cycle begin for member 77234581?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9999060735485369,0.9998756356648579,ensemble,False
+Is member 44781239 on a family or individual plan?,family_type,family_type,True,member_domain,member_domain,True,0.9987777342687756,0.9976758178566794,ensemble,False
+Show the family coverage designation for this member.,family_type,family_type,True,member_domain,member_domain,True,0.9996853503756007,0.9993730848769772,ensemble,True
+What is the coverage tier classification for member 88654321?,family_type,member_coverage,False,member_domain,member_domain,True,0.40572310995431726,0.13039158875886786,ensemble,False
+Is this member's plan set up as employee-plus-spouse or employee-only?,family_type,family_type,True,member_domain,member_domain,True,0.9936961700166,0.9887647440218558,ensemble,True
+Who else is enrolled under the same family ID?,family_members,family_members,True,member_domain,member_domain,True,0.9997986952231253,0.9996141768885208,ensemble,True
+List the dependents for member 44781239.,family_members,family_members,True,member_domain,member_domain,True,0.9998335946491039,0.9997585552563838,ensemble,True
+Show me the subscriber and all dependents in this family.,family_members,family_members,True,member_domain,member_domain,True,0.999999940894246,0.9999999328190539,ensemble,True
+How many people are covered under this member's household?,family_members,family_members,True,member_domain,member_domain,True,0.9961093411800682,0.9925295060956857,ensemble,True
+Does member 44781239 have other insurance on file?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9952623546641811,0.9910788466222643,ensemble,False
+Show secondary coverage details for this member.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9997168120173088,0.9995727235514286,ensemble,True
+Is there a second payer listed for member 88654321?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9819481695747319,0.9652688133425855,ensemble,False
+Check if member 77234581 carries any supplemental pharmacy coverage.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.859573804153603,0.7536611481861801,ensemble,False
+Is this member enrolled in a Medicare drug plan?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9999998283886847,0.9999997336643639,ensemble,True
+Show Part D enrollment status for member 44781239.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9999610361973875,0.9999332737326221,ensemble,True
+Does member 88654321 have Med-D benefits?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9968349902352605,0.9946095214308879,ensemble,False
+Verify whether member 77234581 participates in a Medicare prescription program.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9934065657338678,0.9900325431639726,ensemble,False
+What is the low income subsidy level for this member?,lics_status,lics_status,True,member_domain,member_domain,True,0.9999999263664487,0.9999998981541061,ensemble,True
+Is member 44781239 designated as LICS?,lics_status,lics_status,True,member_domain,member_domain,True,0.9986870862358909,0.9976702063385107,ensemble,False
+Does this member qualify for low income cost sharing?,lics_status,lics_status,True,member_domain,member_domain,True,0.9999969197869812,0.9999952399203591,ensemble,True
+Check whether member 88654321 has an LIS co-pay reduction on file.,lics_status,lics_status,True,member_domain,member_domain,True,0.9893956580767541,0.9865364762939006,ensemble,False
+Show STCOB links for member 44781239.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9997884858580048,0.9997152575707416,ensemble,False
+Are there short-term COB records for this member?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9999714572369534,0.9999652825635164,ensemble,True
+Pull up the STCOB member connections for member 88654321.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9996060044089459,0.9993407011386157,ensemble,False
+Does member 77234581 have any active short-term coordination linkages?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9664191277872617,0.9449623685723088,ensemble,False
+What CVS ID is assigned to member 44781239?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9999582817976829,0.9999469446631425,ensemble,False
+Look up the CVS member identifier for this member.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9999996863525583,0.9999995987112689,ensemble,True
+What is the CVS number on file for member 88654321?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9982704107630029,0.9974145269070286,ensemble,False
+Retrieve the CVS identifier stored for member 77234581.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9999738714624848,0.9999691350268245,ensemble,True
+Show other CAGMs sharing the same CVS ID as this member.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9989541265252875,0.9979202427825324,ensemble,True
+List CAGMs by family ID under client code ABC.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9999773849783444,0.9999716910279306,ensemble,True
+Which members are linked by the same CVS identifier?,related_cagm,related_cagm,True,member_domain,member_domain,True,0.5611444756897265,0.12270151728333395,ensemble,True
+Find all CAGM records that match member 77234581 by family and client.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9174409629030482,0.8354847823406708,ensemble,False
+What other IDs are on file for member 44781239?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9956941099417768,0.9934959786393431,ensemble,False
+List all cross-reference identifiers for this member.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9992535350468562,0.9985153966922805,ensemble,True
+Show every alternate member number for member 88654321.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9673756334272098,0.954259243144225,ensemble,False
+Pull up the full list of supplemental IDs stored for member 77234581.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9986240520735317,0.9978785207846659,ensemble,True
+Summarize the key fields on PA 78901.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9982880713139233,0.9974393025487951,ensemble,False
+Give me an overview of this prior authorization.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9999997312671055,0.9999996110317492,ensemble,True
+What are the critical attributes of PA 12345?,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9396268153313422,0.8986935580651433,ensemble,False
+Show a high-level report of what PA 55432 covers and its effective dates.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9813214792504671,0.9721286518920921,ensemble,False
+Break down the most impactful settings on this PA for me.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9998760573883873,0.9998308483226327,ensemble,True
+Will this PA clear a 75 rejection?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9999936206343449,0.9999916690624236,ensemble,True
+Can this prior auth bypass a non-formulary reject 70?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9999521377676417,0.9999057343531643,ensemble,True
+Does this PA address reject code 76 plan limits?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9998496725143252,0.9996994222466155,ensemble,True
+If a claim rejects with code 75 PA required will this override fix it?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9937536015818046,0.9875371413990628,ensemble,True
+Tell me whether this PA handles both reject 70 and reject 76.,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.999998763769508,0.9999985993293848,ensemble,True
+What does the formulary override indicator mean on a PA?,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.9999998645093602,0.999999826064324,ensemble,True
+How does the days supply cap setting work on a prior authorization?,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.8230673907039149,0.6560670654423751,ensemble,True
+What is the purpose of the drug coverage code on a PA?,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.9987897198654213,0.997678173476117,ensemble,True
+Describe what the PA priority ranking field controls.,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.9989204237731837,0.9978420898276791,ensemble,True
+Help me understand the GPI wildcard setting on a prior authorization.,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.8181565729342409,0.6375466596441514,ensemble,False
+How does the copay on this PA change the total payment?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9999944139935975,0.9999901486239431,ensemble,True
+Will the PA copay override reduce the member cost?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9999966893514936,0.999994826282096,ensemble,True
+Show the pricing impact of the copay fields on this PA.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9999990290879895,0.9999984922574473,ensemble,True
+If I change the copay override on this PA does it affect the ingredient cost or just the patient pay?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9937968513159277,0.9884153532701511,ensemble,True
+Explain how multiple copay fields on this PA interact to set the final price.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9990401081844351,0.9981066482035594,ensemble,True
+Which medications does this PA authorize?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.999951411032232,0.9999091626133105,ensemble,True
+Show the GPI range covered by PA 78901.,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9990996391394767,0.9988389699882388,ensemble,True
+What NDC codes fall under this prior authorization?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9991637562196919,0.9983286380411593,ensemble,True
+List every drug group and NDC that PA 55432 applies to.,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9942417011296655,0.9918318446451165,ensemble,False
+Does this PA cover both brand and generic versions of the medication?,pa_drug_coverage,daw_info,False,override_domain,cap_api,False,0.7743313819341442,0.5523148491667847,ensemble,False
+How many fills have been processed under this PA?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9999843859276418,0.9999793029933112,ensemble,True
+Show the claim volume for PA 78901.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9795357957188844,0.9674517658871932,ensemble,False
+What is the total utilization count for this prior auth?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9999783310022357,0.9999654860805809,ensemble,True
+Tell me how many prescriptions were adjudicated against PA 55432.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9731295203090431,0.9504149944561823,ensemble,False
+Give me the usage statistics showing how often this PA was referenced.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9999935889105177,0.9999913964681967,ensemble,True
