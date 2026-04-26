@@ -751,181 +751,44 @@ def run_ablation(X, y, labels, best_dim):
 # LLM FALLBACK (mirrors llm_judge_node from nodes/llm_judge.py)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def llm_classify(query, candidates, ensemble_intent=None, ensemble_confidence=0.0):
-    """LLM fallback classifier — mirrors the production llm_judge_node pattern.
+def llm_classify(query, candidates, ensemble_intent=None, ensemble_confidence=0.0, top5_with_probs=None):
+    """Domain-aware LLM fallback classifier.
     
-    Uses the SAME prompt template (claim_prompt_template) and response parsing
-    as the production LLM judge, but scoped to the top-5 candidates from
-    the ensemble classifier.
+    Uses the domain-specific prompt modules from prompt_templates/domain_prompts/
+    for highly accurate intent classification. Each domain has an expert-level
+    prompt with exhaustive disambiguation rules, decision trees, and confusion
+    pair resolution.
     
     Args:
-        query: User's natural language query
+        query: User's natural language query (original, with claim numbers)
         candidates: Top-5 intent names from ensemble (ordered by probability)
         ensemble_intent: The ensemble's top prediction (for context)
         ensemble_confidence: The ensemble's confidence (for context)
+        top5_with_probs: List of (intent_name, probability) tuples from ensemble
         
     Returns:
-        Predicted intent name (one of the candidates, or candidates[0] as fallback)
+        Predicted intent name
     """
-    from google import genai
-    from google.genai import types
-    import re as _re
-
-    client = genai.Client(
-        vertexai=True,
-        project=os.getenv("PROJECT_ID", "pbm-poc-coderev-genai-poc"),
-        location=os.getenv("LOCATION", "us-central1"),
+    # Add parent directory to path so we can import prompt_templates
+    parent_dir = os.path.dirname(BASE_DIR)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
+    from prompt_templates.domain_prompts.llm_fallback import llm_fallback_classify
+    
+    # Build top5 with probabilities if not provided
+    if top5_with_probs is None:
+        # Fallback: assign decreasing dummy probabilities
+        top5_with_probs = [(c, max(0.1, ensemble_confidence - i*0.1)) for i, c in enumerate(candidates)]
+    
+    result = llm_fallback_classify(
+        query=query,
+        top5_intents=top5_with_probs,
+        ensemble_intent=ensemble_intent,
+        ensemble_confidence=ensemble_confidence,
     )
-
-    # Build a focused system instruction with intent distinctions
-    # This mirrors how llm_judge_node uses claim_prompt_template as system_instruction
-    candidate_desc = "\n".join(f"- {n}: {INTENT_DESC.get(n, n)}" for n in candidates)
-
-    system_instruction = f"""You are an intent classification system for a Pharmacy Benefit Manager (PBM) platform.
-Your task is to classify the user query into exactly ONE of the candidate intents below.
-
-## CANDIDATE INTENTS (choose ONE):
-{candidate_desc}
-
-## KEY RULE — Single Claim (cap_api) vs Claim History Search:
-- cap_api intents (claim_status, pricing_info, pharmacy_info, prescriber_info, settlement_info,
-  rejection_reasons, prior_auth_info, etc.) = details about ONE specific claim
-- claim_history_search intents (Pricing, Pharmacy, Prescriber, Settlement, Status, RejectCode,
-  PriorAuth, Refills, DaysSupply, Diagnosis, DrugLast, Month, NDC, etc.) = SEARCH/FILTER across
-  MULTIPLE claims in history
-- If the query references a SPECIFIC claim number or "this claim", lean toward cap_api
-- If the query asks to LIST, FILTER, SEARCH, or COMPARE claims, lean toward claim_history_search
-
-## CRITICAL DISTINCTIONS — cap_api (single claim):
-- prescriber_info = who PRESCRIBED/WROTE the medication (doctor name, NPI, physician)
-- rx_details = prescription NUMBER, quantity dispensed, days supply, fill number, drug strength
-- pricing_info = copay, ingredient cost, dispensing fee, patient pay for ONE claim
-- reimbursement_info = what the PHARMACY was paid/reimbursed, payment to pharmacy
-- settlement_info = settlement CODES, pharmacy RESPONSE codes for ONE claim
-- claim_status = overall claim status (paid/rejected/pending), adjudication outcome
-- approval_info = plan OVERRIDES, transition fill (TF), BPG configuration
-- rejection_reasons = why claim was DENIED/REJECTED, failed edit codes, how to FIX
-- audit_info = audit TRAIL, change LOG, modification HISTORY, add/change dates
-- reversal_info = claim REVERSAL, R&R (reverse & resubmit), manual adjustments
-- prior_auth_info = PA status for ONE specific claim
-
-## CRITICAL DISTINCTIONS — claim_history_search (multi-claim search):
-- Pricing = cost/copay for a specific DRUG across MULTIPLE claims
-- Pharmacy = search claims FROM a specific pharmacy name/store
-- Prescriber = search claims BY a specific prescriber name/NPI
-- Settlement = filter claims by settlement CODE NUMBER
-- Status = filter/list claims by status (paid, rejected, pending)
-- RejectCode = search claims by NCPDP rejection code number
-- PriorAuth = search claims that REQUIRED prior authorization
-- Refills = refill counts, remaining refills across prescriptions
-- DaysSupply = filter claims by days supply duration (30, 60, 90 days)
-- DrugLast = when was a specific drug LAST dispensed for a member
-- NDC = search claims by NDC number
-- ClaimNum = look up a specific claim by claim number
-- Month = filter claims by calendar month
-
-## CRITICAL DISTINCTIONS — member_domain:
-- member_coverage = coverage ELIGIBILITY windows, enrollment dates, active status for a MEMBER
-- medicare_coverage = Medicare Part-D enrollment status for a MEMBER (not claim-level)
-- member_hierarchy = Client/CAG hierarchy, organizational structure
-- lics_status = Low Income Subsidy level/status
-- cvs_id_lookup = CVS ID for the member
-- alternate_ids = all alternate IDs on file
-
-## CRITICAL DISTINCTIONS — override_domain (PA management):
-- pa_summary = high-level PA overview, key fields, configuration
-- pa_override_reject = will this PA override reject codes 75/70/76
-- pa_field_help = what does a specific PA FIELD do (documentation)
-- pa_copay_pricing = copay override IMPACT on pricing
-- pa_drug_coverage = drugs COVERED by this PA (GPI/NDC lists)
-- pa_claim_usage = how many CLAIMS used this PA
-
-## CRITICAL DISTINCTIONS — benefits_api:
-- plan_summary = benefit plan OVERVIEW, current coverage snapshot
-- plan_history = plan CHANGE LOG, revision history, amendments
-- plan_finder = SEARCH for available benefit plans, plan catalog
-
-## OTHER DISTINCTIONS:
-- compound_info = compound MEDICATION, MIC breakdown, individual INGREDIENT costs
-- drug_info = drug NAME, NDC code, GPI, therapeutic class, formulary status
-- fill_date_info = DATE prescription was filled, dispense DATE, service date
-- generic_availability = generic ALTERNATIVES, therapeutic equivalents
-- cob_info = Coordination of Benefits (COB), OTHER insurance, secondary payer
-- beneficiary_info = member BENEFIT phase, coverage TIER, accumulations
-- greeting = hello, hi, good morning (casual greeting)
-- out_of_scope = completely unrelated to pharmacy (weather, recipes, sports, gibberish)
-- help = how to submit claims, filing guidance
-
-## ENTITY EXTRACTION:
-- claim_number: 15-digit number (required for claim-related intents)
-- sequence_number: 3-digit number (required for claim-related intents)
-
-## OUTPUT FORMAT (JSON only):
-{{"intent": "<one of the candidate intents>", "confidence": <0.0-1.0>, "entities": {{"claim_number": "<15digits|null>", "sequence_number": "<3digits|null>"}}, "reasoning": "<brief>"}}
-"""
-
-    # Build user prompt (mirrors llm_judge_node's user_prompt construction)
-    user_prompt = f"Current User message: {query}\n\n"
-    if ensemble_intent:
-        user_prompt += (
-            f"Note: The primary classifier suggested '{ensemble_intent}' "
-            f"with {ensemble_confidence:.0%} confidence, but was uncertain. "
-            f"Please re-evaluate carefully.\n"
-        )
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=100,
-                system_instruction=system_instruction,
-            ),
-        )
-
-        response_text = response.text.strip()
-
-        # Parse JSON response (mirrors llm_judge_node's parsing logic)
-        # Remove markdown code blocks if present
-        response_text = _re.sub(r'^```json\s*', '', response_text, flags=_re.MULTILINE)
-        response_text = _re.sub(r'^```\s*', '', response_text, flags=_re.MULTILINE)
-        response_text = _re.sub(r'```\s*$', '', response_text, flags=_re.MULTILINE)
-        response_text = response_text.strip()
-
-        # Try to extract JSON
-        json_match = _re.search(r'\{[^{}]*"intent"[^{}]*\}', response_text, _re.DOTALL)
-        if json_match:
-            llm_result = json.loads(json_match.group(0))
-        else:
-            llm_result = json.loads(response_text)
-
-        predicted = llm_result.get("intent", "")
-
-        # Validate: must be one of the candidates
-        for c in candidates:
-            if c.lower() == predicted.lower():
-                return c
-
-        # Partial match (LLM might use slightly different name)
-        for c in candidates:
-            if c.lower() in predicted.lower() or predicted.lower() in c.lower():
-                return c
-
-        # If LLM returned a valid intent not in candidates, still accept it
-        # if it's in our known intent list
-        if predicted in INTENT_TO_DOMAIN:
-            return predicted
-
-        logger.warning(f"LLM returned unknown intent '{predicted}', using ensemble top pick")
-        return candidates[0]
-
-    except json.JSONDecodeError as e:
-        logger.warning(f"LLM JSON parse failed: {e}")
-        return candidates[0]
-    except Exception as e:
-        logger.error(f"LLM classify failed: {e}")
-        return candidates[0]
+    
+    return result.get("intent", candidates[0] if candidates else "unknown")
 
 
 def evaluate(test_data, pipeline, embedder, use_llm=True, conf_t=0.30, margin_t=0.05):
@@ -943,11 +806,13 @@ def evaluate(test_data, pipeline, embedder, use_llm=True, conf_t=0.30, margin_t=
             final, src = pred["intent"], "ensemble"
         else:
             # Send ORIGINAL text (with claim numbers) to LLM — it can extract entities
+            # Pass full top5 with probabilities for domain-aware routing
             final = llm_classify(
                 rec["text"],
                 [n for n, _ in pred["top_5"]],
                 ensemble_intent=pred["intent"],
                 ensemble_confidence=pred["confidence"],
+                top5_with_probs=pred["top_5"],
             )
             src = "llm"; llm_n += 1
 
