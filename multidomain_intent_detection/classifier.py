@@ -50,12 +50,28 @@ logger = logging.getLogger(__name__)
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_ARTIFACTS_CANDIDATES = [
-    os.path.join(BASE_DIR, "artifacts"),
-    os.path.join(os.path.dirname(BASE_DIR), "Intent_detection_system", "artifacts"),
-]
-ARTIFACTS = next((p for p in _ARTIFACTS_CANDIDATES if os.path.isdir(p)), _ARTIFACTS_CANDIDATES[0])
-MODEL_PKL = os.path.join(ARTIFACTS, "v3_pipeline.pkl")
+
+
+def _find_model_pkl() -> str:
+    """Search multiple candidate locations for v3_pipeline.pkl."""
+    project_root = os.path.dirname(BASE_DIR)
+    candidates = [
+        # 1. artifacts/ inside this package
+        os.path.join(BASE_DIR, "artifacts", "v3_pipeline.pkl"),
+        # 2. Intent_detection_system/artifacts/ (sibling folder)
+        os.path.join(project_root, "Intent_detection_system", "artifacts", "v3_pipeline.pkl"),
+        # 3. Relative to cwd
+        os.path.join(os.getcwd(), "Intent_detection_system", "artifacts", "v3_pipeline.pkl"),
+        os.path.join(os.getcwd(), "artifacts", "v3_pipeline.pkl"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    # Fallback: return the most likely location (will raise FileNotFoundError later)
+    return candidates[1]
+
+
+MODEL_PKL = _find_model_pkl()
 
 
 class MultidomainIntentClassifier:
@@ -100,10 +116,15 @@ class MultidomainIntentClassifier:
         if self._pipeline is not None:
             return
 
+        # Re-resolve path at load time (cwd may have changed since import)
+        if not os.path.exists(self._model_path):
+            self._model_path = _find_model_pkl()
+
         if not os.path.exists(self._model_path):
             raise FileNotFoundError(
                 f"Trained pipeline not found at {self._model_path}. "
-                "Run the training script first to train and save the model."
+                "Run the training script first to train and save the model.\n"
+                "  python -m multidomain_intent_detection.training"
             )
 
         # The pickle stores the class as '__main__.IntentPipeline' because the
