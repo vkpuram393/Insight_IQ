@@ -30,6 +30,7 @@ Architecture:
 import os
 import re
 import json
+import sys
 import time
 import pickle
 import logging
@@ -421,6 +422,22 @@ class IntentClassifierV3:
                 f"Trained pipeline not found at {self._model_path}. "
                 f"Run intent_detection_v3.py first to train and save the model."
             )
+
+        # Import IntentPipeline so the unpickler can resolve it.
+        # The pickle stores the class as '__main__.IntentPipeline' because the
+        # training script (intent_detection_v3.py) was run directly.  We need
+        # that class available in whichever module pickle looks up.
+        try:
+            from Intent_detection_system.intent_detection_v3 import IntentPipeline
+        except ImportError:
+            from intent_detection_v3 import IntentPipeline
+
+        # Patch __main__ so pickle.load finds IntentPipeline regardless of
+        # which script is currently __main__.
+        import __main__
+        if not hasattr(__main__, "IntentPipeline"):
+            __main__.IntentPipeline = IntentPipeline
+
         t0 = time.time()
         with open(self._model_path, "rb") as f:
             self._pipeline = pickle.load(f)
