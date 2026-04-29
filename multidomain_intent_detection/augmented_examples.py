@@ -48,6 +48,8 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Show the approval logic and overrides for this claim.",
         "What plan overrides led to the approval of this claim?",
         "What BPG configuration approved this claim?",
+        "Comprehensive summary of claim approval and overrides.",
+        "Adjudication outcome: what overrides were applied to approve?",
     ],
 
     # ── rejection_reasons: confused with help & claim_status ────────────
@@ -62,9 +64,86 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Options to fix a denied claim.",
     ],
 
+    # ── ClaimNum: confused with claim_status & rx_details ───────────────
+    "ClaimNum": [
+        "260302639954275",
+        "claim number 260302639954275",
+        "Look up claim 480517832091643.",
+        "Retrieve claim number 710924356178502.",
+        "Find claim 392081547623918.",
+        "Get claim number 853746291035824.",
+        "claim 641285739401562",
+        "Pull up claim number 205638914720483.",
+    ],
+
+    # ── compound_info: confused with pricing_info ───────────────────────
+    "compound_info": [
+        "Show the compound medication details for this claim.",
+        "What are the individual ingredient costs in the compound?",
+        "Display the MIC breakdown for this compound claim.",
+        "Is this a compounded medication? Show ingredients.",
+        "Compound formulation details and ingredient list for this claim.",
+        "Funded versus unfunded compound ingredient costs.",
+    ],
+
+    # ── settlement_info (single claim) vs Settlement (search) ──────────
+    "settlement_info": [
+        "Settlement details for claim 220133725669000 sequence 001.",
+        "Settlement information for claim 222492018072002 sequence 001.",
+        "Settlement report for claim 222492117457002 sequence 001.",
+        "Settlement status for claim 241774768475148 sequence 003.",
+        "Settlement summary for claim 242831720377166 sequence 002.",
+        "Settlement feedback for claim 243122443413000 sequence 001.",
+        "Response information for claim 250023213779000 sequence 001.",
+        "What settlement codes were sent back to the pharmacy for this claim?",
+        "Show the pharmacy feedback codes for this specific claim.",
+    ],
+
+    # ── beneficiary_info: confused with approval_info & member_coverage ─
+    "beneficiary_info": [
+        "What benefit phase is the member in for this claim?",
+        "Show the accumulation status for the member on this claim.",
+        "Display the coverage tier used for this claim.",
+        "What is the member's benefit type for this claim?",
+        "Are medical dollars included in the member's accumulation?",
+        "Linked LOE information for the member on this claim.",
+    ],
+
+    # ── greeting: confused with out_of_scope ───────────────────────────
+    "greeting": [
+        "Hello", "Hi there", "Welcome", "Hiya",
+        "Hello, how are you?", "Hi, good to see you",
+        "Hey", "What's up", "Good morning", "Good afternoon",
+        "Yo!", "Greetings", "Howdy",
+    ],
+
+    # ── out_of_scope: confused with greeting ───────────────────────────
+    "out_of_scope": [
+        "What is the weather today?", "Tell me a joke.",
+        "Who won the Super Bowl?", "How do I cook pasta?",
+        "What is the meaning of life?",
+        "Tell me about the latest iPhone.",
+        "Calculate my taxes for 2025.",
+        "Book me a flight to Hawaii.",
+        "asdfghjkl qwertyuiop",
+        "lorem ipsum dolor sit amet",
+    ],
+
     # ══════════════════════════════════════════════════════════════════════
     # 2. CAP_API ANCHORS (single-claim operations)
     # ══════════════════════════════════════════════════════════════════════
+
+    # ── generic_availability: confused with Generic & daw_info ─────────
+    "generic_availability": [
+        "Are there generic alternatives for the drug on this claim?",
+        "Show the therapeutic equivalents for this prescription.",
+        "Generic availability information for claim 201990819198000 sequence 001.",
+        "Generic substitutes for claim 220992183436835 sequence 002.",
+        "Generic alternative details for claim 230381673488000 sequence 001.",
+        "Substitute drug information for claim 231865207544000 sequence 001.",
+        "List the cheaper generic options for the medication on this claim.",
+        "What formulary alternatives exist for this drug?",
+    ],
 
     "prescriber_info": [
         "Prescriber details for claim 132435151040074 sequence 001.",
@@ -77,15 +156,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Prescriber NPI and name for claim 221775171449000 sequence 003.",
         "Who ordered the medication on claim 221172865083001 sequence 001?",
         "Ordering provider information for claim 230624075311000 sequence 002.",
-    ],
-    "settlement_info": [
-        "Settlement details for claim 220133725669000 sequence 001.",
-        "Settlement information for claim 222492018072002 sequence 001.",
-        "Settlement report for claim 222492117457002 sequence 001.",
-        "Settlement status for claim 241774768475148 sequence 003.",
-        "Settlement summary for claim 242831720377166 sequence 002.",
-        "Settlement feedback for claim 243122443413000 sequence 001.",
-        "Response information for claim 250023213779000 sequence 001.",
     ],
     "audit_info": [
         "When was claim 132435151040074 sequence 001 first created?",
@@ -178,17 +248,8 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
     ],
 
     # ══════════════════════════════════════════════════════════════════════
-    # 4. GENERAL
+    # 4. GENERAL (greeting & out_of_scope are in section 1 above)
     # ══════════════════════════════════════════════════════════════════════
-
-    "greeting": [
-        "Hello", "Hi there", "Welcome", "Hiya",
-        "Hello, how are you?", "Hi, good to see you",
-    ],
-    "out_of_scope": [
-        "What is the weather today?", "Tell me a joke.",
-        "Who won the Super Bowl?", "What's up", "How do I cook pasta?",
-    ],
 
     # ══════════════════════════════════════════════════════════════════════
     # 5. MEMBER_DOMAIN ANCHORS

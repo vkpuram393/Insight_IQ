@@ -358,11 +358,17 @@ class IntentPipeline:
         "help":                {"rejection_reasons"},
         "pricing_info":        {"compound_info", "medicare_part_d", "cob_info"},
         "compound_info":       {"pricing_info"},
-        "claim_status":        {"approval_info", "rejection_reasons"},
+        "claim_status":        {"approval_info", "rejection_reasons", "audit_info"},
         "generic_availability": {"Generic", "daw_info"},
         "fill_date_info":      {"rx_details", "audit_info"},
         "member_demographics": {"member_contact_info"},
         "member_contact_info": {"member_demographics"},
+        "ClaimNum":            {"claim_status", "rx_details"},
+        "settlement_info":     {"Settlement"},
+        "Settlement":          {"settlement_info"},
+        "beneficiary_info":    {"approval_info", "member_coverage"},
+        "greeting":            {"out_of_scope"},
+        "out_of_scope":        {"greeting"},
     }
     CONFUSION_PRONE_INTENTS = set(CONFUSION_PAIRS.keys())
 
