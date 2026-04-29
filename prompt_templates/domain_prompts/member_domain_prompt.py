@@ -4,7 +4,11 @@ Member Domain — LLM Fallback Prompt
 This domain covers member-level queries NOT tied to a specific claim:
   member_coverage, member_hierarchy, benefit_reset_date, family_type,
   family_members, alternate_insurance, medicare_coverage, lics_status,
-  stcob_linkage, cvs_id_lookup, related_cagm, alternate_ids
+  stcob_linkage, cvs_id_lookup, related_cagm, alternate_ids,
+  member_demographics, member_contact_info, member_eligibility_copay,
+  member_transition_status, member_dur_config, member_mbi_number,
+  member_caretaker_info, member_language_pref, member_discount_program,
+  member_override_plan
 """
 
 MEMBER_DOMAIN_PROMPT = """
@@ -18,7 +22,7 @@ The Member Domain handles queries about a MEMBER'S profile, coverage, hierarchy,
 These are NOT tied to a specific claim — they are about the MEMBER themselves.
 If the query mentions a specific claim number, it likely belongs to cap_api or benefits_api instead.
 
-## MEMBER DOMAIN INTENTS (12 intents)
+## MEMBER DOMAIN INTENTS (22 intents)
 
 ### member_coverage
 **What it is:** Member's coverage ELIGIBILITY windows, active coverage status, enrollment dates.
@@ -165,6 +169,143 @@ If the query mentions a specific claim number, it likely belongs to cap_api or b
   - "What alternate IDs are assigned to this member?"
   - "Give me all alternate IDs associated with this member."
 
+### member_demographics
+**What it is:** Member's PERSONAL DETAILS — name (first/last/middle), date of birth,
+  gender, person code, relationship code.
+**Trigger phrases:** "member name", "date of birth", "DOB", "gender", "person code",
+  "relationship code", "demographic", "personal details"
+**Examples:**
+  - "What is the full name and date of birth for this member?"
+  - "Show the gender recorded for this member."
+  - "Display the member's person code and relationship code."
+  - "Retrieve the demographic profile for this member."
+  - "Give me the member's first name, last name, and DOB."
+
+### member_contact_info
+**What it is:** Member's CONTACT INFORMATION — email, phone number, mailing/postal address.
+**Trigger phrases:** "email address", "phone number", "mailing address", "postal address",
+  "contact details", "street address", "city state zip"
+**Examples:**
+  - "What is the email address on file for this member?"
+  - "Show the mailing address for this member."
+  - "Display the primary phone number for this member."
+  - "Retrieve the member's postal address including city and zip."
+  - "Give me the contact details including email and phone."
+**DISAMBIGUATION from member_demographics:**
+  - member_contact_info = email, phone, address (HOW TO REACH the member)
+  - member_demographics = name, DOB, gender (WHO the member IS)
+  - "What is the member's phone?" → member_contact_info
+  - "What is the member's name?" → member_demographics
+
+### member_eligibility_copay
+**What it is:** COPAY CONFIGURATION from the member's eligibility record — copayBrand,
+  copayGeneric, copay3, copay4.
+**Trigger phrases:** "copay configuration", "brand copay", "generic copay", "copay3",
+  "copay4", "eligibility copay", "copay settings", "copay amounts"
+**Examples:**
+  - "What is the brand copay set on this member's eligibility?"
+  - "Show the generic copay amount for this member."
+  - "Display the copay3 and copay4 values from eligibility."
+  - "Retrieve all four copay fields for this member."
+  - "What are the copay amounts assigned to this member's plan?"
+**DISAMBIGUATION from pricing_info (cap_api):**
+  - member_eligibility_copay = copay CONFIGURATION at member/plan level (member_domain)
+  - pricing_info = actual copay CHARGED on a specific claim (cap_api)
+  - "What copay is configured for this member?" → member_eligibility_copay
+  - "What was the copay on claim X?" → pricing_info
+
+### member_transition_status
+**What it is:** Member's TRANSITION FILL status and start date from the eligibility record.
+**Trigger phrases:** "transition status", "transition fill", "transition period",
+  "transition start date", "memberTransition"
+**Examples:**
+  - "What is the transition status for this member?"
+  - "Show the transition start date from the eligibility record."
+  - "Is this member currently in a transition period?"
+  - "Display the memberTransition status for this member."
+  - "When did the transition period start for this member?"
+**DISAMBIGUATION from approval_info (benefits_api):**
+  - member_transition_status = member-level transition ELIGIBILITY (member_domain)
+  - approval_info = transition fill applied to a SPECIFIC CLAIM (benefits_api)
+  - "Is this member in transition?" → member_transition_status
+  - "Was TF applied to claim X?" → approval_info
+
+### member_dur_config
+**What it is:** DUR (Drug Utilization Review) KEY and PROCESS FLAG configuration.
+**Trigger phrases:** "DUR configuration", "DUR key", "DUR process flag",
+  "drugUtilizationReviewKey", "DUR processing", "DUR enabled"
+**Examples:**
+  - "What is the DUR configuration key for this member?"
+  - "Show the drug utilization review process flag."
+  - "Is DUR processing enabled for this member?"
+  - "Display the drugUtilizationReviewKey for this member."
+  - "Retrieve the member DUR review key and process flag."
+
+### member_mbi_number
+**What it is:** MEDICARE BENEFICIARY IDENTIFIER (MBI) number from the Part D record.
+**Trigger phrases:** "MBI number", "Medicare Beneficiary Identifier", "mbiNumber",
+  "MBI on file", "Medicare ID number"
+**Examples:**
+  - "What is the MBI number for this member?"
+  - "Show the Medicare Beneficiary Identifier on file."
+  - "Retrieve the MBI from the Medicare Part D record."
+  - "Display the mbiNumber for this member."
+  - "What MBI number is assigned to this member?"
+**DISAMBIGUATION from medicare_coverage:**
+  - member_mbi_number = the specific MBI NUMBER/ID (identifier)
+  - medicare_coverage = Part D ENROLLMENT STATUS (active/inactive)
+  - "What is the MBI?" → member_mbi_number
+  - "Is the member enrolled in Medicare?" → medicare_coverage
+
+### member_caretaker_info
+**What it is:** CARETAKER details from Medicare Part D — caretaker name and address.
+**Trigger phrases:** "caretaker", "caretaker name", "caretaker address",
+  "who is the caretaker", "caretaker on file"
+**Examples:**
+  - "Show the caretaker information for this Medicare member."
+  - "Who is the caretaker on file for this member?"
+  - "Display the caretaker name and address from Part D."
+  - "Is there a caretaker assigned to this member?"
+  - "Retrieve the caretaker details including city and state."
+
+### member_language_pref
+**What it is:** Member's LANGUAGE CODE / PREFERENCE (mbrLangCode).
+**Trigger phrases:** "language preference", "language code", "mbrLangCode",
+  "preferred language", "communication language"
+**Examples:**
+  - "What is the language preference for this member?"
+  - "Show the member language code on file."
+  - "Display the preferred language setting for this member."
+  - "What language is set for communications with this member?"
+  - "Retrieve the mbrLangCode from the member base record."
+
+### member_discount_program
+**What it is:** DISCOUNT PROGRAM TYPE assigned to the member.
+**Trigger phrases:** "discount program", "discountProgramType", "discount enrollment",
+  "discount plan"
+**Examples:**
+  - "What discount program is assigned to this member?"
+  - "Show the discount program type on the member record."
+  - "Is this member enrolled in a discount program?"
+  - "Display the discountProgramType for this member."
+  - "Retrieve the discount program details for this member."
+
+### member_override_plan
+**What it is:** Member-level OVERRIDE PLAN ID from the eligibility record (memberOverridePlan).
+**Trigger phrases:** "override plan", "memberOverridePlan", "plan override",
+  "override plan ID", "member override"
+**Examples:**
+  - "Does this member have an override plan on file?"
+  - "Show the member override plan ID from eligibility."
+  - "Is an override plan configured for this member?"
+  - "Display the memberOverridePlan from the eligibility record."
+  - "What override plan is assigned to this member's eligibility?"
+**DISAMBIGUATION from pa_summary (override_domain):**
+  - member_override_plan = member-level plan override in ELIGIBILITY (member_domain)
+  - pa_summary = Prior Authorization record overview (override_domain)
+  - "Override plan for the member" → member_override_plan
+  - "PA overview/summary" → pa_summary
+
 ## DECISION TREE
 1. Coverage ELIGIBILITY / ACTIVE STATUS → member_coverage
 2. MEDICARE / Part D enrollment → medicare_coverage
@@ -178,6 +319,16 @@ If the query mentions a specific claim number, it likely belongs to cap_api or b
 10. CVS ID → cvs_id_lookup
 11. RELATED CAGM → related_cagm
 12. ALTERNATE IDs → alternate_ids
+13. NAME / DOB / GENDER / PERSON CODE → member_demographics
+14. EMAIL / PHONE / ADDRESS → member_contact_info
+15. COPAY CONFIGURATION (brand/generic/copay3/copay4) → member_eligibility_copay
+16. TRANSITION STATUS / TRANSITION START DATE → member_transition_status
+17. DUR KEY / DUR PROCESS FLAG → member_dur_config
+18. MBI NUMBER / MEDICARE BENEFICIARY ID → member_mbi_number
+19. CARETAKER NAME / ADDRESS → member_caretaker_info
+20. LANGUAGE CODE / PREFERENCE → member_language_pref
+21. DISCOUNT PROGRAM TYPE → member_discount_program
+22. OVERRIDE PLAN ID FROM ELIGIBILITY → member_override_plan
 
 ## COMMON CONFUSION PAIRS
 
@@ -192,4 +343,18 @@ If the query mentions a specific claim number, it likely belongs to cap_api or b
 | "COB for claim X" | cob_info (cap_api) | Claim-level COB |
 | "CAG hierarchy" | member_hierarchy | Organizational structure |
 | "Related CAGMs" | related_cagm | Linked CAGM records |
+| "Member's name or DOB" | member_demographics | Personal details |
+| "Member's email/phone" | member_contact_info | Contact information |
+| "Brand copay configured" | member_eligibility_copay | Eligibility copay |
+| "Copay on claim X" | pricing_info (cap_api) | Claim-level pricing |
+| "Transition status" | member_transition_status | Member transition |
+| "TF applied to claim" | approval_info (benefits_api) | Claim-level TF |
+| "DUR key/flag" | member_dur_config | DUR configuration |
+| "MBI number" | member_mbi_number | Medicare ID |
+| "Enrolled in Medicare?" | medicare_coverage | Enrollment status |
+| "Caretaker details" | member_caretaker_info | Caretaker info |
+| "Language preference" | member_language_pref | Language code |
+| "Discount program" | member_discount_program | Discount type |
+| "Override plan ID" | member_override_plan | Eligibility override |
+| "PA summary/overview" | pa_summary (override_domain) | PA config overview |
 """

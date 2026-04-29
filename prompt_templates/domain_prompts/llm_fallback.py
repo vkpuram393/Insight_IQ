@@ -145,6 +145,16 @@ INTENT_DESC = {
     "cvs_id_lookup": "CVS ID for the member",
     "related_cagm": "Related CAGMs by CVS ID or family ID",
     "alternate_ids": "All alternate IDs on file for the member",
+    "member_demographics": "Member name, DOB, gender, person code, relationship code",
+    "member_contact_info": "Member email, phone, mailing/postal address",
+    "member_eligibility_copay": "Copay fields: copayBrand, copayGeneric, copay3, copay4",
+    "member_transition_status": "Member transition fill status and start date",
+    "member_dur_config": "DUR review key and process flag configuration",
+    "member_mbi_number": "Medicare Beneficiary Identifier (MBI) number",
+    "member_caretaker_info": "Caretaker name and address from Part D",
+    "member_language_pref": "Member language code/preference",
+    "member_discount_program": "Discount program type for the member",
+    "member_override_plan": "Member override plan ID from eligibility",
     # override_domain
     "pa_summary": "Prior authorization summary, key fields overview",
     "pa_override_reject": "Will PA override reject codes 75/70/76",
@@ -152,6 +162,16 @@ INTENT_DESC = {
     "pa_copay_pricing": "PA copay override impact on pricing",
     "pa_drug_coverage": "Drugs covered by this PA (GPI/NDC lists)",
     "pa_claim_usage": "How many claims used this PA, utilization count",
+    "pa_reason_code": "PA reason code (U1, LC, OD, OA, US, U3)",
+    "pa_effective_dates": "PA effective begin/end dates, expiration",
+    "pa_agent_code": "Agent/source code on PA (A, C, 3, H)",
+    "pa_ignore_status": "Ignore status code (Y, P, 3)",
+    "pa_specialty_rx_override": "Specialty Rx reject override indicator",
+    "pa_clinical_admin_code": "Clinical administration code (A, C, blank)",
+    "pa_transform_care": "Transform care type on PA",
+    "pa_follow_me_logic": "Follow me logic indicator on PA",
+    "pa_drug_type_indicator": "Authorized drug type (G=GPI, N=NDC)",
+    "pa_modification_history": "PA last modified date/time",
 }
 
 

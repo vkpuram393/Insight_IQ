@@ -1492,6 +1492,239 @@ class embeddingVars:
     ],
 
     # ──────────────────────────────────────────────────────────────────
+    # member_domain intents  (additional – derived from Members API response)
+    # ──────────────────────────────────────────────────────────────────
+    "member_demographics": [
+        "show the demographic details for this member",
+        "what is the member's full name",
+        "display the date of birth for this member",
+        "retrieve the gender recorded for this member",
+        "tell me the person code assigned to this member",
+        "give me the relationship code for this member",
+        "what is the member's first and last name",
+        "show the member's date of birth and gender",
+        "pull up the demographic profile for member John Doe",
+        "fetch the personal details for this member",
+        "display the member's name, DOB, and gender",
+        "what is the relationship code for this member to the subscriber",
+        "retrieve the person code on the member record",
+        "tell me the member's middle name",
+        "show the member's basic demographic information",
+        "give me the biographical details for this member",
+        "what gender is recorded for this member",
+        "display the subscriber relationship for this member",
+        "pull up the personal profile for this member",
+        "fetch the name and date of birth for member ID 123456789",
+    ],
+
+    "member_contact_info": [
+        "show the contact information for this member",
+        "what is the email address on file for this member",
+        "display the member's mailing address",
+        "retrieve the phone number for this member",
+        "tell me the member's postal address",
+        "give me the email associated with this member",
+        "what is the member's street address",
+        "show the primary phone number for this member",
+        "pull up the contact details for member John Doe",
+        "fetch the member's city, state, and zip code",
+        "display the mailing address on the member record",
+        "what phone number is on file for this member",
+        "retrieve the member's email and phone",
+        "tell me the member's address including zip code",
+        "show the full postal address for this member",
+        "give me the member's country of residence",
+        "what is the street address for this member",
+        "display the email address and last update date",
+        "pull up the phone and email for this member",
+        "fetch the contact information including address and phone",
+    ],
+
+    "member_eligibility_copay": [
+        "show the copay configuration for this member",
+        "what is the brand copay set on the member's eligibility",
+        "display the generic copay amount for this member",
+        "retrieve the copay3 and copay4 values for this member",
+        "tell me the member's copay settings from eligibility",
+        "give me the brand and generic copay amounts",
+        "what copay amounts are assigned to this member",
+        "show the eligibility-level copay details",
+        "pull up the member copay breakdown",
+        "fetch the copayBrand and copayGeneric for this member",
+        "display all four copay fields for this member",
+        "what is the copay4 value on the member's eligibility record",
+        "retrieve the copay tiers for this member",
+        "tell me if this member has a zero-dollar copay",
+        "show the member-level copay amounts for brand drugs",
+        "give me the copay configuration from the eligibility segment",
+        "what are the copay values assigned to this member's plan",
+        "display the generic versus brand copay for this member",
+        "pull up the copay details from the eligibility record",
+        "fetch all copay fields including copay3 and copay4",
+    ],
+
+    "member_transition_status": [
+        "what is the transition status for this member",
+        "show the member's transition fill eligibility",
+        "display the transition start date for this member",
+        "retrieve the member transition status from eligibility",
+        "tell me if this member is in a transition period",
+        "give me the transition details for this member",
+        "is this member currently in a transition window",
+        "show the memberTransition status and start date",
+        "pull up the transition fill status for this member",
+        "fetch the transition information from eligibility",
+        "what is the transition start date for this member",
+        "display whether this member has an active transition",
+        "retrieve the transition period details for this member",
+        "tell me the member's transition configuration",
+        "give me the transition status from the eligibility record",
+        "show if this member qualifies for transition fills",
+        "when did the transition period start for this member",
+        "display the transition window for this member's eligibility",
+        "pull up the transition fill eligibility for this member",
+        "fetch the memberTransition status for member John Doe",
+    ],
+
+    "member_dur_config": [
+        "what is the DUR configuration for this member",
+        "show the drug utilization review key for this member",
+        "display the DUR process flag for this member",
+        "retrieve the member's DUR settings",
+        "tell me the DUR key assigned to this member",
+        "give me the drug utilization review configuration",
+        "is DUR processing enabled for this member",
+        "show the drugUtilizationReviewKey for this member",
+        "pull up the DUR processing flag for this member",
+        "fetch the member-level DUR setup",
+        "what DUR key is assigned to this member's record",
+        "display whether DUR processing is active for this member",
+        "retrieve the DUR review key and flag for this member",
+        "tell me if the DUR process flag is set to Y for this member",
+        "give me the member DUR review configuration",
+        "show the utilization review settings for this member",
+        "what is the drugUtilizationReviewProcessFlag for this member",
+        "display the DUR key from the member base record",
+        "pull up the DUR configuration details for this member",
+        "fetch the drug utilization review key and process flag",
+    ],
+
+    "member_mbi_number": [
+        "what is the MBI number for this member",
+        "show the Medicare Beneficiary Identifier for this member",
+        "display the MBI on file for this member",
+        "retrieve the MBI number from the Medicare Part D record",
+        "tell me this member's MBI",
+        "give me the Medicare Beneficiary Identifier number",
+        "what MBI number is assigned to this member",
+        "show the mbiNumber from the Medicare segment",
+        "pull up the MBI for this member",
+        "fetch the Medicare Beneficiary Identifier for member John Doe",
+        "what is the MBI associated with this member's Part D enrollment",
+        "display the member's MBI from the Medicare Part D record",
+        "retrieve the MBI for this Medicare member",
+        "tell me the Medicare Beneficiary Identifier on file",
+        "give me the MBI details for this member",
+        "show the MBI number linked to this member's Medicare coverage",
+        "what MBI is recorded on the Part D segment",
+        "display the mbiNumber for this member",
+        "pull up the Medicare Beneficiary ID for this member",
+        "fetch the MBI assigned to this member",
+    ],
+
+    "member_caretaker_info": [
+        "show the caretaker information for this member",
+        "who is the caretaker on file for this Medicare member",
+        "display the caretaker name and address",
+        "retrieve the caretaker details from the Part D record",
+        "tell me if there is a caretaker assigned to this member",
+        "give me the caretaker's first and last name",
+        "what is the caretaker address for this member",
+        "show the caretaker city, state, and zip",
+        "pull up the caretaker information from Medicare Part D",
+        "fetch the caretaker details for this member",
+        "is there a caretaker listed on the Medicare record",
+        "display the caretaker contact information for this member",
+        "retrieve the caretaker name on the Part D segment",
+        "tell me the caretaker's full address",
+        "give me the caretaker details from the Medicare enrollment",
+        "show the caretaker fields on the Medicare Part D record",
+        "who is listed as the caretaker for this member",
+        "display caretaker first name and last name for this member",
+        "pull up the caretaker address from the Part D record",
+        "fetch the caretaker information for member John Doe",
+    ],
+
+    "member_language_pref": [
+        "what is the language preference for this member",
+        "show the member's language code",
+        "display the preferred language for this member",
+        "retrieve the language setting on the member record",
+        "tell me the language code assigned to this member",
+        "give me the member's language preference",
+        "what language is set for this member",
+        "show the mbrLangCode for this member",
+        "pull up the language preference for member John Doe",
+        "fetch the member language code from the base record",
+        "what language does this member prefer for communications",
+        "display the language code on file for this member",
+        "retrieve the member's communication language setting",
+        "tell me the preferred language for this member",
+        "give me the language code from the member base",
+        "show the language configuration for this member",
+        "is this member's language set to English or Spanish",
+        "display the member language preference code",
+        "pull up the language setting for this member",
+        "fetch the language code assigned to this member",
+    ],
+
+    "member_discount_program": [
+        "what discount program is assigned to this member",
+        "show the discount program type for this member",
+        "display the member's discount program information",
+        "retrieve the discountProgramType from the member record",
+        "tell me if this member is enrolled in a discount program",
+        "give me the discount program details for this member",
+        "is this member part of a discount program",
+        "show the discount program configuration for this member",
+        "pull up the discount program type for this member",
+        "fetch the discount program enrollment for member John Doe",
+        "what type of discount program does this member have",
+        "display the discount program on file for this member",
+        "retrieve the discount program status for this member",
+        "tell me the discount program type assigned to this member",
+        "give me the discount program designation from the member base",
+        "show if a discount program is active for this member",
+        "what is the discountProgramType for this member",
+        "display the member's discount program enrollment details",
+        "pull up the discount program information from the member record",
+        "fetch the discount program type for this member",
+    ],
+
+    "member_override_plan": [
+        "does this member have an override plan",
+        "show the member override plan ID",
+        "display the override plan assigned to this member",
+        "retrieve the memberOverridePlan from the eligibility record",
+        "tell me if an override plan is configured for this member",
+        "give me the override plan details for this member",
+        "what override plan is on file for this member",
+        "show the member override plan configuration",
+        "pull up the override plan for this member's eligibility",
+        "fetch the override plan ID for member John Doe",
+        "is there a member-level override plan assigned",
+        "display the override plan from the eligibility segment",
+        "retrieve the override plan for this member",
+        "tell me the override plan ID on the eligibility record",
+        "give me the memberOverridePlan ID for this member",
+        "show if an override plan exists for this member",
+        "what is the member override plan configuration",
+        "display the override plan details from eligibility",
+        "pull up the member-level plan override for this member",
+        "fetch the override plan assigned to this member's eligibility",
+    ],
+
+    # ──────────────────────────────────────────────────────────────────
     # override_domain intents  (PA overrides, field help, pricing impact)
     # ──────────────────────────────────────────────────────────────────
     "pa_summary": [
@@ -1631,6 +1864,239 @@ class embeddingVars:
         "retrieve the total number of claims linked to this PA",
         "how many claims have been processed with this PA",
     ],
+
+    # ──────────────────────────────────────────────────────────────────
+    # override_domain intents  (additional – derived from Overrides API response)
+    # ──────────────────────────────────────────────────────────────────
+    "pa_reason_code": [
+        "what is the reason code on this PA",
+        "show the reason code assigned to this prior authorization",
+        "display the PA reason code for this override",
+        "retrieve the reason code from the PA record",
+        "tell me the reason code for this prior auth",
+        "give me the reason code on this PA such as U1 or LC",
+        "what reason code was used on this prior authorization",
+        "show whether the reason code is U1, OD, OA, or LC",
+        "pull up the reason code for this PA",
+        "fetch the PA reason code for this member",
+        "is the reason code on this PA set to U1",
+        "display the override reason code for this PA",
+        "retrieve the reason code classification on this prior auth",
+        "tell me if this PA has a reason code of LC",
+        "give me the reason code details for this authorization",
+        "what does the reason code on this PA indicate",
+        "show all PAs with reason code OD",
+        "which PAs have reason code U3",
+        "display the reason code meaning for this PA",
+        "fetch the reason code and its description for this PA",
+    ],
+
+    "pa_effective_dates": [
+        "what are the effective dates for this PA",
+        "show the start and end dates on this prior authorization",
+        "display the effective period for this PA",
+        "retrieve the begin and end dates for this PA",
+        "tell me when this PA is effective",
+        "give me the date range of this prior authorization",
+        "when does this PA start and when does it expire",
+        "show the effective begin date for this PA",
+        "pull up the effective period for this override",
+        "fetch the PA start date and end date",
+        "is this PA currently within its effective period",
+        "display the dateBegin and dateEnd for this PA",
+        "has this prior authorization expired",
+        "when does this PA become effective",
+        "show the effective dates for all PAs on this member",
+        "retrieve the PA expiration date",
+        "tell me if this PA is still active based on its dates",
+        "give me the effective window for this prior authorization",
+        "what is the end date of this PA",
+        "display the effective start date for this PA",
+    ],
+
+    "pa_agent_code": [
+        "what is the agent code on this PA",
+        "show the agent code assigned to this prior authorization",
+        "display the PA agent code for this override",
+        "retrieve the agent code from the PA record",
+        "tell me the agent code for this prior auth",
+        "give me the agent code on this PA",
+        "what agent code created or modified this PA",
+        "show whether the agent code is A, C, 3, or H",
+        "pull up the agent code for this PA",
+        "fetch the agent code associated with this prior authorization",
+        "who created this PA based on the agent code",
+        "display the agent source code for this PA",
+        "retrieve the agent code classification on this PA",
+        "tell me if this PA was created by agent code C",
+        "give me the agent code details for this authorization",
+        "what does the agent code on this PA mean",
+        "show all PAs created by agent code 3",
+        "which PAs have agent code H",
+        "display the agent code for each PA on this member",
+        "fetch the agent code that last modified this PA",
+    ],
+
+    "pa_ignore_status": [
+        "what is the ignore status code on this PA",
+        "show the ignore status for this prior authorization",
+        "display the ignoreStatusCode for this PA",
+        "retrieve the ignore status setting from the PA record",
+        "tell me the ignore status code for this prior auth",
+        "give me the ignore status flag on this PA",
+        "is the ignore status code set to Y on this PA",
+        "show whether the ignore status is Y, P, or another value",
+        "pull up the ignore status code for this PA",
+        "fetch the ignore status for this prior authorization",
+        "what does the ignore status code mean on this PA",
+        "display the ignore status setting for this override",
+        "retrieve the ignore status value for this PA",
+        "tell me if this PA has an active ignore status",
+        "give me the ignore status code details for this authorization",
+        "is the PA ignore status set to P for pending",
+        "show all PAs with ignore status code Y",
+        "which PAs have ignore status P",
+        "display the ignoreStatusCode for each PA on this member",
+        "what ignore status is configured on this prior auth",
+    ],
+
+    "pa_specialty_rx_override": [
+        "does this PA override the specialty prescription reject",
+        "show the specialty Rx override indicator for this PA",
+        "display the overrideSpecialtyPrescriptionRejectIndicator",
+        "retrieve the specialty prescription reject override flag",
+        "tell me if this PA overrides specialty Rx rejection",
+        "give me the specialty prescription override status",
+        "is the specialty Rx reject indicator set on this PA",
+        "show whether this PA bypasses specialty prescription rejects",
+        "pull up the specialty override flag for this PA",
+        "fetch the specialty Rx reject override for this prior auth",
+        "does this PA allow specialty prescriptions to bypass rejection",
+        "display the specialty prescription reject setting on this PA",
+        "retrieve the specialty override indicator for this PA",
+        "tell me if the specialty Rx override is true or false",
+        "give me the specialty prescription reject indicator for this PA",
+        "is the specialty prescription reject overridden by this PA",
+        "show the specialty Rx indicator for all PAs on this member",
+        "which PAs have the specialty prescription override enabled",
+        "display the specialty reject flag for this prior authorization",
+        "what is the specialty prescription override status on this PA",
+    ],
+
+    "pa_clinical_admin_code": [
+        "what is the clinical administration code on this PA",
+        "show the clinical admin code for this prior authorization",
+        "display the clinicalAdministrationCode for this PA",
+        "retrieve the clinical administration code from the PA record",
+        "tell me the clinical admin code assigned to this PA",
+        "give me the clinical administration code on this PA",
+        "is there a clinical administration code set on this PA",
+        "show whether the clinical admin code is A or C",
+        "pull up the clinical admin code for this PA",
+        "fetch the clinical administration code for this prior auth",
+        "what does the clinical administration code mean on this PA",
+        "display the clinical admin setting for this override",
+        "retrieve the clinical admin code value for this PA",
+        "tell me if this PA has a clinical administration code of C",
+        "give me the clinical admin code details for this authorization",
+        "is the clinical admin code blank on this PA",
+        "show all PAs with clinical administration code A",
+        "which PAs have a clinical administration code configured",
+        "display the clinical admin code for each PA on this member",
+        "what clinical administration code is assigned to this PA",
+    ],
+
+    "pa_transform_care": [
+        "what is the transform care type on this PA",
+        "show the transform care setting for this prior authorization",
+        "display the transformCare type for this PA",
+        "retrieve the transform care configuration from the PA",
+        "tell me the transform care type assigned to this PA",
+        "give me the transform care details on this PA",
+        "is there a transform care type configured on this PA",
+        "show the transform care type value for this PA",
+        "pull up the transform care setting for this PA",
+        "fetch the transform care type for this prior auth",
+        "what does the transform care type indicate on this PA",
+        "display the transform care configuration for this override",
+        "retrieve the transform care type value for this PA",
+        "tell me if this PA has an active transform care type",
+        "give me the transform care type details for this authorization",
+        "is the transform care type set or blank on this PA",
+        "show all PAs with a transform care type configured",
+        "which PAs have a transform care type assigned",
+        "display the transform care type for each PA on this member",
+        "what transform care configuration is on this prior auth",
+    ],
+
+    "pa_follow_me_logic": [
+        "is follow me logic enabled on this PA",
+        "show the follow me logic indicator for this PA",
+        "display the followMeLogicIndicator for this PA",
+        "retrieve the follow me logic flag from the PA record",
+        "tell me if follow me logic is active on this PA",
+        "give me the follow me logic setting on this PA",
+        "is the follow me logic indicator true or false",
+        "show whether follow me logic is enabled for this PA",
+        "pull up the follow me logic flag for this PA",
+        "fetch the follow me logic indicator for this prior auth",
+        "does this PA use follow me logic",
+        "display the follow me logic configuration for this override",
+        "retrieve the follow me logic value for this PA",
+        "tell me the follow me logic status for this PA",
+        "give me the follow me logic details for this authorization",
+        "check if follow me logic is turned on for this PA",
+        "show all PAs with follow me logic enabled",
+        "which PAs have the follow me indicator set to true",
+        "display the follow me logic for each PA on this member",
+        "what is the follow me logic setting on this prior auth",
+    ],
+
+    "pa_drug_type_indicator": [
+        "what is the authorized drug type on this PA",
+        "show the drug type indicator for this prior authorization",
+        "display the authorizedDrugType for this PA",
+        "retrieve the drug type code from the PA record",
+        "tell me if this PA uses GPI or NDC drug type",
+        "give me the authorized drug type on this PA",
+        "is the drug type set to G for GPI on this PA",
+        "show whether the drug type is G or N on this PA",
+        "pull up the drug type indicator for this PA",
+        "fetch the authorized drug type for this prior auth",
+        "what does the drug type indicator mean on this PA",
+        "display the drug matching type for this PA",
+        "retrieve the authorized drug type value for this PA",
+        "tell me if this PA matches drugs by GPI or NDC",
+        "give me the drug type code for this authorization",
+        "is the authorized drug type NDC on this PA",
+        "show all PAs with authorized drug type G",
+        "which PAs use NDC-based drug matching",
+        "display the drug type indicator for each PA on this member",
+        "what authorized drug type is configured on this PA",
+    ],
+
+    "pa_modification_history": [
+        "when was this PA last modified",
+        "show the modification date and time for this PA",
+        "display the modifyDateTime for this prior authorization",
+        "retrieve the last update timestamp for this PA",
+        "tell me when this PA was last changed",
+        "give me the modification history for this PA",
+        "what is the last modified date for this PA",
+        "show the most recent update timestamp on this PA",
+        "pull up the modification date for this PA",
+        "fetch the last modified date and time for this prior auth",
+        "when was this prior authorization last updated",
+        "display the update timestamp for this override",
+        "retrieve the modification timestamp for this PA",
+        "tell me the last change date for this PA",
+        "give me the modifyDateTime from the PA record",
+        "how recently was this PA modified",
+        "show all PAs sorted by modification date",
+        "which PA was most recently modified",
+        "display the last update date for each PA on this member",
+        "what is the latest modification timestamp on this PA",
+    ],
 }
     DOMAIN_REGISTRY = {
         "benefits_api": {
@@ -1712,22 +2178,35 @@ class embeddingVars:
             "Member demographics and eligibility API: coverage/eligibility windows, "
             "client-CAG hierarchy lookup, benefit reset dates, family type and family "
             "members, alternate insurance, Medicare Part-D enrollment, LICS status, "
-            "STCOB linkage, CVS ID lookup, related CAGMs, and alternate IDs."
+            "STCOB linkage, CVS ID lookup, related CAGMs, alternate IDs, member "
+            "demographics (name/DOB/gender), contact info (email/phone/address), "
+            "eligibility copay configuration, transition status, DUR config, MBI number, "
+            "caretaker info, language preference, discount program, and override plan."
         ),
         "api_endpoint": "/myclaims/members/v1/member",
         "intents": [
-            "member_coverage",      # Coverage / eligibility windows & active status
-            "member_hierarchy",     # Client / CAG / hierarchy membership
-            "benefit_reset_date",   # Benefit year reset date
-            "family_type",          # Individual vs family classification
-            "family_members",       # List members in same family
-            "alternate_insurance",  # Other / secondary insurance on file
-            "medicare_coverage",    # Part-D / Med-D / Medicare enrollment
-            "lics_status",          # Low Income Subsidy status / level
-            "stcob_linkage",        # Short-term COB linkage
-            "cvs_id_lookup",        # CVS ID for the member
-            "related_cagm",         # Related CAGMs by CVS ID or Family ID
-            "alternate_ids",        # All alternate IDs on file
+            "member_coverage",          # Coverage / eligibility windows & active status
+            "member_hierarchy",         # Client / CAG / hierarchy membership
+            "benefit_reset_date",       # Benefit year reset date
+            "family_type",              # Individual vs family classification
+            "family_members",           # List members in same family
+            "alternate_insurance",      # Other / secondary insurance on file
+            "medicare_coverage",        # Part-D / Med-D / Medicare enrollment
+            "lics_status",              # Low Income Subsidy status / level
+            "stcob_linkage",            # Short-term COB linkage
+            "cvs_id_lookup",            # CVS ID for the member
+            "related_cagm",             # Related CAGMs by CVS ID or Family ID
+            "alternate_ids",            # All alternate IDs on file
+            "member_demographics",      # Name, DOB, gender, person/relationship code
+            "member_contact_info",      # Email, phone, postal address
+            "member_eligibility_copay", # Brand/generic/copay3/copay4 from eligibility
+            "member_transition_status", # Transition status & start date
+            "member_dur_config",        # DUR review key & process flag
+            "member_mbi_number",        # Medicare Beneficiary Identifier
+            "member_caretaker_info",    # Caretaker name & address from Part D
+            "member_language_pref",     # Member language code / preference
+            "member_discount_program",  # Discount program type
+            "member_override_plan",     # Member-level override plan from eligibility
         ],
     },
     "override_domain": {
@@ -1735,17 +2214,30 @@ class embeddingVars:
         "description": (
             "Prior Authorization (PA) override operations: PA summary of key fields, "
             "reject code override analysis (75/70/76), PA field help and documentation, "
-            "copay pricing impact, drug coverage scope (GPI/NDC lists), and PA claim "
-            "usage statistics."
+            "copay pricing impact, drug coverage scope (GPI/NDC lists), PA claim "
+            "usage statistics, reason codes (U1/LC/OD/OA/US/U3), effective date periods, "
+            "agent codes, ignore status codes, specialty Rx reject override indicator, "
+            "clinical administration codes, transform care type, follow me logic, "
+            "authorized drug type indicator (GPI vs NDC), and PA modification history."
         ),
         "api_endpoint": "/myclaims/overrides/v1/pa",
         "intents": [
-            "pa_summary",           # High-level PA summary of key fields
-            "pa_override_reject",   # Will PA override reject 75/70/76
-            "pa_field_help",        # What does a specific PA field do
-            "pa_copay_pricing",     # Copay influence on pricing
-            "pa_drug_coverage",     # Drugs covered by this PA (GPI/NDC)
-            "pa_claim_usage",       # How many claims used this PA
+            "pa_summary",               # High-level PA summary of key fields
+            "pa_override_reject",       # Will PA override reject 75/70/76
+            "pa_field_help",            # What does a specific PA field do
+            "pa_copay_pricing",         # Copay influence on pricing
+            "pa_drug_coverage",         # Drugs covered by this PA (GPI/NDC)
+            "pa_claim_usage",           # How many claims used this PA
+            "pa_reason_code",           # Reason code on the PA (U1, LC, OD, OA, US, U3)
+            "pa_effective_dates",       # Effective period begin/end dates
+            "pa_agent_code",            # Agent/source code (A, C, 3, H, etc.)
+            "pa_ignore_status",         # Ignore status code (Y, P, 3)
+            "pa_specialty_rx_override", # Specialty Rx reject override indicator
+            "pa_clinical_admin_code",   # Clinical administration code (A, C, blank)
+            "pa_transform_care",        # Transform care type
+            "pa_follow_me_logic",       # Follow me logic indicator
+            "pa_drug_type_indicator",   # Authorized drug type (G=GPI, N=NDC)
+            "pa_modification_history",  # Last modified date/time
         ],
     },
 }

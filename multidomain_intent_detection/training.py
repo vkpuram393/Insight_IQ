@@ -31,6 +31,7 @@ from multidomain_intent_detection.normalizer import normalize_query
 from multidomain_intent_detection.embeddings import get_embedder
 from multidomain_intent_detection.pipeline import IntentPipeline
 from multidomain_intent_detection.llm_fallback import llm_classify
+from multidomain_intent_detection.augmented_examples import AUGMENTED_EXAMPLES
 
 logger = logging.getLogger(__name__)
 
@@ -81,251 +82,17 @@ def load_embeddings() -> Dict[str, list]:
     return cached
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Augmented training examples  (real-world phrasing patterns)
-# ─────────────────────────────────────────────────────────────────────────────
-
-AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
-    # ── cap_api anchors ──────────────────────────────────────────────────
-    "prescriber_info": [
-        "Prescriber details for claim 132435151040074 sequence 001.",
-        "Physician information for claim 150692388845000 sequence 001.",
-        "Doctor's name for claim 160060096136030 sequence 001.",
-        "Prescriber NPI for claim 191406379285000 sequence 001.",
-        "Who prescribed the medication on claim 130041467416065 sequence 001?",
-        "Which physician wrote the prescription for claim 180571470939000?",
-        "Prescribing physician information for claim 221663541811000 sequence 001.",
-        "Prescriber NPI and name for claim 221775171449000 sequence 003.",
-        "Who ordered the medication on claim 221172865083001 sequence 001?",
-        "Ordering provider information for claim 230624075311000 sequence 002.",
-    ],
-    "settlement_info": [
-        "Settlement details for claim 220133725669000 sequence 001.",
-        "Settlement information for claim 222492018072002 sequence 001.",
-        "Settlement report for claim 222492117457002 sequence 001.",
-        "Settlement status for claim 241774768475148 sequence 003.",
-        "Settlement summary for claim 242831720377166 sequence 002.",
-        "Settlement feedback for claim 243122443413000 sequence 001.",
-        "Response information for claim 250023213779000 sequence 001.",
-    ],
-    "audit_info": [
-        "When was claim 132435151040074 sequence 001 first created?",
-        "Claim 201503823714118 sequence 001 add date and change date.",
-        "Who last modified claim 201752592251000 sequence 001 and when?",
-        "What is the creation timestamp of claim 211263773300000 sequence 004?",
-        "When was claim 221172865083001 sequence 001 added to the system?",
-    ],
-    "reversal_info": [
-        "R&R information for claim 242905816136000 sequence 001.",
-        "R&R status for claim 242905816136000 sequence 001.",
-        "R&R report for claim 253603736282009 sequence 001.",
-        "Was claim 231181462825000 sequence 001 reversed?",
-        "Claim modifications for claim 260021649904000 sequence 005.",
-    ],
-    "claim_status": [
-        "What is the current status of claim 130041467416065 sequence 001?",
-        "Is claim 220133725669000 sequence 001 paid, rejected, or pending?",
-        "Quick status check on claim 230381673488000 sequence 001.",
-        "What was the result of processing claim 230624075311000 sequence 002?",
-        "Adjudication outcome for claim 191406379285000 sequence 001.",
-    ],
-    "pricing_info": [
-        "What is the copay on claim 132435151040074 sequence 001?",
-        "Show the pricing breakdown for claim 220133725669000 sequence 001.",
-        "What did the patient pay on this specific claim?",
-        "Ingredient cost and fees for claim 191406379285000 sequence 001.",
-        "Copay calculation steps for this claim.",
-    ],
-    "pharmacy_info": [
-        "Which pharmacy dispensed claim 132435151040074 sequence 001?",
-        "Pharmacy details for claim 220133725669000 sequence 001.",
-        "Where was this specific claim filled?",
-        "Dispensing pharmacy name for this claim.",
-        "Store location for claim 191406379285000 sequence 001.",
-    ],
-    # ── claim_history_search anchors ─────────────────────────────────────
-    "Pricing": [
-        "How much did the member pay for METFORMIN across all fills?",
-        "Show me the total spent on ATORVASTATIN prescriptions.",
-        "What was the copay trend for LISINOPRIL fills over time?",
-        "Compare costs across multiple SERTRALINE claims.",
-        "List the pricing for all GABAPENTIN claims this year.",
-    ],
-    "Settlement": [
-        "Show claims with settlement code 358.",
-        "Filter by settlement code 001 across all claims.",
-        "Which claims returned settlement code 425?",
-        "List fills that received settlement code 310.",
-        "Retrieve claims with pharmacy settlement response 200.",
-    ],
-    "Pharmacy": [
-        "Show claims filled at CVS PHARMACY 00610.",
-        "List fills dispensed by WALGREENS 04528.",
-        "Retrieve claims from RITE AID 11237.",
-        "Which fills were filled at TARGET PHARMACY 01893?",
-        "Give me claims processed at WALMART PHARMACY 10340.",
-    ],
-    "Prescriber": [
-        "Show claims by prescriber NOEUV.",
-        "List claims written by Dr. PATEL.",
-        "Retrieve fills prescribed by NPI 1234567890.",
-        "Which claims were ordered by prescriber SMITH?",
-        "Display claims from prescriber Dr. JOHNSON.",
-    ],
-    "Status": [
-        "Show all rejected claims for this member.",
-        "List claims in paid status this year.",
-        "Which claims are currently pending?",
-        "Display all denied claims across all drugs.",
-        "Give me claims in reversed status.",
-    ],
-    "RejectCode": [
-        "Show claims with reject code 79.",
-        "Filter claims by rejection code 75.",
-        "Which claims have NCPDP reject code MR?",
-        "List claims rejected under code 76.",
-        "Retrieve claims with reject code 70.",
-    ],
-    "PriorAuth": [
-        "Which claims required prior authorization?",
-        "Show fills that went through a PA process.",
-        "List claims where PA was approved.",
-        "Retrieve prescriptions with an active prior auth on file.",
-        "Display PA-approved claims for specialty drugs.",
-    ],
-    # ── general ──────────────────────────────────────────────────────────
-    "greeting": [
-        "Hello", "Hi there", "Welcome", "Hiya",
-        "Hello, how are you?", "Hi, good to see you",
-    ],
-    "out_of_scope": [
-        "What is the weather today?", "Tell me a joke.",
-        "Who won the Super Bowl?", "What's up", "How do I cook pasta?",
-    ],
-    # ── member_domain anchors ────────────────────────────────────────────
-    "member_coverage": [
-        "Does this member have active coverage as of today?",
-        "Show me the coverage eligibility windows for this member.",
-        "What are the eligibility dates for member John Doe?",
-        "When does this member's coverage begin and end?",
-        "Is member 555123456 eligible right now?",
-    ],
-    "member_hierarchy": [
-        "Which client does this member belong to?",
-        "Show me the CAG hierarchy for this member.",
-        "What client account group is this member under?",
-        "Display the hierarchy information for this member.",
-        "Give me the client and group assignment for this member.",
-    ],
-    "benefit_reset_date": [
-        "What is the benefit reset date for this member?",
-        "When does the benefit year reset for this member?",
-        "Tell me when the accumulators reset for this member.",
-        "Show me the plan year reset date for this member.",
-        "When do the deductible and OOP accumulators reset?",
-    ],
-    "medicare_coverage": [
-        "Does this member have Part D coverage?",
-        "Is this member enrolled in Medicare?",
-        "Show the Medicare Part D status for this member.",
-        "Is this member a Medicare beneficiary?",
-        "Tell me the Medicare coverage status for this member.",
-    ],
-    "lics_status": [
-        "Is this member LICS?",
-        "Does this member qualify for low income subsidy?",
-        "Show the LICS status for this member.",
-        "What LICS level is assigned to this member?",
-        "Tell me if this member is receiving low income cost sharing.",
-    ],
-    "cvs_id_lookup": [
-        "What is the CVS ID for this member?",
-        "Show the CVS ID associated with this member.",
-        "Retrieve the CVS ID for member John Doe.",
-        "Give me the CVS identifier for this member.",
-        "Look up the CVS ID for this member.",
-    ],
-    "alternate_ids": [
-        "List all alternate IDs for this member.",
-        "Show the alternate identifiers on file for this member.",
-        "What alternate IDs are assigned to this member?",
-        "Retrieve all alternate member IDs for this member.",
-        "Give me all alternate IDs associated with this member.",
-    ],
-    # ── override_domain anchors ──────────────────────────────────────────
-    "pa_summary": [
-        "Give me a summary of this prior authorization.",
-        "Summarize the key details of this PA.",
-        "Show the most important fields on this PA.",
-        "Display a high-level overview of this prior authorization.",
-        "Provide the PA summary including effective dates and drug coverage.",
-    ],
-    "pa_override_reject": [
-        "Will this PA override a reject 75 PA required?",
-        "Does this PA handle reject code 75?",
-        "Will this prior authorization bypass a reject 70 non-formulary?",
-        "Does this PA override reject 70 plan exclusion?",
-        "Show me which reject codes this PA can override.",
-    ],
-    "pa_field_help": [
-        "What does the PA type field do?",
-        "Explain the purpose of the effective date field on a PA.",
-        "What is the GPI override field used for?",
-        "Describe what the PA status indicator means.",
-        "What does the quantity limit override field do on this PA?",
-    ],
-    "pa_copay_pricing": [
-        "Does this copay override influence the price?",
-        "How does the copay on this PA affect pricing?",
-        "Will the PA copay change the member's out-of-pocket cost?",
-        "Show me how the copay override impacts the final price.",
-        "Does the copay field on this PA modify the claim price?",
-    ],
-    "pa_drug_coverage": [
-        "What drugs will this PA cover?",
-        "Show me the drug list covered by this prior authorization.",
-        "Which medications are included under this PA?",
-        "List the drugs that this PA authorizes.",
-        "Display the GPI range covered by this PA.",
-    ],
-    "pa_claim_usage": [
-        "How many claims used this PA?",
-        "Show the claim count for this prior authorization.",
-        "How many times has this PA been applied to claims?",
-        "Display the number of claims processed under this PA.",
-        "Retrieve the claim usage count for this PA.",
-    ],
-    # ── benefits_api anchors ─────────────────────────────────────────────
-    "plan_summary": [
-        "Show the current benefit plan overview for this member.",
-        "Give me a snapshot of the member's active plan.",
-        "What does this member's benefit plan cover?",
-        "Display the current plan summary.",
-        "Summarize the active benefit plan for this member.",
-    ],
-    "plan_history": [
-        "Show the change log of this member's benefit plan.",
-        "What modifications have been made to the plan over time?",
-        "List past revisions of the benefits plan.",
-        "Display the audit trail of plan changes.",
-        "Give me the timeline of updates to the plan.",
-    ],
-    "plan_finder": [
-        "Help me locate an available benefit plan.",
-        "Search for plans that match this client.",
-        "Which plans are offered to this member's group?",
-        "Find a matching benefits plan.",
-        "Look up what plans exist for this client.",
-    ],
-}
-
-
 def augment_embeddings(embeddings: Dict) -> Dict:
     """Add augmented training examples to cached embeddings.
 
     Normalizes examples (strips claim numbers) before embedding so they
     match the normalized test query space.
+
+    Cache invalidation uses content hashing — if any example text changes
+    (not just count), the affected intents are re-embedded.
     """
+    import hashlib
+
     aug_cache_path = os.path.join(ARTIFACTS, "augmented_embeddings_v3.json")
 
     if os.path.exists(aug_cache_path):
@@ -334,9 +101,18 @@ def augment_embeddings(embeddings: Dict) -> Dict:
     else:
         aug_cached = {}
 
+    # Compute content hash per intent for invalidation
+    def _content_hash(texts):
+        normalized = [normalize_query(t) for t in texts]
+        return hashlib.sha256("|".join(normalized).encode()).hexdigest()[:16]
+
     needs_generation = False
     for intent, examples in AUGMENTED_EXAMPLES.items():
-        if intent not in aug_cached or len(aug_cached[intent]) != len(examples):
+        expected_hash = _content_hash(examples)
+        cached_hash = aug_cached.get(f"_hash_{intent}", "")
+        if (intent not in aug_cached
+                or len(aug_cached[intent]) != len(examples)
+                or cached_hash != expected_hash):
             needs_generation = True
             break
 
@@ -344,17 +120,27 @@ def augment_embeddings(embeddings: Dict) -> Dict:
         logger.info("Generating augmented training embeddings (normalized)...")
         emb = get_embedder()
         for intent, examples in AUGMENTED_EXAMPLES.items():
-            if intent not in aug_cached or len(aug_cached[intent]) != len(examples):
+            expected_hash = _content_hash(examples)
+            cached_hash = aug_cached.get(f"_hash_{intent}", "")
+            if (intent not in aug_cached
+                    or len(aug_cached[intent]) != len(examples)
+                    or cached_hash != expected_hash):
                 normalized = [normalize_query(ex) for ex in examples]
                 logger.info(f"  Augmenting '{intent}' with {len(examples)} normalized examples")
                 aug_cached[intent] = [list(v) for v in emb.embed_batch(normalized)]
-        with open(aug_cache_path, "w") as f:
+                aug_cached[f"_hash_{intent}"] = expected_hash
+        # Write atomically (temp file + rename)
+        tmp_path = aug_cache_path + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(aug_cached, f)
+        os.replace(tmp_path, aug_cache_path)
         logger.info(f"Augmented embeddings saved → {aug_cache_path}")
 
-    # Merge
+    # Merge (skip _hash_ metadata keys)
     merged = {k: list(v) for k, v in embeddings.items()}
     for intent, vecs in aug_cached.items():
+        if intent.startswith("_hash_"):
+            continue  # skip metadata keys
         if intent in merged:
             merged[intent] = merged[intent] + vecs
         else:
@@ -413,14 +199,51 @@ def search_pca(X, y, labels) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin_t=0.05):
-    """Evaluate pipeline on test data.  Returns {intent_accuracy, domain_accuracy}."""
+    """Evaluate pipeline with confusion-aware gating.  Returns {intent_accuracy, domain_accuracy, gate_stats}."""
+    from multidomain_intent_detection.pipeline import CONFUSION_PRONE_INTENTS
+
     results, llm_n = [], 0
+    gate_stats = {
+        "ensemble_pass": 0, "disagreement_to_llm": 0,
+        "low_conf_to_llm": 0, "confusion_pair_to_llm": 0,
+    }
+
     for idx, rec in enumerate(test_data):
         normalized_text = normalize_query(rec["text"])
         vec = np.array(embedder.embed(normalized_text))
         pred = pipeline.predict_single(vec)
-        confident = pred["confidence"] >= conf_t and pred["margin"] >= margin_t
 
+        # ── Gating (mirrors classifier.py) ───────────────────────────
+        confident = (
+            pred["confidence"] >= conf_t
+            and pred["margin"] >= margin_t
+            and pred["agreement"]
+        )
+        gate_reason = "pass"
+
+        if not pred["agreement"]:
+            confident = False
+            gate_reason = "disagreement"
+        elif confident and pred["intent"] in CONFUSION_PRONE_INTENTS:
+            if not (pred["confidence"] >= 0.55 and pred["margin"] >= 0.20):
+                confident = False
+                gate_reason = "confusion_prone"
+        if confident and pred.get("is_confusion_pair", False):
+            if not (pred["confidence"] >= 0.60 and pred["margin"] >= 0.25):
+                confident = False
+                gate_reason = "confusion_pair"
+
+        # Track gate stats
+        if confident:
+            gate_stats["ensemble_pass"] += 1
+        elif gate_reason == "disagreement":
+            gate_stats["disagreement_to_llm"] += 1
+        elif gate_reason == "confusion_pair":
+            gate_stats["confusion_pair_to_llm"] += 1
+        else:
+            gate_stats["low_conf_to_llm"] += 1
+
+        # ── Classify ─────────────────────────────────────────────────
         if confident or not use_llm:
             final, src = pred["intent"], "ensemble"
         else:
@@ -442,9 +265,12 @@ def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin
             "predicted_domain": INTENT_TO_DOMAIN.get(final, "unknown"),
             "domain_match": rec["actual_domain"] == INTENT_TO_DOMAIN.get(final, "unknown"),
             "confidence": pred["confidence"],
+            "raw_confidence": pred.get("raw_confidence", pred["confidence"]),
             "margin": pred["margin"],
             "source": src,
             "agreement": pred["agreement"],
+            "is_confusion_pair": pred.get("is_confusion_pair", False),
+            "gate_reason": gate_reason,
         })
         if (idx + 1) % 50 == 0:
             logger.info(f"  {idx + 1}/{len(test_data)}")
@@ -455,17 +281,42 @@ def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin
 
     ia = df["intent_match"].mean() * 100
     da = df["domain_match"].mean() * 100
-    print(f"\n{'=' * 60}")
+    errors = df[~df["intent_match"]]
+    high_conf_errors = errors[errors["raw_confidence"] >= 0.85]
+
+    print(f"\n{'=' * 65}")
     print(f"  {'ENSEMBLE + LLM' if use_llm else 'ENSEMBLE ONLY'}")
-    print(f"  Intent Accuracy : {ia:.2f}%")
-    print(f"  Domain Accuracy : {da:.2f}%")
+    print(f"  Intent Accuracy    : {ia:.2f}%")
+    print(f"  Domain Accuracy    : {da:.2f}%")
+    print(f"  Total Errors       : {len(errors)}")
+    print(f"  High-conf Errors   : {len(high_conf_errors)} (raw conf >= 0.85)")
     if use_llm:
         ep = (len(test_data) - llm_n) / len(test_data) * 100
-        print(f"  Ensemble resolved : {ep:.1f}% ({len(test_data) - llm_n}/{len(test_data)})")
-        print(f"  LLM calls         : {llm_n} ({llm_n / len(test_data) * 100:.1f}%)")
-    print(f"{'=' * 60}")
+        print(f"  Ensemble resolved  : {ep:.1f}% ({len(test_data) - llm_n}/{len(test_data)})")
+        print(f"  LLM calls          : {llm_n} ({llm_n / len(test_data) * 100:.1f}%)")
+    print(f"\n  Gate Statistics:")
+    for k, v in gate_stats.items():
+        print(f"    {k:25s}: {v}")
+    print(f"{'=' * 65}")
+
+    print(f"\n  {'Domain':<25} {'Intent':>8} {'Domain':>8} {'Count':>6}")
+    print(f"  {'-'*50}")
+    for dom in sorted(df["actual_domain"].unique()):
+        s = df[df["actual_domain"] == dom]
+        print(f"  {dom:<25} {s['intent_match'].mean()*100:>6.1f}% {s['domain_match'].mean()*100:>6.1f}% {len(s):>6}")
+
+    if len(errors) > 0:
+        print(f"\n  Top Confusions:")
+        conf = errors.groupby(["actual_intent", "predicted_intent"]).size().sort_values(ascending=False).head(10)
+        for (a, p), c in conf.items():
+            print(f"    {a} -> {p}: {c}")
+
+    if use_llm and llm_n:
+        lr = df[df["source"] == "llm"]
+        print(f"\n  LLM accuracy: {lr['intent_match'].mean()*100:.1f}% ({int(lr['intent_match'].sum())}/{llm_n})")
+
     print()
-    return {"intent_accuracy": ia, "domain_accuracy": da}
+    return {"intent_accuracy": ia, "domain_accuracy": da, "gate_stats": gate_stats}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -21,23 +21,25 @@ from typing import Dict, Optional
 _CLAIM_NUM_PATTERN = re.compile(r'\b\d{12,18}\b')
 _SEQ_PATTERN = re.compile(r'\bsequence\s+\d{1,3}\b', re.IGNORECASE)
 _SEQ_NUM = re.compile(r'\bseq\s+\d{1,3}\b', re.IGNORECASE)
+_PA_NUM_PATTERN = re.compile(r'\bPA\s+[A-Z0-9]{5,15}\b', re.IGNORECASE)
 _WHITESPACE = re.compile(r'\s+')
 
 
 def normalize_query(text: str) -> str:
-    """Strip claim/sequence numbers so embedding focuses on intent semantics.
+    """Strip claim/sequence/PA numbers so embedding focuses on intent semantics.
 
     Before:  "Prescriber details for claim 132435151040074 sequence 001."
     After:   "prescriber details for claim"
 
-    This makes training templates and test queries land in the same
-    embedding region because the semantic content (not numeric IDs)
-    drives the vector.
+    Also strips PA identifiers: "PA JW012726LC" → "pa"
     """
-    t = text.lower().strip()
+    if not isinstance(text, str) or not text:
+        return ""
+    t = text[:2000].lower().strip()  # truncate to prevent regex DoS
     t = _SEQ_PATTERN.sub('', t)
     t = _SEQ_NUM.sub('', t)
     t = _CLAIM_NUM_PATTERN.sub('', t)
+    t = _PA_NUM_PATTERN.sub('pa', t)
     t = t.replace('.', ' ').replace('?', ' ').replace('!', ' ')
     t = _WHITESPACE.sub(' ', t).strip()
     return t
@@ -47,13 +49,14 @@ def normalize_query(text: str) -> str:
 # Compiled Patterns — Entity Extraction
 # ─────────────────────────────────────────────────────────────────────────────
 
-_ENTITY_CLAIM_NUM = re.compile(r'\b(\d{15})\b')
+_ENTITY_CLAIM_NUM = re.compile(r'\b(\d{12,18})\b')
 _ENTITY_SEQ_NUM = re.compile(r'\bsequence\s+(\d{1,3})\b', re.IGNORECASE)
 _ENTITY_NPI = re.compile(r'\bNPI\s+(\d{10})\b', re.IGNORECASE)
 _ENTITY_NDC = re.compile(r'\bNDC\s+([\d-]{10,13})\b', re.IGNORECASE)
 _ENTITY_MEMBER_ID = re.compile(r'\bmember\s+(?:ID\s+)?(\d{6,12})\b', re.IGNORECASE)
 _ENTITY_DRUG_NAME = re.compile(
-    r'\b([A-Z]{3,}(?:\s+[A-Z]{2,})?)\b'  # e.g. METFORMIN, ATORVASTATIN CALCIUM
+    r'\b([A-Z]{3,}(?:\s+[A-Z]{2,})?)\b',
+    re.IGNORECASE,  # match mixed-case drug names like "Metformin"
 )
 _ENTITY_REJECT_CODE = re.compile(r'\breject\s*(?:code)?\s+(\d{1,3}|[A-Z]{2})\b', re.IGNORECASE)
 _ENTITY_SETTLEMENT_CODE = re.compile(r'\bsettlement\s+(?:code\s+)?(\d{1,4})\b', re.IGNORECASE)

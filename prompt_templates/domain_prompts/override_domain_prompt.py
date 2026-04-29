@@ -3,7 +3,10 @@ Override Domain — LLM Fallback Prompt for Prior Authorization Management
 
 This domain covers PA (Prior Authorization) configuration and management:
   pa_summary, pa_override_reject, pa_field_help, pa_copay_pricing,
-  pa_drug_coverage, pa_claim_usage
+  pa_drug_coverage, pa_claim_usage, pa_reason_code, pa_effective_dates,
+  pa_agent_code, pa_ignore_status, pa_specialty_rx_override,
+  pa_clinical_admin_code, pa_transform_care, pa_follow_me_logic,
+  pa_drug_type_indicator, pa_modification_history
 
 KEY DISTINCTION: These are about the PA RECORD/CONFIGURATION itself,
 NOT about whether a specific claim needed PA (that's prior_auth_info in cap_api)
@@ -26,7 +29,7 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
   - prior_auth_info (cap_api): PA status for ONE specific claim
   - PriorAuth (claim_history_search): SEARCH claims that required PA
 
-## OVERRIDE DOMAIN INTENTS (6 intents)
+## OVERRIDE DOMAIN INTENTS (16 intents)
 
 ### pa_summary
 **What it is:** High-level OVERVIEW of a Prior Authorization record. Summary of key fields,
@@ -130,13 +133,145 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
   - "Display the number of claims processed under this PA."
   - "Retrieve the claim usage count for this PA."
 
+### pa_reason_code
+**What it is:** The REASON CODE on the PA (U1, LC, OD, OA, US, U3). Why the PA was created,
+  the override reason classification.
+**Trigger phrases:** "reason code", "PA reason", "reason code U1", "reason code LC",
+  "reason code OD", "override reason"
+**Examples:**
+  - "What is the reason code on this PA?"
+  - "Show the reason code assigned to this prior authorization."
+  - "Is the reason code on this PA set to U1 or LC?"
+  - "Which PAs have reason code OD?"
+  - "Display the reason code meaning for this PA."
+
+### pa_effective_dates
+**What it is:** The EFFECTIVE PERIOD (begin/end dates) of the PA. When it starts, expires,
+  or is active.
+**Trigger phrases:** "effective dates", "PA start date", "PA end date", "effective period",
+  "when does PA expire", "PA date range", "dateBegin", "dateEnd"
+**Examples:**
+  - "What are the effective dates for this PA?"
+  - "Show the start and end dates on this prior authorization."
+  - "When does this PA expire?"
+  - "Is this PA currently within its effective period?"
+  - "Display the dateBegin and dateEnd for this PA."
+
+### pa_agent_code
+**What it is:** The AGENT/SOURCE CODE on the PA (A, C, 3, H, 5, 2, O). Who or what
+  system created or last modified the PA.
+**Trigger phrases:** "agent code", "PA agent", "who created PA", "agent source",
+  "created by agent", "agent code C"
+**Examples:**
+  - "What is the agent code on this PA?"
+  - "Show the agent code assigned to this prior authorization."
+  - "Who created this PA based on the agent code?"
+  - "Which PAs were created by agent code C?"
+  - "Display the agent code for each PA on this member."
+
+### pa_ignore_status
+**What it is:** The IGNORE STATUS CODE on the PA (Y, P, 3). Whether the PA's status
+  is bypassed during processing.
+**Trigger phrases:** "ignore status", "ignoreStatusCode", "ignore status Y",
+  "ignore status P", "PA status bypass"
+**Examples:**
+  - "What is the ignore status code on this PA?"
+  - "Show the ignore status for this prior authorization."
+  - "Is the ignore status code set to Y on this PA?"
+  - "Which PAs have ignore status P?"
+  - "Display the ignoreStatusCode for this PA."
+
+### pa_specialty_rx_override
+**What it is:** The SPECIALTY PRESCRIPTION REJECT OVERRIDE indicator. Whether this PA
+  bypasses specialty Rx rejection.
+**Trigger phrases:** "specialty Rx override", "specialty prescription reject",
+  "overrideSpecialtyPrescriptionRejectIndicator", "specialty reject indicator"
+**Examples:**
+  - "Does this PA override the specialty prescription reject?"
+  - "Show the specialty Rx override indicator for this PA."
+  - "Is the specialty Rx reject indicator enabled on this PA?"
+  - "Which PAs have the specialty prescription override turned on?"
+  - "Display the overrideSpecialtyPrescriptionRejectIndicator."
+
+### pa_clinical_admin_code
+**What it is:** The CLINICAL ADMINISTRATION CODE on the PA (A, C, or blank).
+  Clinical program designation.
+**Trigger phrases:** "clinical administration code", "clinical admin code",
+  "clinicalAdministrationCode", "clinical admin"
+**Examples:**
+  - "What is the clinical administration code on this PA?"
+  - "Show the clinical admin code for this PA."
+  - "Is there a clinical administration code set on this PA?"
+  - "Which PAs have clinical admin code C configured?"
+  - "Display the clinicalAdministrationCode for this PA."
+
+### pa_transform_care
+**What it is:** The TRANSFORM CARE TYPE on the PA. Care transformation program designation.
+**Trigger phrases:** "transform care", "transformCare", "care type", "transform care type"
+**Examples:**
+  - "What is the transform care type on this PA?"
+  - "Show the transform care setting for this PA."
+  - "Is there a transform care type configured on this PA?"
+  - "Display the transformCare type for this prior authorization."
+  - "Which PAs have a transform care type assigned?"
+
+### pa_follow_me_logic
+**What it is:** The FOLLOW ME LOGIC indicator. Whether the PA follows the member
+  across plan changes.
+**Trigger phrases:** "follow me logic", "followMeLogicIndicator", "follow me indicator",
+  "PA follows member"
+**Examples:**
+  - "Is follow me logic enabled on this PA?"
+  - "Show the follow me logic indicator for this PA."
+  - "Does this PA use follow me logic?"
+  - "Which PAs have the follow me indicator set to true?"
+  - "Display the followMeLogicIndicator for this PA."
+
+### pa_drug_type_indicator
+**What it is:** The AUTHORIZED DRUG TYPE (G=GPI-based matching, N=NDC-based matching).
+  How the PA matches drugs.
+**Trigger phrases:** "drug type indicator", "authorized drug type", "authorizedDrugType",
+  "GPI or NDC matching", "drug type G or N"
+**Examples:**
+  - "What is the authorized drug type on this PA?"
+  - "Show the drug type indicator for this PA."
+  - "Is the drug type set to G for GPI or N for NDC?"
+  - "Which PAs use NDC-based drug matching?"
+  - "Display the authorizedDrugType for this PA."
+**DISAMBIGUATION from pa_drug_coverage:**
+  - pa_drug_type_indicator = HOW drugs are MATCHED (GPI vs NDC method)
+  - pa_drug_coverage = WHICH drugs the PA covers (the drug list itself)
+  - "Is this PA using GPI or NDC?" → pa_drug_type_indicator
+  - "What drugs does this PA cover?" → pa_drug_coverage
+
+### pa_modification_history
+**What it is:** When the PA was LAST MODIFIED, update timestamp (modifyDateTime).
+**Trigger phrases:** "last modified", "modification date", "modifyDateTime",
+  "when was PA updated", "PA last changed", "update timestamp"
+**Examples:**
+  - "When was this PA last modified?"
+  - "Show the modification date and time for this PA."
+  - "Which PA was most recently modified?"
+  - "Display the modifyDateTime for this prior authorization."
+  - "How recently was this PA updated?"
+
 ## DECISION TREE
 1. Query asks for PA OVERVIEW / SUMMARY / KEY FIELDS → pa_summary
 2. Query asks about PA REJECTING / OVERRIDING REJECT CODES → pa_override_reject
 3. Query asks WHAT A PA FIELD MEANS / DOES → pa_field_help
 4. Query asks about PA COPAY IMPACT ON PRICING → pa_copay_pricing
-5. Query asks WHAT DRUGS PA COVERS / GPI / NDC → pa_drug_coverage
+5. Query asks WHAT DRUGS PA COVERS / GPI / NDC LIST → pa_drug_coverage
 6. Query asks HOW MANY CLAIMS USED THIS PA → pa_claim_usage
+7. Query asks about REASON CODE (U1/LC/OD/OA/US/U3) → pa_reason_code
+8. Query asks about EFFECTIVE DATES / START / END / EXPIRATION → pa_effective_dates
+9. Query asks about AGENT CODE / WHO CREATED PA → pa_agent_code
+10. Query asks about IGNORE STATUS CODE (Y/P/3) → pa_ignore_status
+11. Query asks about SPECIALTY RX REJECT OVERRIDE → pa_specialty_rx_override
+12. Query asks about CLINICAL ADMINISTRATION CODE → pa_clinical_admin_code
+13. Query asks about TRANSFORM CARE TYPE → pa_transform_care
+14. Query asks about FOLLOW ME LOGIC → pa_follow_me_logic
+15. Query asks about DRUG TYPE INDICATOR (GPI vs NDC MATCHING) → pa_drug_type_indicator
+16. Query asks WHEN PA WAS LAST MODIFIED / UPDATE TIMESTAMP → pa_modification_history
 
 ## COMMON CONFUSION PAIRS
 
@@ -153,4 +288,15 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
 | "Drugs covered by PA" | pa_drug_coverage | PA drug scope |
 | "Drug info for claim" | drug_info (claim_history_search) | Drug on a claim |
 | "Claims using this PA" | pa_claim_usage | PA utilization count |
+| "Reason code on PA" | pa_reason_code | PA override reason |
+| "When does PA expire?" | pa_effective_dates | PA date range |
+| "Who created this PA?" | pa_agent_code | Agent/source code |
+| "Ignore status on PA" | pa_ignore_status | Status bypass flag |
+| "Specialty Rx override?" | pa_specialty_rx_override | Specialty reject bypass |
+| "Clinical admin code?" | pa_clinical_admin_code | Clinical program code |
+| "Transform care type?" | pa_transform_care | Care program type |
+| "Follow me logic?" | pa_follow_me_logic | PA portability flag |
+| "GPI or NDC matching?" | pa_drug_type_indicator | Drug matching method |
+| "When was PA modified?" | pa_modification_history | Last update timestamp |
+| "When was claim created?" | audit_info (benefits_api) | Claim-level audit |
 """

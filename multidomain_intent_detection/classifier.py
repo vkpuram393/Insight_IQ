@@ -34,6 +34,7 @@ import time
 import pickle
 import asyncio
 import logging
+import threading
 import numpy as np
 from typing import Dict, Any, List, Optional
 
@@ -47,6 +48,21 @@ from multidomain_intent_detection.embeddings import get_embedder
 from multidomain_intent_detection.llm_fallback import llm_classify
 
 logger = logging.getLogger(__name__)
+
+# ── Intents prone to high-confidence misclassification ───────────────────────
+# These intents have overlapping vocabulary with neighbors and benefit from
+# stricter confidence gating (higher threshold + force LLM on disagreement).
+_CONFUSION_PRONE_INTENTS = {
+    "approval_info",      # confused with prior_auth_info, claim_status
+    "prior_auth_info",    # confused with approval_info, pa_summary
+    "rejection_reasons",  # confused with help, claim_status
+    "pricing_info",       # confused with compound_info, medicare_part_d, cob_info
+    "claim_status",       # confused with approval_info, rejection_reasons
+    "help",               # confused with rejection_reasons
+    "compound_info",      # confused with pricing_info
+    "generic_availability", # confused with Generic, daw_info
+    "fill_date_info",     # confused with rx_details, audit_info
+}
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -108,50 +124,63 @@ class MultidomainIntentClassifier:
         self._pipeline = None
         self._model_path = model_path
         self._load_time: Optional[float] = None
+        self._load_lock = threading.Lock()
 
     # ── Lazy load ────────────────────────────────────────────────────────
 
     def _ensure_loaded(self):
-        """Lazy-load the pipeline on first classify() call."""
+        """Lazy-load the pipeline on first classify() call (thread-safe)."""
         if self._pipeline is not None:
             return
 
-        # Re-resolve path at load time (cwd may have changed since import)
-        if not os.path.exists(self._model_path):
-            self._model_path = _find_model_pkl()
+        with self._load_lock:
+            if self._pipeline is not None:
+                return  # another thread loaded it while we waited
 
-        if not os.path.exists(self._model_path):
-            raise FileNotFoundError(
-                f"Trained pipeline not found at {self._model_path}. "
-                "Run the training script first to train and save the model.\n"
-                "  python -m multidomain_intent_detection.training"
+            # Re-resolve path at load time (cwd may have changed since import)
+            if not os.path.exists(self._model_path):
+                self._model_path = _find_model_pkl()
+
+            if not os.path.exists(self._model_path):
+                raise FileNotFoundError(
+                    f"Trained pipeline not found at {self._model_path}. "
+                    "Run the training script first to train and save the model.\n"
+                    "  python -m multidomain_intent_detection.training"
+                )
+
+            # The pickle stores the class as '__main__.IntentPipeline' because the
+            # training script was run directly.  Make it resolvable here too.
+            from multidomain_intent_detection.pipeline import IntentPipeline
+
+            import __main__
+            if not hasattr(__main__, "IntentPipeline"):
+                __main__.IntentPipeline = IntentPipeline
+
+            # Also try the old module path for backward compat
+            try:
+                from Intent_detection_system import intent_detection_v3
+            except ImportError:
+                pass
+
+            t0 = time.time()
+            try:
+                with open(self._model_path, "rb") as f:
+                    self._pipeline = pickle.load(f)
+            except (pickle.UnpicklingError, ModuleNotFoundError,
+                    AttributeError, EOFError, ImportError) as e:
+                raise RuntimeError(
+                    f"Failed to load pipeline from {self._model_path}: {e}\n"
+                    "The model file may be corrupted or built with an incompatible "
+                    "sklearn version. Re-run training to rebuild it."
+                ) from e
+            self._load_time = time.time() - t0
+
+            n_intents = len(self._pipeline.label_names)
+            logger.info(
+                f"Pipeline loaded: {n_intents} intents, "
+                f"PCA-{self._pipeline.n_pca}, "
+                f"loaded in {self._load_time * 1000:.0f}ms"
             )
-
-        # The pickle stores the class as '__main__.IntentPipeline' because the
-        # training script was run directly.  Make it resolvable here too.
-        from multidomain_intent_detection.pipeline import IntentPipeline
-
-        import __main__
-        if not hasattr(__main__, "IntentPipeline"):
-            __main__.IntentPipeline = IntentPipeline
-
-        # Also try the old module path for backward compat
-        try:
-            from Intent_detection_system import intent_detection_v3
-        except ImportError:
-            pass
-
-        t0 = time.time()
-        with open(self._model_path, "rb") as f:
-            self._pipeline = pickle.load(f)
-        self._load_time = time.time() - t0
-
-        n_intents = len(self._pipeline.label_names)
-        logger.info(
-            f"Pipeline loaded: {n_intents} intents, "
-            f"PCA-{self._pipeline.n_pca}, "
-            f"loaded in {self._load_time * 1000:.0f}ms"
-        )
 
     # ── Classify ─────────────────────────────────────────────────────────
 
@@ -164,6 +193,17 @@ class MultidomainIntentClassifier:
         Returns:
             Classification result dict (see class docstring for schema).
         """
+        # Input validation
+        if not query or not isinstance(query, str):
+            return {
+                "intent": "out_of_scope", "domain": "general",
+                "domain_name": "General", "api_endpoint": None,
+                "confidence": 0.0, "margin": 0.0, "source": "validation",
+                "agreement": True, "top_5": [], "entities": {},
+                "needs_clarification": True, "latency_ms": 0.0,
+            }
+        query = query[:5000]  # hard limit to prevent resource exhaustion
+
         self._ensure_loaded()
         t0 = time.time()
 
@@ -181,10 +221,30 @@ class MultidomainIntentClassifier:
         pred = self._pipeline.predict_single(vec)
 
         # 5. Confidence gate → optional LLM fallback
+        #    The pipeline's predict_single() already applies three calibration
+        #    layers (temperature, disagreement penalty, confusion-pair penalty).
+        #    The confidence/margin values we receive are POST-calibration, so
+        #    even a query the raw ensemble scored at 0.92 may arrive here at
+        #    0.55 if sub-classifiers disagreed AND it's a confusion pair.
+        #
+        #    Gate logic:
+        #    a) Base gate: confidence >= threshold AND margin >= threshold
+        #    b) Agreement gate: all 3 sub-classifiers must agree
+        #    c) Confusion-pair gate: stricter thresholds for known-ambiguous intents
         confident = (
             pred["confidence"] >= self.confidence_threshold
             and pred["margin"] >= self.margin_threshold
+            and pred["agreement"]  # ALL 3 sub-classifiers must agree
         )
+
+        # For known confusion-prone intents, apply stricter thresholds
+        # even when the gate above passed (catches high-conf wrong answers)
+        if confident and pred["intent"] in _CONFUSION_PRONE_INTENTS:
+            confident = pred["confidence"] >= 0.55 and pred["margin"] >= 0.20
+
+        # If pipeline flagged this as a confusion pair, require extra clearance
+        if confident and pred.get("is_confusion_pair", False):
+            confident = pred["confidence"] >= 0.60 and pred["margin"] >= 0.25
 
         if confident or not self.use_llm_fallback:
             final_intent = pred["intent"]
@@ -271,6 +331,7 @@ class MultidomainIntentClassifier:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _classifier_instance: Optional[MultidomainIntentClassifier] = None
+_classifier_lock = threading.Lock()
 
 
 def get_classifier(
@@ -278,17 +339,19 @@ def get_classifier(
     margin_threshold: float = 0.05,
     use_llm_fallback: bool = True,
 ) -> MultidomainIntentClassifier:
-    """Get the singleton MultidomainIntentClassifier instance.
+    """Get the singleton MultidomainIntentClassifier instance (thread-safe).
 
     First call creates the classifier (lazy—pipeline loaded on first classify()).
     Subsequent calls return the same instance.
     """
     global _classifier_instance
     if _classifier_instance is None:
-        _classifier_instance = MultidomainIntentClassifier(
-            confidence_threshold=confidence_threshold,
-            margin_threshold=margin_threshold,
-            use_llm_fallback=use_llm_fallback,
-        )
-        logger.info("MultidomainIntentClassifier singleton created")
+        with _classifier_lock:
+            if _classifier_instance is None:
+                _classifier_instance = MultidomainIntentClassifier(
+                    confidence_threshold=confidence_threshold,
+                    margin_threshold=margin_threshold,
+                    use_llm_fallback=use_llm_fallback,
+                )
+                logger.info("MultidomainIntentClassifier singleton created")
     return _classifier_instance

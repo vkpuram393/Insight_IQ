@@ -12,6 +12,7 @@ Handles:
 import os
 import time
 import logging
+import threading
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -101,14 +102,17 @@ class VertexEmbeddings:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _embedder_instance: Optional[VertexEmbeddings] = None
+_embedder_lock = threading.Lock()
 
 
 def get_embedder(
     project_id: Optional[str] = None,
     location: Optional[str] = None,
 ) -> VertexEmbeddings:
-    """Return the singleton VertexEmbeddings instance."""
+    """Return the singleton VertexEmbeddings instance (thread-safe)."""
     global _embedder_instance
     if _embedder_instance is None:
-        _embedder_instance = VertexEmbeddings(project_id=project_id, location=location)
+        with _embedder_lock:
+            if _embedder_instance is None:
+                _embedder_instance = VertexEmbeddings(project_id=project_id, location=location)
     return _embedder_instance

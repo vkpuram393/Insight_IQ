@@ -21,14 +21,33 @@ from typing import Dict, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
+# ── Known confusion pairs (intents with high embedding overlap) ─────────────
+# When the top-2 predictions are both from the same confusion pair,
+# the confidence is penalized even if the ensemble average is high.
+CONFUSION_PAIRS: Dict[str, set] = {
+    "approval_info":       {"prior_auth_info", "claim_status"},
+    "prior_auth_info":     {"approval_info", "pa_summary"},
+    "rejection_reasons":   {"help", "claim_status"},
+    "help":                {"rejection_reasons"},
+    "pricing_info":        {"compound_info", "medicare_part_d", "cob_info"},
+    "compound_info":       {"pricing_info"},
+    "claim_status":        {"approval_info", "rejection_reasons"},
+    "generic_availability": {"Generic", "daw_info"},
+    "fill_date_info":      {"rx_details", "audit_info"},
+    "member_demographics": {"member_contact_info"},
+    "member_contact_info": {"member_demographics"},
+}
+
+CONFUSION_PRONE_INTENTS = set(CONFUSION_PAIRS.keys())
+
 
 class IntentPipeline:
-    """PCA → Ensemble (SVM-RBF + LogReg + kNN) with temperature scaling."""
+    """PCA → Ensemble (SVM-RBF + LogReg + kNN) with learned temperature scaling."""
 
-    def __init__(self, n_pca: int = 50, knn_k: int = 5, temperature: float = 0.3):
+    def __init__(self, n_pca: int = 50, knn_k: int = 5, temperature: float = 1.5):
         self.n_pca = n_pca
         self.knn_k = knn_k
-        self.temperature = temperature  # <1 = sharper, >1 = softer
+        self.temperature = temperature  # learned during fit(); >1 = softer (reduces overconfidence)
         self.pca = None
         self.scaler = None
         self.clfs: Dict = {}
@@ -74,7 +93,61 @@ class IntentPipeline:
         ).fit(X_s, y)
 
         logger.info("Ensemble ready: SVM-RBF + LogReg + kNN")
+        # Learn optimal temperature on held-out data
+        self.temperature = self._learn_temperature(X_s, y)
+        logger.info(f"Learned temperature: {self.temperature:.3f}")
 
+    # ── Temperature Calibration ─────────────────────────────────────────────
+
+    def _learn_temperature(self, X_scaled: np.ndarray, y: np.ndarray) -> float:
+        """Find temperature T that minimizes NLL on held-out data.
+
+        Temperature scaling (Guo et al. 2017) is the simplest post-hoc
+        calibration method.  T > 1 softens overconfident predictions so
+        that the confidence gate can correctly identify uncertain queries.
+
+        Uses 3-fold CV with LogReg (fastest sub-classifier) to collect
+        held-out probabilities, then optimizes T via bounded scalar search.
+        """
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.linear_model import LogisticRegression
+        from scipy.optimize import minimize_scalar
+
+        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+        all_probs, all_labels = [], []
+
+        for train_idx, val_idx in skf.split(X_scaled, y):
+            X_tr, X_val = X_scaled[train_idx], X_scaled[val_idx]
+            y_tr, y_val = y[train_idx], y[val_idx]
+            lr = LogisticRegression(
+                C=10, max_iter=3000, solver="lbfgs",
+                class_weight="balanced", random_state=42,
+            ).fit(X_tr, y_tr)
+            all_probs.append(lr.predict_proba(X_val))
+            all_labels.append(y_val)
+
+        all_probs = np.vstack(all_probs)
+        all_labels = np.concatenate(all_labels)
+
+        def nll(T):
+            """Negative log-likelihood with temperature scaling."""
+            scaled = np.log(all_probs + 1e-12) / T
+            scaled -= scaled.max(axis=1, keepdims=True)
+            exp_scaled = np.exp(scaled)
+            softmax = exp_scaled / exp_scaled.sum(axis=1, keepdims=True)
+            correct_probs = softmax[np.arange(len(all_labels)), all_labels]
+            return -np.log(correct_probs + 1e-12).mean()
+
+        result = minimize_scalar(nll, bounds=(0.5, 5.0), method="bounded")
+        # T ≥ 1.0: never sharpen, only soften (sharpening worsens overconfidence)
+        return max(round(result.x, 3), 1.0)
+
+    def _apply_temperature(self, probs: np.ndarray) -> np.ndarray:
+        """Apply learned temperature scaling to a probability vector."""
+        log_p = np.log(probs + 1e-12) / self.temperature
+        log_p -= log_p.max()
+        exp_p = np.exp(log_p)
+        return exp_p / exp_p.sum()
     # ── Transform ────────────────────────────────────────────────────────
 
     def _transform(self, X: np.ndarray) -> np.ndarray:
@@ -84,46 +157,105 @@ class IntentPipeline:
     # ── Predict ──────────────────────────────────────────────────────────
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Weighted ensemble probability with temperature scaling."""
+        """Weighted ensemble probability with log-space temperature scaling.
+
+        Uses the same _apply_temperature logic as predict_single() to ensure
+        consistency between batch CV evaluation and inference.
+        """
         X_f = self._transform(X)
-        p = sum(
+        raw_p = sum(
             clf.predict_proba(X_f) * self.weights[name]
             for name, clf in self.clfs.items()
         )
+        # Apply log-space temperature per row (same math as _apply_temperature)
         if self.temperature != 1.0:
-            p = np.power(p + 1e-10, 1.0 / self.temperature)
-        return p / (p.sum(axis=1, keepdims=True) + 1e-10)
+            log_p = np.log(raw_p + 1e-12) / self.temperature
+            log_p -= log_p.max(axis=1, keepdims=True)
+            exp_p = np.exp(log_p)
+            return exp_p / (exp_p.sum(axis=1, keepdims=True) + 1e-10)
+        return raw_p / (raw_p.sum(axis=1, keepdims=True) + 1e-10)
 
     def predict_single(self, vec: np.ndarray) -> Dict:
         """Predict intent for a single 768-d vector.
 
+        Applies three layers of calibration to prevent confidently-wrong
+        predictions from bypassing the LLM fallback gate:
+
+          1. Learned temperature scaling  — softens overconfident probabilities
+             using a data-driven T learned during fit().
+          2. Disagreement penalty         — when sub-classifiers disagree,
+             confidence is reduced proportionally.
+          3. Confusion-pair penalty       — when the top-2 predictions are a
+             known confusion pair, an additional penalty is applied.
+
         Returns:
             {
-                "intent":      str,
-                "confidence":  float,
-                "margin":      float,
-                "top_5":       [(intent, prob), ...],
-                "individual":  {"svm": ..., "logreg": ..., "knn": ...},
-                "agreement":   bool,
+                "intent":         str,
+                "confidence":     float,  # after all calibration layers
+                "raw_confidence": float,  # before any calibration
+                "margin":         float,
+                "top_5":          [(intent, prob), ...],
+                "individual":     {"svm": ..., "logreg": ..., "knn": ...},
+                "agreement":      bool,
+                "is_confusion_pair": bool,
             }
         """
-        p = self.predict_proba(vec.reshape(1, -1))[0]
-        idx = np.argsort(p)[::-1]
-        top5 = [(self.label_names[i], float(p[i])) for i in idx[:5]]
-
+        if vec.ndim == 1:
+            if vec.shape[0] != self.pca.n_features_in_:
+                raise ValueError(
+                    f"Expected {self.pca.n_features_in_}-d vector, got {vec.shape[0]}-d"
+                )
+        # ── Raw ensemble probabilities (before temperature) ───────────────
         X_f = self._transform(vec.reshape(1, -1))
+        raw_p = sum(
+            clf.predict_proba(X_f) * self.weights[name]
+            for name, clf in self.clfs.items()
+        )[0]
+
+        # ── Layer 1: Temperature scaling ───────────────────────────────
+        calibrated_p = self._apply_temperature(raw_p)
+
+        idx = np.argsort(calibrated_p)[::-1]
+        top5 = [(self.label_names[i], float(calibrated_p[i])) for i in idx[:5]]
+
+        # ── Sub-classifier agreement ──────────────────────────────────
         indiv = {
             name: self.label_names[clf.predict(X_f)[0]]
             for name, clf in self.clfs.items()
         }
+        agreement = len(set(indiv.values())) == 1
+
+        raw_confidence = float(raw_p[idx[0]])
+        confidence = float(calibrated_p[idx[0]])
+        margin = float(calibrated_p[idx[0]] - calibrated_p[idx[1]]) if len(idx) > 1 else 1.0
+
+        # ── Layer 2: Disagreement penalty ──────────────────────────────
+        if not agreement:
+            n_unique = len(set(indiv.values()))
+            penalty = 1.0 - (n_unique - 1) * 0.15  # 2-way=0.85×, 3-way=0.70×
+            confidence *= penalty
+            margin *= penalty
+
+        # ── Layer 3: Confusion-pair penalty ────────────────────────────
+        top1_intent = self.label_names[idx[0]]
+        top2_intent = self.label_names[idx[1]] if len(idx) > 1 else ""
+        is_confusion_pair = (
+            top1_intent in CONFUSION_PAIRS
+            and top2_intent in CONFUSION_PAIRS.get(top1_intent, set())
+        )
+        if is_confusion_pair:
+            confidence *= 0.80  # 20% additional penalty
+            margin *= 0.80
 
         return {
-            "intent": self.label_names[idx[0]],
-            "confidence": float(p[idx[0]]),
-            "margin": float(p[idx[0]] - p[idx[1]]) if len(idx) > 1 else 1.0,
+            "intent": top1_intent,
+            "confidence": confidence,
+            "raw_confidence": raw_confidence,
+            "margin": margin,
             "top_5": top5,
             "individual": indiv,
-            "agreement": len(set(indiv.values())) == 1,
+            "agreement": agreement,
+            "is_confusion_pair": is_confusion_pair,
         }
 
     # ── Cross-validation ────────────────────────────────────────────────

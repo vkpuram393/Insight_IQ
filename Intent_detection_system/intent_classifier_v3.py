@@ -50,7 +50,15 @@ MODEL_PKL = os.path.join(ARTIFACTS, "v3_pipeline.pkl")
 _CLAIM_NUM_PATTERN = re.compile(r'\b\d{12,18}\b')
 _SEQ_PATTERN = re.compile(r'\bsequence\s+\d{1,3}\b', re.IGNORECASE)
 _SEQ_NUM = re.compile(r'\bseq\s+\d{1,3}\b', re.IGNORECASE)
+_PA_NUM_PATTERN = re.compile(r'\bPA\s+[A-Z0-9]{5,15}\b', re.IGNORECASE)
 _WHITESPACE = re.compile(r'\s+')
+
+# ── Known confusion pairs ────────────────────────────────────────────────
+_CONFUSION_PRONE_INTENTS = {
+    "approval_info", "prior_auth_info", "rejection_reasons", "help",
+    "pricing_info", "compound_info", "claim_status", "generic_availability",
+    "fill_date_info", "member_demographics", "member_contact_info",
+}
 
 # Entity extraction patterns
 _ENTITY_CLAIM_NUM = re.compile(r'\b(\d{15})\b')
@@ -61,11 +69,12 @@ _ENTITY_MEMBER_ID = re.compile(r'\bmember\s+(?:ID\s+)?(\d{6,12})\b', re.IGNORECA
 
 
 def _normalize_query(text: str) -> str:
-    """Strip claim/sequence numbers so embedding focuses on intent semantics."""
+    """Strip claim/sequence/PA numbers so embedding focuses on intent semantics."""
     t = text.lower().strip()
     t = _SEQ_PATTERN.sub('', t)
     t = _SEQ_NUM.sub('', t)
     t = _CLAIM_NUM_PATTERN.sub('', t)
+    t = _PA_NUM_PATTERN.sub('pa', t)
     t = t.replace('.', ' ').replace('?', ' ').replace('!', ' ')
     t = _WHITESPACE.sub(' ', t).strip()
     return t
@@ -138,10 +147,20 @@ INTENT_TO_DOMAIN = {
     "medicare_coverage": "member_domain", "lics_status": "member_domain",
     "stcob_linkage": "member_domain", "cvs_id_lookup": "member_domain",
     "related_cagm": "member_domain", "alternate_ids": "member_domain",
+    "member_demographics": "member_domain", "member_contact_info": "member_domain",
+    "member_eligibility_copay": "member_domain", "member_transition_status": "member_domain",
+    "member_dur_config": "member_domain", "member_mbi_number": "member_domain",
+    "member_caretaker_info": "member_domain", "member_language_pref": "member_domain",
+    "member_discount_program": "member_domain", "member_override_plan": "member_domain",
     # override_domain
     "pa_summary": "override_domain", "pa_override_reject": "override_domain",
     "pa_field_help": "override_domain", "pa_copay_pricing": "override_domain",
     "pa_drug_coverage": "override_domain", "pa_claim_usage": "override_domain",
+    "pa_reason_code": "override_domain", "pa_effective_dates": "override_domain",
+    "pa_agent_code": "override_domain", "pa_ignore_status": "override_domain",
+    "pa_specialty_rx_override": "override_domain", "pa_clinical_admin_code": "override_domain",
+    "pa_transform_care": "override_domain", "pa_follow_me_logic": "override_domain",
+    "pa_drug_type_indicator": "override_domain", "pa_modification_history": "override_domain",
 }
 
 # Domain → API endpoint mapping
@@ -229,12 +248,32 @@ INTENT_DESC = {
     "cvs_id_lookup": "CVS ID for the member",
     "related_cagm": "Related CAGMs by CVS ID or family ID",
     "alternate_ids": "All alternate IDs on file for the member",
+    "member_demographics": "Member name, DOB, gender, person code, relationship code",
+    "member_contact_info": "Member email, phone, mailing/postal address",
+    "member_eligibility_copay": "Copay fields: copayBrand, copayGeneric, copay3, copay4",
+    "member_transition_status": "Member transition fill status and start date",
+    "member_dur_config": "DUR review key and process flag configuration",
+    "member_mbi_number": "Medicare Beneficiary Identifier (MBI) number",
+    "member_caretaker_info": "Caretaker name and address from Part D",
+    "member_language_pref": "Member language code/preference",
+    "member_discount_program": "Discount program type for the member",
+    "member_override_plan": "Member override plan ID from eligibility",
     "pa_summary": "PA summary, key fields, configuration overview",
     "pa_override_reject": "Will PA override reject codes 75/70/76",
     "pa_field_help": "What a specific PA field does (documentation)",
     "pa_copay_pricing": "PA copay override impact on pricing",
     "pa_drug_coverage": "Drugs covered by this PA (GPI/NDC lists)",
     "pa_claim_usage": "How many claims used this PA",
+    "pa_reason_code": "PA reason code (U1, LC, OD, OA, US, U3)",
+    "pa_effective_dates": "PA effective begin/end dates, expiration",
+    "pa_agent_code": "Agent/source code on PA (A, C, 3, H)",
+    "pa_ignore_status": "Ignore status code (Y, P, 3)",
+    "pa_specialty_rx_override": "Specialty Rx reject override indicator",
+    "pa_clinical_admin_code": "Clinical administration code (A, C, blank)",
+    "pa_transform_care": "Transform care type on PA",
+    "pa_follow_me_logic": "Follow me logic indicator on PA",
+    "pa_drug_type_indicator": "Authorized drug type (G=GPI, N=NDC)",
+    "pa_modification_history": "PA last modified date/time",
 }
 
 
@@ -476,10 +515,21 @@ class IntentClassifierV3:
         pred = self._pipeline.predict_single(vec)
 
         # 5. Confidence gate → optional LLM fallback
+        #    Uses calibrated confidence from pipeline (temperature + disagreement
+        #    + confusion-pair penalties already applied).
         confident = (
             pred["confidence"] >= self.confidence_threshold
             and pred["margin"] >= self.margin_threshold
+            and pred["agreement"]
         )
+
+        # Stricter gate for known confusion-prone intents
+        if confident and pred["intent"] in _CONFUSION_PRONE_INTENTS:
+            confident = pred["confidence"] >= 0.55 and pred["margin"] >= 0.20
+
+        # Even stricter when top-2 are a known confusion pair
+        if confident and pred.get("is_confusion_pair", False):
+            confident = pred["confidence"] >= 0.60 and pred["margin"] >= 0.25
 
         if confident or not self.use_llm_fallback:
             final_intent = pred["intent"]

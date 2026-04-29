@@ -253,7 +253,6 @@ What is the weather today?,out_of_scope,general
 Tell me a joke.,out_of_scope,general
 Who won the Super Bowl?,out_of_scope,general
 What is the capital of France?,out_of_scope,general
-How do I cook pasta?,out_of_scope,general
 What time is it?,out_of_scope,general
 Who is the president?,out_of_scope,general
 What movies are playing?,out_of_scope,general
@@ -261,7 +260,6 @@ How do I fix my car?,out_of_scope,general
 What is the stock price of Apple?,out_of_scope,general
 Tell me about history.,out_of_scope,general
 What are good restaurants nearby?,out_of_scope,general
-How does gravity work?,out_of_scope,general
 What is the meaning of life?,out_of_scope,general
 Show me sports scores.,out_of_scope,general
 What is machine learning?,out_of_scope,general
@@ -501,3 +499,242 @@ Show the claim volume for PA 78901.,pa_claim_usage,override_domain
 What is the total utilization count for this prior auth?,pa_claim_usage,override_domain
 Tell me how many prescriptions were adjudicated against PA 55432.,pa_claim_usage,override_domain
 Give me the usage statistics showing how often this PA was referenced.,pa_claim_usage,override_domain
+Show me a summary of the current benefit plan for this member.,plan_summary,benefits_api
+What does this member's benefit plan cover today?,plan_summary,benefits_api
+Give me a snapshot of the active plan for member 4807045053.,plan_summary,benefits_api
+Retrieve the high-level plan overview for this member.,plan_summary,benefits_api
+Display the current plan configuration at a glance.,plan_summary,benefits_api
+What changes have been made to this member's benefit plan over time?,plan_history,benefits_api
+Show the revision log for the benefits plan.,plan_history,benefits_api
+When was this member's plan last modified?,plan_history,benefits_api
+Display the audit trail of plan amendments.,plan_history,benefits_api
+List past revisions and updates to the plan.,plan_history,benefits_api
+Help me find an available benefit plan for this client.,plan_finder,benefits_api
+Which plans are offered to this member's employer group?,plan_finder,benefits_api
+Search for plans matching this client's criteria.,plan_finder,benefits_api
+Look up benefit plan options in the catalog.,plan_finder,benefits_api
+Find a suitable plan that this member can enroll in.,plan_finder,benefits_api
+How many refills remain on the METFORMIN prescription for this member?,Refills,claim_history_search
+List refill counts across all of this member's active prescriptions.,Refills,claim_history_search
+Show only the refill fills for LISINOPRIL.,Refills,claim_history_search
+Which prescriptions have used the most refills?,Refills,claim_history_search
+Are there any remaining refills for ATORVASTATIN?,Refills,claim_history_search
+Show all claims with a 90-day supply for this member.,DaysSupply,claim_history_search
+Filter claims where days supply equals 30.,DaysSupply,claim_history_search
+Which prescriptions were dispensed as a 14-day supply?,DaysSupply,claim_history_search
+List claims with days supply greater than 84.,DaysSupply,claim_history_search
+Give me all 7-day emergency supply fills.,DaysSupply,claim_history_search
+Which claims required prior authorization for this member?,PriorAuth,claim_history_search
+Show fills that went through a PA process.,PriorAuth,claim_history_search
+Did HUMIRA need prior authorization?,PriorAuth,claim_history_search
+List claims where PA was approved in the history.,PriorAuth,claim_history_search
+Display PA-approved claims for specialty drugs.,PriorAuth,claim_history_search
+Show claims with diagnosis code E11.9 for this member.,Diagnosis,claim_history_search
+Filter claims by ICD-10 code J45.909.,Diagnosis,claim_history_search
+Which claims carry diagnosis I10?,Diagnosis,claim_history_search
+Retrieve fills linked to diagnosis code F32.9.,Diagnosis,claim_history_search
+List prescriptions associated with ICD K21.00.,Diagnosis,claim_history_search
+Show claims with settlement code 358 for this member.,Settlement,claim_history_search
+Filter by settlement code 001.,Settlement,claim_history_search
+Which claims returned settlement code 425?,Settlement,claim_history_search
+List fills that received settlement code 310.,Settlement,claim_history_search
+Retrieve claims with pharmacy settlement response 200.,Settlement,claim_history_search
+Show claims filled at retail pharmacies for this member.,PharmType,claim_history_search
+Filter claims dispensed through mail-order channels.,PharmType,claim_history_search
+List specialty pharmacy claims for this member.,PharmType,claim_history_search
+Which fills came from a retail chain pharmacy?,PharmType,claim_history_search
+Display claims filled via the specialty pharmacy channel.,PharmType,claim_history_search
+Show claims processed under plan LICS2 for this member.,Plan,claim_history_search
+Filter claims by plan code RX8B.,Plan,claim_history_search
+Which claims were adjudicated under plan MED3?,Plan,claim_history_search
+List claims covered by plan FRM1.,Plan,claim_history_search
+Retrieve fills under insurance plan STD2.,Plan,claim_history_search
+Show claims filled at CVS PHARMACY 00610.,Pharmacy,claim_history_search
+List fills dispensed by WALGREENS 04528.,Pharmacy,claim_history_search
+Retrieve claims from RITE AID 11237.,Pharmacy,claim_history_search
+Which fills were filled at TARGET PHARMACY 01893?,Pharmacy,claim_history_search
+Display claims from KROGER PHARMACY 05672.,Pharmacy,claim_history_search
+Show claims by prescriber Dr. PATEL for this member.,Prescriber,claim_history_search
+List claims written by NPI 1234567890.,Prescriber,claim_history_search
+Which claims were ordered by prescriber SMITH?,Prescriber,claim_history_search
+Retrieve fills prescribed by Dr. JOHNSON.,Prescriber,claim_history_search
+Fetch claims by provider NPI 9876543210.,Prescriber,claim_history_search
+How much did the member pay for LEVOTHYROXINE?,Pricing,claim_history_search
+What was the copay on METFORMIN fills?,Pricing,claim_history_search
+Show the out-of-pocket cost for ATORVASTATIN claims.,Pricing,claim_history_search
+Retrieve the ingredient cost of LISINOPRIL claims.,Pricing,claim_history_search
+What did the plan pay for GABAPENTIN?,Pricing,claim_history_search
+Show all rejected claims for this member.,Status,claim_history_search
+List claims in paid status.,Status,claim_history_search
+Which claims are currently pending?,Status,claim_history_search
+Display all denied claims for this member.,Status,claim_history_search
+Retrieve claims that were successfully adjudicated.,Status,claim_history_search
+Show claims with reject code 79 for this member.,RejectCode,claim_history_search
+Filter claims by rejection code 75.,RejectCode,claim_history_search
+Which claims have NCPDP reject code MR?,RejectCode,claim_history_search
+Retrieve claims with reject code 70.,RejectCode,claim_history_search
+List claims rejected under code 76.,RejectCode,claim_history_search
+When was LEVOTHYROXINE last filled for this member?,DrugLast,claim_history_search
+What is the most recent fill date for METFORMIN?,DrugLast,claim_history_search
+Show the last time ATORVASTATIN was dispensed.,DrugLast,claim_history_search
+When did this member last get LISINOPRIL?,DrugLast,claim_history_search
+Retrieve the latest dispensing date for AMLODIPINE.,DrugLast,claim_history_search
+Give me all claims for this member in January.,Month,claim_history_search
+Show fills from February for this member.,Month,claim_history_search
+Retrieve March claims for this member.,Month,claim_history_search
+List claims filed in April.,Month,claim_history_search
+Display fills from the month of September.,Month,claim_history_search
+Look up claim number 260302639954275.,ClaimNum,claim_history_search
+Retrieve claim 480517832091643.,ClaimNum,claim_history_search
+Show details for claim number 710924356178502.,ClaimNum,claim_history_search
+Fetch claim 392081547623918.,ClaimNum,claim_history_search
+Get claim number 853746291035824.,ClaimNum,claim_history_search
+Show claims for NDC 33342-0395-44.,NDC,claim_history_search
+Look up NDC 00071-0155-23.,NDC,claim_history_search
+Retrieve claims with NDC 68462-0235-90.,NDC,claim_history_search
+Filter by NDC 00093-5057-01.,NDC,claim_history_search
+Fetch claims for NDC 16729-0044-15.,NDC,claim_history_search
+Show claims for drugs manufactured by TEVA.,Manufacturer,claim_history_search
+Filter claims by manufacturer MYLAN.,Manufacturer,claim_history_search
+Which claims have drugs from PFIZER?,Manufacturer,claim_history_search
+List claims with medications by SANDOZ.,Manufacturer,claim_history_search
+Retrieve claims for manufacturer NOVARTIS.,Manufacturer,claim_history_search
+Show all generic drug claims for this member.,Generic,claim_history_search
+List only non-branded medication fills.,Generic,claim_history_search
+Filter claims for generic substitutions.,Generic,claim_history_search
+Which fills dispensed a generic equivalent?,Generic,claim_history_search
+Retrieve claims where a generic was substituted for brand.,Generic,claim_history_search
+Show brand name claims for this member.,Brand,claim_history_search
+List claims for proprietary medications.,Brand,claim_history_search
+Filter claims dispensed as trade name drugs.,Brand,claim_history_search
+Which fills used the original brand product?,Brand,claim_history_search
+Retrieve claims for innovator brand drugs.,Brand,claim_history_search
+What is the full name and date of birth for this member?,member_demographics,member_domain
+Show the gender recorded for member 4807045053.,member_demographics,member_domain
+Display the member's person code and relationship code.,member_demographics,member_domain
+Retrieve the demographic profile for this member.,member_demographics,member_domain
+"Give me the member's first name, last name, and DOB.",member_demographics,member_domain
+What is the email address on file for this member?,member_contact_info,member_domain
+Show the mailing address for member 4807045053.,member_contact_info,member_domain
+Display the primary phone number for this member.,member_contact_info,member_domain
+Retrieve the member's postal address including city and zip.,member_contact_info,member_domain
+Give me the contact details including email and phone.,member_contact_info,member_domain
+What is the brand copay set on this member's eligibility?,member_eligibility_copay,member_domain
+Show the generic copay amount for this member.,member_eligibility_copay,member_domain
+Display the copay3 and copay4 values from eligibility.,member_eligibility_copay,member_domain
+Retrieve all four copay fields for this member.,member_eligibility_copay,member_domain
+What are the copay amounts assigned to this member's plan?,member_eligibility_copay,member_domain
+What is the transition status for this member?,member_transition_status,member_domain
+Show the transition start date from the eligibility record.,member_transition_status,member_domain
+Is this member currently in a transition period?,member_transition_status,member_domain
+Display the memberTransition status for this member.,member_transition_status,member_domain
+When did the transition period start for this member?,member_transition_status,member_domain
+What is the DUR configuration key for this member?,member_dur_config,member_domain
+Show the drug utilization review process flag.,member_dur_config,member_domain
+Is DUR processing enabled for this member?,member_dur_config,member_domain
+Display the drugUtilizationReviewKey for this member.,member_dur_config,member_domain
+Retrieve the member DUR review key and process flag.,member_dur_config,member_domain
+What is the MBI number for this member?,member_mbi_number,member_domain
+Show the Medicare Beneficiary Identifier on file.,member_mbi_number,member_domain
+Retrieve the MBI from the Medicare Part D record.,member_mbi_number,member_domain
+Display the mbiNumber for this member.,member_mbi_number,member_domain
+What MBI number is assigned to this member's Part D enrollment?,member_mbi_number,member_domain
+Show the caretaker information for this Medicare member.,member_caretaker_info,member_domain
+Who is the caretaker on file for this member?,member_caretaker_info,member_domain
+Display the caretaker name and address from Part D.,member_caretaker_info,member_domain
+Is there a caretaker assigned to this member's Medicare record?,member_caretaker_info,member_domain
+Retrieve the caretaker details including city and state.,member_caretaker_info,member_domain
+What is the language preference for this member?,member_language_pref,member_domain
+Show the member language code on file.,member_language_pref,member_domain
+Display the preferred language setting for this member.,member_language_pref,member_domain
+What language is set for communications with this member?,member_language_pref,member_domain
+Retrieve the mbrLangCode from the member base record.,member_language_pref,member_domain
+What discount program is assigned to this member?,member_discount_program,member_domain
+Show the discount program type on the member record.,member_discount_program,member_domain
+Is this member enrolled in a discount program?,member_discount_program,member_domain
+Display the discountProgramType for this member.,member_discount_program,member_domain
+Retrieve the discount program details for this member.,member_discount_program,member_domain
+Does this member have an override plan on file?,member_override_plan,member_domain
+Show the member override plan ID from eligibility.,member_override_plan,member_domain
+Is an override plan configured for this member?,member_override_plan,member_domain
+Display the memberOverridePlan from the eligibility record.,member_override_plan,member_domain
+What override plan is assigned to this member's eligibility?,member_override_plan,member_domain
+What is the reason code on this prior authorization?,pa_reason_code,override_domain
+Show the reason code assigned to PA JW012726LC.,pa_reason_code,override_domain
+Display the PA reason code for this override.,pa_reason_code,override_domain
+Is the reason code on this PA set to U1 or LC?,pa_reason_code,override_domain
+Which PAs have reason code OD for this member?,pa_reason_code,override_domain
+What are the effective dates for PA JW012726LC?,pa_effective_dates,override_domain
+Show the start and end dates on this prior authorization.,pa_effective_dates,override_domain
+When does this PA expire?,pa_effective_dates,override_domain
+Is this PA currently within its effective period?,pa_effective_dates,override_domain
+Display the dateBegin and dateEnd for this PA.,pa_effective_dates,override_domain
+What is the agent code on PA JW012726LC?,pa_agent_code,override_domain
+Show the agent code assigned to this prior authorization.,pa_agent_code,override_domain
+Who created this PA based on the agent code?,pa_agent_code,override_domain
+Which PAs were created by agent code C?,pa_agent_code,override_domain
+Display the agent code for each PA on this member.,pa_agent_code,override_domain
+What is the ignore status code on this PA?,pa_ignore_status,override_domain
+Show the ignore status for PA JW012726LC.,pa_ignore_status,override_domain
+Is the ignore status code set to Y on this PA?,pa_ignore_status,override_domain
+Which PAs have ignore status P for this member?,pa_ignore_status,override_domain
+Display the ignoreStatusCode for this prior authorization.,pa_ignore_status,override_domain
+Does this PA override the specialty prescription reject?,pa_specialty_rx_override,override_domain
+Show the specialty Rx override indicator for PA JW012726LC.,pa_specialty_rx_override,override_domain
+Is the specialty Rx reject indicator enabled on this PA?,pa_specialty_rx_override,override_domain
+Which PAs have the specialty prescription override turned on?,pa_specialty_rx_override,override_domain
+Display the overrideSpecialtyPrescriptionRejectIndicator for this PA.,pa_specialty_rx_override,override_domain
+What is the clinical administration code on this PA?,pa_clinical_admin_code,override_domain
+Show the clinical admin code for PA KMC0325261.,pa_clinical_admin_code,override_domain
+Is there a clinical administration code set on this PA?,pa_clinical_admin_code,override_domain
+Which PAs have clinical admin code C configured?,pa_clinical_admin_code,override_domain
+Display the clinicalAdministrationCode for this PA.,pa_clinical_admin_code,override_domain
+What is the transform care type on this PA?,pa_transform_care,override_domain
+Show the transform care setting for PA JW012726LC.,pa_transform_care,override_domain
+Is there a transform care type configured on this PA?,pa_transform_care,override_domain
+Display the transformCare type for this prior authorization.,pa_transform_care,override_domain
+Which PAs have a transform care type assigned?,pa_transform_care,override_domain
+Is follow me logic enabled on this PA?,pa_follow_me_logic,override_domain
+Show the follow me logic indicator for PA JW012726LC.,pa_follow_me_logic,override_domain
+Does this PA use follow me logic?,pa_follow_me_logic,override_domain
+Which PAs have the follow me indicator set to true?,pa_follow_me_logic,override_domain
+Display the followMeLogicIndicator for this prior authorization.,pa_follow_me_logic,override_domain
+What is the authorized drug type on this PA?,pa_drug_type_indicator,override_domain
+Show the drug type indicator for PA 20260127222.,pa_drug_type_indicator,override_domain
+Is the drug type set to G for GPI or N for NDC on this PA?,pa_drug_type_indicator,override_domain
+Which PAs use NDC-based drug matching?,pa_drug_type_indicator,override_domain
+Display the authorizedDrugType for this prior authorization.,pa_drug_type_indicator,override_domain
+When was PA JW012726LC last modified?,pa_modification_history,override_domain
+Show the modification date and time for this PA.,pa_modification_history,override_domain
+Which PA was most recently modified for this member?,pa_modification_history,override_domain
+Display the modifyDateTime for this prior authorization.,pa_modification_history,override_domain
+How recently was this PA updated?,pa_modification_history,override_domain
+Tell me a joke about pharmacists.,out_of_scope,general
+How do I reset my password?,out_of_scope,general
+Can you help me book a dentist appointment?,out_of_scope,general
+What are the side effects of aspirin?,out_of_scope,general
+Calculate my taxes for 2025.,out_of_scope,general
+Convert 100 USD to Euros.,out_of_scope,general
+xyzzy bazqux lorem ipsum dolor sit,out_of_scope,general
+asdfjkl;asdfjkl;asdfjkl;,out_of_scope,general
+Tell me about the latest iPhone.,out_of_scope,general
+Hey there!,greeting,general
+Yo!,greeting,general
+"Hi, how are you doing today?",greeting,general
+What's up?,greeting,general
+Greetings and salutations.,greeting,general
+How do I use this system to look up claims?,help,general
+What can you help me with?,help,general
+I need help understanding how to query member information.,help,general
+Can you guide me through the claim lookup process?,help,general
+What commands or questions can I ask you?,help,general
+What happened to this claim overall?,claim_status,cap_api
+Just give me the full summary of claim 999999999999999.,claim_status,cap_api
+Can you tell me everything about this claim?,claim_status,cap_api
+How can I fix this rejected claim?,rejection_reasons,cap_api
+What steps should I take to overturn the denial?,rejection_reasons,cap_api
+"My claim was rejected with code 75, what does that mean?",rejection_reasons,cap_api
+Break down the total cost including copay and dispensing fee.,pricing_info,cap_api
+What is the patient responsibility for this fill?,pricing_info,cap_api
+Was any transition fill or plan override triggered for claim 123456789?,approval_info,benefits_api
+Explain the approval pathway including BPG configuration.,approval_info,benefits_api

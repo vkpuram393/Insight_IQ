@@ -50,10 +50,20 @@ INTENT_TO_DOMAIN = {
     "medicare_coverage": "member_domain", "lics_status": "member_domain",
     "stcob_linkage": "member_domain", "cvs_id_lookup": "member_domain",
     "related_cagm": "member_domain", "alternate_ids": "member_domain",
+    "member_demographics": "member_domain", "member_contact_info": "member_domain",
+    "member_eligibility_copay": "member_domain", "member_transition_status": "member_domain",
+    "member_dur_config": "member_domain", "member_mbi_number": "member_domain",
+    "member_caretaker_info": "member_domain", "member_language_pref": "member_domain",
+    "member_discount_program": "member_domain", "member_override_plan": "member_domain",
     # ── override_domain ────────────────────────────────────────────────────
     "pa_summary": "override_domain", "pa_override_reject": "override_domain",
     "pa_field_help": "override_domain", "pa_copay_pricing": "override_domain",
     "pa_drug_coverage": "override_domain", "pa_claim_usage": "override_domain",
+    "pa_reason_code": "override_domain", "pa_effective_dates": "override_domain",
+    "pa_agent_code": "override_domain", "pa_ignore_status": "override_domain",
+    "pa_specialty_rx_override": "override_domain", "pa_clinical_admin_code": "override_domain",
+    "pa_transform_care": "override_domain", "pa_follow_me_logic": "override_domain",
+    "pa_drug_type_indicator": "override_domain", "pa_modification_history": "override_domain",
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
