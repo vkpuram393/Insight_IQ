@@ -1,0 +1,1937 @@
+"""
+Cluster Quality Analysis & Production Classification Model
+
+Task 1: Comprehensive cluster quality analysis (silhouette, WCSS, overlap detection, PCA/t-SNE visualizations, outlier detection, class imbalance analysis).
+Task 2: Hierarchical direct-embedding classifier with LOO-CV, confidence scoring,and OOD abstain mechanism.
+
+Usage:
+    python cluster_analysis_and_model.py                  # full pipeline
+    python cluster_analysis_and_model.py --cluster-only   # Task 1 only
+    python cluster_analysis_and_model.py --train-only     # Task 2 only
+    python cluster_analysis_and_model.py --skip-tsne      # skip slow t-SNE
+    python cluster_analysis_and_model.py --skip-eval      # skip Vertex AI test eval
+"""
+
+import os
+import sys
+import json
+import argparse
+import logging
+import warnings
+import pickle
+import time
+from collections import Counter
+from typing import Dict, List, Tuple, Any, Optional
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.cm as cm
+
+from sklearn.metrics import (
+    silhouette_score, silhouette_samples,
+    accuracy_score, f1_score, classification_report,
+    confusion_matrix,
+)
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import LeaveOneOut, cross_val_predict
+from sklearn.preprocessing import LabelEncoder
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+
+try:
+    import seaborn as sns
+    HAS_SEABORN = True
+except ImportError:
+    HAS_SEABORN = False
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 0: PATHS & CONSTANTS
+# ═════════════════════════════════════════════════════════════════════════════
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(BASE_DIR, "artifacts")
+OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+PLOTS_DIR = os.path.join(OUTPUTS_DIR, "cluster_plots")
+MODELS_DIR = os.path.join(ARTIFACTS_DIR, "direct_classifiers")
+TESTDATA_PATH = os.path.join(BASE_DIR, "Testdata.csv")
+TEST_EMBEDDINGS_PATH = os.path.join(OUTPUTS_DIR, "testdata_embeddings.json")
+
+INTENT_EMBEDDINGS_PATH = os.path.join(ARTIFACTS_DIR, "intent_embeddings_v4.json")
+INTENT_CENTROIDS_PATH = os.path.join(ARTIFACTS_DIR, "intent_centroids_v4.json")
+DOMAIN_CENTROIDS_PATH = os.path.join(ARTIFACTS_DIR, "domain_centroids_v4.json")
+
+os.makedirs(PLOTS_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+KNN_K = 7
+OVERLAP_THRESHOLD = 0.85
+NEGATIVE_SILO_THRESHOLD = 0.0
+ABSTAIN_SCORE_FLOOR = 0.45
+ABSTAIN_MARGIN_CEIL = 0.05
+DISPERSION_SIGMA_FLOOR = 0.05
+TSNE_PERPLEXITY = 30
+RANDOM_STATE = 42
+
+BENEFITS_API_ALL_INTENTS = [
+    "plan_summary", "plan_history", "plan_finder",
+    "beneficiary_info", "audit_info", "approval_info",
+]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 1: DATA LOADING
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _get_domain_registry() -> Dict[str, Any]:
+    """Get DOMAIN_REGISTRY with the benefits_api duplicate-key fix applied."""
+    from VamsiSir import embeddingVars
+    registry = dict(embeddingVars.DOMAIN_REGISTRY)
+    if "benefits_api" in registry:
+        existing_intents = list(registry["benefits_api"]["intents"])
+        for intent in BENEFITS_API_ALL_INTENTS:
+            if intent not in existing_intents:
+                existing_intents.append(intent)
+        registry["benefits_api"] = dict(registry["benefits_api"])
+        registry["benefits_api"]["intents"] = existing_intents
+    return registry
+
+
+def _build_intent_to_domains(domain_registry: Dict) -> Dict[str, List[str]]:
+    """Reverse map: intent -> list of domains it belongs to."""
+    intent_to_domains: Dict[str, List[str]] = {}
+    for domain_key, domain_info in domain_registry.items():
+        for intent_name in domain_info["intents"]:
+            if intent_name not in intent_to_domains:
+                intent_to_domains[intent_name] = []
+            if domain_key not in intent_to_domains[intent_name]:
+                intent_to_domains[intent_name].append(domain_key)
+    return intent_to_domains
+
+
+def _l2_normalize(v: np.ndarray) -> np.ndarray:
+    """L2-normalize a vector or each row of a matrix."""
+    if v.ndim == 1:
+        norm = np.linalg.norm(v)
+        return v / norm if norm > 0 else v
+    norms = np.linalg.norm(v, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1.0, norms)
+    return v / norms
+
+
+def load_all_artifacts() -> Dict[str, Any]:
+    """Load all embedding artifacts and build flat arrays for analysis."""
+    logger.info("Loading artifacts...")
+
+    with open(INTENT_EMBEDDINGS_PATH, "r") as f:
+        raw_embeddings = json.load(f)
+
+    with open(INTENT_CENTROIDS_PATH, "r") as f:
+        raw_centroids_intent = json.load(f)
+
+    with open(DOMAIN_CENTROIDS_PATH, "r") as f:
+        raw_centroids_domain = json.load(f)
+
+    domain_registry = _get_domain_registry()
+    intent_to_domains = _build_intent_to_domains(domain_registry)
+
+    domain_to_intents = {}
+    for domain_key, domain_info in domain_registry.items():
+        domain_to_intents[domain_key] = list(domain_info["intents"])
+
+    all_registered_intents = set()
+    for intents in domain_to_intents.values():
+        all_registered_intents.update(intents)
+
+    vectors_list = []
+    intent_labels = []
+    domain_labels = []
+
+    for intent_name, vecs in raw_embeddings.items():
+        mat = _l2_normalize(np.array(vecs, dtype=np.float32))
+        domains = intent_to_domains.get(intent_name, [])
+        if not domains:
+            assigned_domain = "unregistered"
+        else:
+            assigned_domain = domains[0]
+
+        for row in mat:
+            vectors_list.append(row)
+            intent_labels.append(intent_name)
+            domain_labels.append(assigned_domain)
+
+    all_vectors = np.array(vectors_list, dtype=np.float32)
+
+    centroids_intent = {k: np.array(v, dtype=np.float32) for k, v in raw_centroids_intent.items()}
+    centroids_domain = {k: np.array(v, dtype=np.float32) for k, v in raw_centroids_domain.items()}
+
+    le_intent = LabelEncoder().fit(intent_labels)
+    le_domain = LabelEncoder().fit(domain_labels)
+
+    test_df = None
+    tested_intents = set()
+    untested_intents = set()
+    if os.path.exists(TESTDATA_PATH):
+        test_df = pd.read_csv(TESTDATA_PATH)
+        tested_intents = set(test_df["Intent"].unique())
+        all_intents_in_embeddings = set(raw_embeddings.keys())
+        untested_intents = all_intents_in_embeddings - tested_intents
+
+    total_vectors = all_vectors.shape[0]
+    n_intents = len(set(intent_labels))
+    n_domains = len(set(domain_labels))
+    logger.info(f"Loaded {total_vectors} vectors, {n_intents} intents, {n_domains} domains")
+
+    return {
+        "embeddings": raw_embeddings,
+        "centroids_intent": centroids_intent,
+        "centroids_domain": centroids_domain,
+        "domain_registry": domain_registry,
+        "intent_to_domains": intent_to_domains,
+        "domain_to_intents": domain_to_intents,
+        "all_vectors": all_vectors,
+        "all_intent_labels": intent_labels,
+        "all_domain_labels": domain_labels,
+        "label_encoder_intent": le_intent,
+        "label_encoder_domain": le_domain,
+        "test_df": test_df,
+        "tested_intents": tested_intents,
+        "untested_intents": untested_intents,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 2: CLUSTER QUALITY ANALYSIS (TASK 1)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ── 2.1 Silhouette Analysis ────────────────────────────────────────────────
+
+def compute_silhouette(
+    all_vectors: np.ndarray,
+    labels: List[str],
+    granularity: str = "intent",
+) -> Dict[str, Any]:
+    """Compute silhouette scores using cosine distance."""
+    logger.info(f"Computing silhouette scores ({granularity}-level)...")
+
+    unique_labels = sorted(set(labels))
+    if len(unique_labels) < 2:
+        return {"overall_score": 0.0, "error": "Need at least 2 clusters"}
+
+    label_arr = np.array(labels)
+    per_sample = silhouette_samples(all_vectors, label_arr, metric="cosine")
+    overall = float(silhouette_score(all_vectors, label_arr, metric="cosine"))
+
+    per_cluster_mean = {}
+    per_cluster_min = {}
+    per_cluster_max = {}
+    per_cluster_negative_count = {}
+
+    for label in unique_labels:
+        mask = label_arr == label
+        scores = per_sample[mask]
+        per_cluster_mean[label] = float(np.mean(scores))
+        per_cluster_min[label] = float(np.min(scores))
+        per_cluster_max[label] = float(np.max(scores))
+        per_cluster_negative_count[label] = int(np.sum(scores < NEGATIVE_SILO_THRESHOLD))
+
+    sorted_by_worst = sorted(per_cluster_mean.items(), key=lambda x: x[1])
+
+    negative_exemplars = []
+    for i, (score, label) in enumerate(zip(per_sample, labels)):
+        if score < NEGATIVE_SILO_THRESHOLD:
+            negative_exemplars.append({
+                "intent": label,
+                "index": i,
+                "silhouette_score": float(score),
+            })
+    negative_exemplars.sort(key=lambda x: x["silhouette_score"])
+
+    logger.info(f"  Overall silhouette ({granularity}): {overall:.4f}")
+    logger.info(f"  Clusters with negative mean: "
+                f"{sum(1 for v in per_cluster_mean.values() if v < 0)}/{len(unique_labels)}")
+    logger.info(f"  Total negative exemplars: {len(negative_exemplars)}")
+
+    return {
+        "overall_score": overall,
+        "per_sample_scores": per_sample,
+        "per_cluster_mean": per_cluster_mean,
+        "per_cluster_min": per_cluster_min,
+        "per_cluster_max": per_cluster_max,
+        "per_cluster_negative_count": per_cluster_negative_count,
+        "sorted_by_worst": sorted_by_worst,
+        "negative_exemplars": negative_exemplars,
+        "granularity": granularity,
+    }
+
+
+# ── 2.2 WCSS / Inertia ────────────────────────────────────────────────────
+
+def compute_wcss(
+    all_vectors: np.ndarray,
+    labels: List[str],
+    centroids: Dict[str, np.ndarray],
+    granularity: str = "intent",
+) -> Dict[str, Any]:
+    """Compute within-cluster sum of squares using cosine distance."""
+    logger.info(f"Computing WCSS ({granularity}-level)...")
+
+    label_arr = np.array(labels)
+    unique_labels = sorted(set(labels))
+
+    per_cluster_wcss = {}
+    per_cluster_mean_dist = {}
+    per_cluster_max_dist = {}
+
+    total_wcss = 0.0
+    for label in unique_labels:
+        mask = label_arr == label
+        cluster_vecs = all_vectors[mask]
+
+        if label not in centroids:
+            per_cluster_wcss[label] = float("nan")
+            per_cluster_mean_dist[label] = float("nan")
+            per_cluster_max_dist[label] = float("nan")
+            continue
+
+        centroid = _l2_normalize(centroids[label])
+        sims = cluster_vecs @ centroid
+        distances = 1.0 - sims
+        wcss = float(np.sum(distances ** 2))
+        per_cluster_wcss[label] = wcss
+        per_cluster_mean_dist[label] = float(np.mean(distances))
+        per_cluster_max_dist[label] = float(np.max(distances))
+        total_wcss += wcss
+
+    tightness_rank = sorted(per_cluster_wcss.items(), key=lambda x: x[1])
+
+    centroid_keys = [k for k in unique_labels if k in centroids]
+    inter_distances = {}
+    if len(centroid_keys) >= 2:
+        for i, k1 in enumerate(centroid_keys):
+            for k2 in centroid_keys[i+1:]:
+                c1 = _l2_normalize(centroids[k1])
+                c2 = _l2_normalize(centroids[k2])
+                dist = 1.0 - float(np.dot(c1, c2))
+                inter_distances[f"{k1} <-> {k2}"] = dist
+
+    logger.info(f"  Total WCSS: {total_wcss:.4f}")
+    logger.info(f"  Tightest: {tightness_rank[0][0]} ({tightness_rank[0][1]:.4f})")
+    logger.info(f"  Loosest: {tightness_rank[-1][0]} ({tightness_rank[-1][1]:.4f})")
+
+    return {
+        "total_wcss": total_wcss,
+        "per_cluster_wcss": per_cluster_wcss,
+        "per_cluster_mean_dist": per_cluster_mean_dist,
+        "per_cluster_max_dist": per_cluster_max_dist,
+        "tightness_rank": tightness_rank,
+        "inter_cluster_distances": inter_distances,
+        "granularity": granularity,
+    }
+
+
+def compute_intra_inter_ratio(
+    all_vectors: np.ndarray,
+    labels: List[str],
+    centroids: Dict[str, np.ndarray],
+) -> Dict[str, float]:
+    """Ratio of mean intra-cluster distance to mean inter-cluster distance. <1 = well separated."""
+    label_arr = np.array(labels)
+    unique_labels = sorted(set(labels))
+
+    centroid_vecs = []
+    valid_labels = []
+    for label in unique_labels:
+        if label in centroids:
+            centroid_vecs.append(_l2_normalize(centroids[label]))
+            valid_labels.append(label)
+
+    if len(centroid_vecs) < 2:
+        return {}
+
+    centroid_matrix = np.array(centroid_vecs)
+    inter_sim = centroid_matrix @ centroid_matrix.T
+
+    ratios = {}
+    for i, label in enumerate(valid_labels):
+        mask = label_arr == label
+        cluster_vecs = all_vectors[mask]
+        c = centroid_matrix[i]
+        intra_sims = cluster_vecs @ c
+        intra_dist = float(np.mean(1.0 - intra_sims))
+
+        inter_dists = []
+        for j, other_label in enumerate(valid_labels):
+            if i != j:
+                inter_dists.append(1.0 - inter_sim[i, j])
+        mean_inter = float(np.mean(inter_dists)) if inter_dists else 1.0
+
+        ratios[label] = intra_dist / mean_inter if mean_inter > 0 else float("inf")
+
+    return ratios
+
+
+# ── 2.3 Cluster Diagnostics ───────────────────────────────────────────────
+
+def identify_overlapping_clusters(
+    centroids: Dict[str, np.ndarray],
+    domain_registry: Dict,
+    threshold: float = OVERLAP_THRESHOLD,
+) -> Dict[str, Any]:
+    """Find centroid pairs with cosine similarity above threshold."""
+    logger.info("Identifying overlapping clusters...")
+    intent_to_domain = _build_intent_to_domains(domain_registry)
+
+    names = sorted(centroids.keys())
+    same_domain_overlaps = []
+    cross_domain_overlaps = []
+
+    for i, n1 in enumerate(names):
+        c1 = _l2_normalize(centroids[n1])
+        for n2 in names[i+1:]:
+            c2 = _l2_normalize(centroids[n2])
+            sim = float(np.dot(c1, c2))
+            if sim >= threshold:
+                d1 = intent_to_domain.get(n1, ["unknown"])
+                d2 = intent_to_domain.get(n2, ["unknown"])
+                severity = "CRITICAL" if sim > 0.93 else "WARNING"
+
+                domains_1 = set(d1)
+                domains_2 = set(d2)
+                if domains_1 & domains_2:
+                    same_domain_overlaps.append((n1, n2, sim, severity, list(domains_1 & domains_2)[0]))
+                else:
+                    cross_domain_overlaps.append((n1, n2, d1[0], d2[0], sim, severity))
+
+    same_domain_overlaps.sort(key=lambda x: x[2], reverse=True)
+    cross_domain_overlaps.sort(key=lambda x: x[4], reverse=True)
+
+    total = len(same_domain_overlaps) + len(cross_domain_overlaps)
+    logger.info(f"  Overlapping pairs (>= {threshold}): {total}")
+    logger.info(f"    Same-domain: {len(same_domain_overlaps)}")
+    logger.info(f"    Cross-domain: {len(cross_domain_overlaps)}")
+
+    return {
+        "same_domain_overlaps": same_domain_overlaps,
+        "cross_domain_overlaps": cross_domain_overlaps,
+        "overlap_count": total,
+        "threshold": threshold,
+    }
+
+
+def analyze_class_imbalance(
+    all_intent_labels: List[str],
+    all_domain_labels: List[str],
+) -> Dict[str, Any]:
+    """Report class distribution at intent and domain level."""
+    intent_counts = Counter(all_intent_labels)
+    domain_counts = Counter(all_domain_labels)
+
+    intent_sorted = intent_counts.most_common()
+    domain_sorted = domain_counts.most_common()
+
+    max_intent = intent_sorted[0][1]
+    min_intent = intent_sorted[-1][1]
+
+    return {
+        "intent_counts": dict(intent_sorted),
+        "domain_counts": dict(domain_sorted),
+        "intent_imbalance_ratio": max_intent / min_intent if min_intent > 0 else float("inf"),
+        "domain_imbalance_ratio": domain_sorted[0][1] / domain_sorted[-1][1] if domain_sorted[-1][1] > 0 else float("inf"),
+        "total_samples": len(all_intent_labels),
+        "n_intents": len(intent_counts),
+        "n_domains": len(domain_counts),
+    }
+
+
+def analyze_cross_domain_intents(
+    centroids_intent: Dict[str, np.ndarray],
+    centroids_domain: Dict[str, np.ndarray],
+    domain_registry: Dict,
+) -> Dict[str, Any]:
+    """Analyze intents that belong to multiple domains."""
+    intent_to_domains = _build_intent_to_domains(domain_registry)
+
+    cross_domain = {}
+    for intent, domains in intent_to_domains.items():
+        if len(domains) > 1 and intent in centroids_intent:
+            c = _l2_normalize(centroids_intent[intent])
+            domain_sims = {}
+            for d in domains:
+                if d in centroids_domain:
+                    dc = _l2_normalize(centroids_domain[d])
+                    domain_sims[d] = float(np.dot(c, dc))
+            cross_domain[intent] = {
+                "domains": domains,
+                "domain_similarities": domain_sims,
+                "leans_toward": max(domain_sims, key=domain_sims.get) if domain_sims else None,
+            }
+
+    return cross_domain
+
+
+# ── 2.4 Visualizations ────────────────────────────────────────────────────
+
+def _get_color_map(labels: List[str]) -> Dict[str, np.ndarray]:
+    """Assign a distinct color to each unique label."""
+    unique = sorted(set(labels))
+    n = len(unique)
+    if n <= 10:
+        cmap = plt.cm.tab10
+    elif n <= 20:
+        cmap = plt.cm.tab20
+    else:
+        cmap = plt.cm.gist_ncar
+    colors = {label: cmap(i / max(n - 1, 1)) for i, label in enumerate(unique)}
+    return colors
+
+
+def plot_silhouette(
+    per_sample_scores: np.ndarray,
+    labels: List[str],
+    title: str,
+    output_path: str,
+) -> None:
+    """Silhouette bar plot: samples grouped by cluster, sorted within each cluster."""
+    logger.info(f"  Generating silhouette plot: {os.path.basename(output_path)}")
+    label_arr = np.array(labels)
+    unique_labels = sorted(set(labels), key=lambda l: np.mean(per_sample_scores[label_arr == l]))
+
+    colors = _get_color_map(unique_labels)
+    fig, ax = plt.subplots(1, 1, figsize=(10, max(8, len(unique_labels) * 0.4)))
+
+    y_lower = 0
+    yticks = []
+    ytick_labels = []
+
+    for label in unique_labels:
+        mask = label_arr == label
+        cluster_scores = per_sample_scores[mask]
+        cluster_scores = np.sort(cluster_scores)
+        n = len(cluster_scores)
+
+        y_upper = y_lower + n
+        ax.barh(
+            range(y_lower, y_upper),
+            cluster_scores,
+            height=1.0,
+            color=colors[label],
+            edgecolor="none",
+        )
+        yticks.append(y_lower + n / 2)
+        mean_score = np.mean(cluster_scores)
+        ytick_labels.append(f"{label} ({mean_score:.3f})")
+        y_lower = y_upper + 2
+
+    mean_sil = float(np.mean(per_sample_scores))
+    ax.axvline(mean_sil, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {mean_sil:.4f}")
+    ax.axvline(0, color="black", linestyle="-", linewidth=0.5)
+
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(ytick_labels, fontsize=6)
+    ax.set_xlabel("Silhouette Score")
+    ax.set_title(title)
+    ax.legend(loc="lower right")
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_pca_2d(
+    all_vectors: np.ndarray,
+    domain_labels: List[str],
+    intent_labels: List[str],
+    output_prefix: str,
+) -> None:
+    """PCA 2D projections colored by domain and by intent."""
+    logger.info("  Generating PCA 2D plots...")
+    pca = PCA(n_components=2, random_state=RANDOM_STATE)
+    coords = pca.fit_transform(all_vectors)
+    ev = pca.explained_variance_ratio_
+
+    for label_type, labels, suffix in [
+        ("Domain", domain_labels, "domain"),
+        ("Intent", intent_labels, "intent"),
+    ]:
+        fig, ax = plt.subplots(1, 1, figsize=(14, 10))
+        colors = _get_color_map(labels)
+        unique = sorted(set(labels))
+
+        for label in unique:
+            mask = np.array(labels) == label
+            ax.scatter(
+                coords[mask, 0], coords[mask, 1],
+                c=[colors[label]],
+                s=15 if label_type == "Intent" else 25,
+                alpha=0.6,
+                label=label if len(unique) <= 20 else None,
+            )
+
+        ax.set_xlabel(f"PC1 ({ev[0]:.1%})")
+        ax.set_ylabel(f"PC2 ({ev[1]:.1%})")
+        ax.set_title(f"PCA 2D — Colored by {label_type}\n"
+                      f"Total explained variance: {sum(ev):.1%}")
+
+        if len(unique) <= 20:
+            ax.legend(fontsize=7, loc="best", ncol=2, framealpha=0.7)
+
+        plt.tight_layout()
+        path = f"{output_prefix}_pca_2d_{suffix}.png"
+        plt.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+
+def plot_pca_3d(
+    all_vectors: np.ndarray,
+    domain_labels: List[str],
+    output_path: str,
+) -> None:
+    """PCA 3D projection colored by domain."""
+    logger.info("  Generating PCA 3D plot...")
+    pca = PCA(n_components=3, random_state=RANDOM_STATE)
+    coords = pca.fit_transform(all_vectors)
+    ev = pca.explained_variance_ratio_
+
+    fig = plt.figure(figsize=(14, 10))
+    ax = fig.add_subplot(111, projection="3d")
+
+    colors = _get_color_map(domain_labels)
+    for label in sorted(set(domain_labels)):
+        mask = np.array(domain_labels) == label
+        ax.scatter(
+            coords[mask, 0], coords[mask, 1], coords[mask, 2],
+            c=[colors[label]], s=15, alpha=0.5, label=label,
+        )
+
+    ax.set_xlabel(f"PC1 ({ev[0]:.1%})")
+    ax.set_ylabel(f"PC2 ({ev[1]:.1%})")
+    ax.set_zlabel(f"PC3 ({ev[2]:.1%})")
+    ax.set_title(f"PCA 3D — Colored by Domain\nTotal: {sum(ev):.1%}")
+    ax.legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_tsne(
+    all_vectors: np.ndarray,
+    domain_labels: List[str],
+    intent_labels: List[str],
+    output_prefix: str,
+    perplexity: int = TSNE_PERPLEXITY,
+) -> None:
+    """t-SNE 2D projections colored by domain and by intent."""
+    logger.info(f"  Generating t-SNE plots (perplexity={perplexity})... this may take ~60s")
+    tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity,
+        max_iter=1000,
+        random_state=RANDOM_STATE,
+        metric="cosine",
+    )
+    coords = tsne.fit_transform(all_vectors)
+
+    for label_type, labels, suffix in [
+        ("Domain", domain_labels, "domain"),
+        ("Intent", intent_labels, "intent"),
+    ]:
+        fig, ax = plt.subplots(1, 1, figsize=(14, 10))
+        colors = _get_color_map(labels)
+        unique = sorted(set(labels))
+
+        for label in unique:
+            mask = np.array(labels) == label
+            ax.scatter(
+                coords[mask, 0], coords[mask, 1],
+                c=[colors[label]],
+                s=15 if label_type == "Intent" else 25,
+                alpha=0.6,
+                label=label if len(unique) <= 20 else None,
+            )
+
+        ax.set_xlabel("t-SNE 1")
+        ax.set_ylabel("t-SNE 2")
+        ax.set_title(f"t-SNE 2D — Colored by {label_type}")
+
+        if len(unique) <= 20:
+            ax.legend(fontsize=7, loc="best", ncol=2, framealpha=0.7)
+
+        plt.tight_layout()
+        path = f"{output_prefix}_tsne_{suffix}.png"
+        plt.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+
+def plot_domain_similarity_heatmap(
+    centroids_domain: Dict[str, np.ndarray],
+    output_path: str,
+) -> None:
+    """4x4 domain centroid similarity heatmap."""
+    logger.info("  Generating domain similarity heatmap...")
+    names = sorted(centroids_domain.keys())
+    n = len(names)
+    matrix = np.zeros((n, n))
+    for i, n1 in enumerate(names):
+        c1 = _l2_normalize(centroids_domain[n1])
+        for j, n2 in enumerate(names):
+            c2 = _l2_normalize(centroids_domain[n2])
+            matrix[i, j] = float(np.dot(c1, c2))
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    if HAS_SEABORN:
+        sns.heatmap(
+            matrix, annot=True, fmt=".3f", cmap="RdYlGn_r",
+            xticklabels=names, yticklabels=names, ax=ax,
+            vmin=0.5, vmax=1.0,
+        )
+    else:
+        im = ax.imshow(matrix, cmap="RdYlGn_r", vmin=0.5, vmax=1.0)
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(names, rotation=45, ha="right")
+        ax.set_yticklabels(names)
+        for i in range(n):
+            for j in range(n):
+                ax.text(j, i, f"{matrix[i,j]:.3f}", ha="center", va="center", fontsize=10)
+        plt.colorbar(im, ax=ax)
+
+    ax.set_title("Domain Centroid Cosine Similarity")
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_intent_confusion_proximity(
+    centroids_intent: Dict[str, np.ndarray],
+    domain_registry: Dict,
+    top_n_pairs: int = 15,
+    output_path: str = None,
+) -> pd.DataFrame:
+    """Top N closest intent centroid pairs."""
+    logger.info("  Computing intent proximity table...")
+    intent_to_domain = _build_intent_to_domains(domain_registry)
+
+    names = sorted(centroids_intent.keys())
+    pairs = []
+    for i, n1 in enumerate(names):
+        c1 = _l2_normalize(centroids_intent[n1])
+        for n2 in names[i+1:]:
+            c2 = _l2_normalize(centroids_intent[n2])
+            sim = float(np.dot(c1, c2))
+            d1 = intent_to_domain.get(n1, ["?"])[0]
+            d2 = intent_to_domain.get(n2, ["?"])[0]
+            is_cross = d1 != d2
+            pairs.append({
+                "intent_a": n1, "domain_a": d1,
+                "intent_b": n2, "domain_b": d2,
+                "cosine_similarity": sim,
+                "is_cross_domain": is_cross,
+            })
+
+    df = pd.DataFrame(pairs).sort_values("cosine_similarity", ascending=False).head(top_n_pairs)
+    df = df.reset_index(drop=True)
+
+    if output_path:
+        df.to_csv(output_path, index=False)
+
+    return df
+
+
+# ── 2.5 Cluster Quality Report ────────────────────────────────────────────
+
+def generate_cluster_quality_report(
+    sil_intent: Dict, sil_domain: Dict,
+    wcss_intent: Dict, wcss_domain: Dict,
+    overlaps: Dict, imbalance: Dict,
+    cross_domain: Dict, intra_inter: Dict,
+    output_path: str = None,
+) -> str:
+    """Generate a comprehensive cluster quality text report."""
+    lines = []
+    lines.append("=" * 80)
+    lines.append("  CLUSTER QUALITY ANALYSIS REPORT")
+    lines.append("=" * 80)
+    lines.append(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"  Data: {imbalance['total_samples']} vectors, "
+                 f"{imbalance['n_intents']} intents, {imbalance['n_domains']} domains")
+    lines.append("")
+
+    # Overall silhouette
+    lines.append("-" * 80)
+    lines.append("  1. SILHOUETTE SCORES")
+    lines.append("-" * 80)
+    lines.append(f"  Intent-level overall:  {sil_intent['overall_score']:.4f}")
+    lines.append(f"  Domain-level overall:  {sil_domain['overall_score']:.4f}")
+    lines.append("")
+    lines.append("  INTERPRETATION:")
+    intent_sil = sil_intent["overall_score"]
+    if intent_sil > 0.5:
+        lines.append("    Intent clusters are WELL-SEPARATED (>0.5)")
+    elif intent_sil > 0.25:
+        lines.append("    Intent clusters have MODERATE structure (0.25-0.5)")
+    elif intent_sil > 0.0:
+        lines.append("    Intent clusters have WEAK structure (0.0-0.25) — overlapping boundaries")
+    else:
+        lines.append("    Intent clusters have NO meaningful structure (<0.0)")
+    lines.append("")
+
+    # Worst intents
+    lines.append("  Bottom 10 intents by silhouette (most problematic):")
+    for name, score in sil_intent["sorted_by_worst"][:10]:
+        neg_count = sil_intent["per_cluster_negative_count"].get(name, 0)
+        lines.append(f"    {name:<35s}  sil={score:+.4f}  neg_exemplars={neg_count}")
+    lines.append("")
+
+    # Best intents
+    lines.append("  Top 5 intents by silhouette (most cohesive):")
+    for name, score in sil_intent["sorted_by_worst"][-5:]:
+        lines.append(f"    {name:<35s}  sil={score:+.4f}")
+    lines.append("")
+
+    # Negative exemplars
+    n_neg = len(sil_intent["negative_exemplars"])
+    lines.append(f"  Total negative-silhouette exemplars: {n_neg}/{imbalance['total_samples']}")
+    if n_neg > 0:
+        lines.append("  Worst 10 outlier exemplars:")
+        for ex in sil_intent["negative_exemplars"][:10]:
+            lines.append(f"    intent={ex['intent']:<30s}  idx={ex['index']:4d}  "
+                         f"sil={ex['silhouette_score']:+.4f}")
+    lines.append("")
+
+    # WCSS
+    lines.append("-" * 80)
+    lines.append("  2. WITHIN-CLUSTER SUM OF SQUARES (WCSS)")
+    lines.append("-" * 80)
+    lines.append(f"  Total intent-level WCSS:  {wcss_intent['total_wcss']:.4f}")
+    lines.append(f"  Total domain-level WCSS:  {wcss_domain['total_wcss']:.4f}")
+    lines.append("")
+    lines.append("  Tightest 5 intents (lowest WCSS = most consistent phrasing):")
+    for name, wcss_val in wcss_intent["tightness_rank"][:5]:
+        mean_d = wcss_intent["per_cluster_mean_dist"].get(name, float("nan"))
+        lines.append(f"    {name:<35s}  WCSS={wcss_val:.4f}  mean_dist={mean_d:.4f}")
+    lines.append("")
+    lines.append("  Loosest 5 intents (highest WCSS = diverse phrasing):")
+    for name, wcss_val in wcss_intent["tightness_rank"][-5:]:
+        mean_d = wcss_intent["per_cluster_mean_dist"].get(name, float("nan"))
+        lines.append(f"    {name:<35s}  WCSS={wcss_val:.4f}  mean_dist={mean_d:.4f}")
+    lines.append("")
+
+    # Intra/inter ratio
+    lines.append("-" * 80)
+    lines.append("  3. INTRA/INTER DISTANCE RATIO")
+    lines.append("-" * 80)
+    lines.append("  Ratio < 1.0 = well-separated | Ratio > 1.0 = dispersed beyond neighbors")
+    lines.append("")
+    dispersed = [(k, v) for k, v in sorted(intra_inter.items(), key=lambda x: x[1], reverse=True) if v > 1.0]
+    if dispersed:
+        lines.append(f"  WARNING: {len(dispersed)} intent(s) have ratio > 1.0 (dispersed):")
+        for name, ratio in dispersed[:10]:
+            lines.append(f"    {name:<35s}  ratio={ratio:.4f}")
+    else:
+        lines.append("  All intents have ratio <= 1.0 (good separation)")
+    lines.append("")
+
+    # Overlapping clusters
+    lines.append("-" * 80)
+    lines.append("  4. OVERLAPPING CLUSTERS")
+    lines.append("-" * 80)
+    lines.append(f"  Threshold: cosine similarity >= {overlaps['threshold']}")
+    lines.append(f"  Total overlapping pairs: {overlaps['overlap_count']}")
+    lines.append("")
+
+    if overlaps["same_domain_overlaps"]:
+        lines.append("  Same-domain overlaps:")
+        for n1, n2, sim, sev, dom in overlaps["same_domain_overlaps"]:
+            lines.append(f"    [{sev:8s}] {n1} <-> {n2}  sim={sim:.3f}  domain={dom}")
+        lines.append("")
+
+    if overlaps["cross_domain_overlaps"]:
+        lines.append("  Cross-domain overlaps:")
+        for n1, n2, d1, d2, sim, sev in overlaps["cross_domain_overlaps"]:
+            lines.append(f"    [{sev:8s}] {n1}({d1}) <-> {n2}({d2})  sim={sim:.3f}")
+        lines.append("")
+
+    # Class imbalance
+    lines.append("-" * 80)
+    lines.append("  5. CLASS IMBALANCE")
+    lines.append("-" * 80)
+    lines.append(f"  Intent imbalance ratio (max/min): {imbalance['intent_imbalance_ratio']:.1f}x")
+    lines.append(f"  Domain imbalance ratio: {imbalance['domain_imbalance_ratio']:.1f}x")
+    lines.append("")
+    lines.append("  Domain sizes:")
+    for domain, count in sorted(imbalance["domain_counts"].items(), key=lambda x: x[1], reverse=True):
+        lines.append(f"    {domain:<30s}  {count:4d} exemplars")
+    lines.append("")
+
+    # Cross-domain intents
+    lines.append("-" * 80)
+    lines.append("  6. CROSS-DOMAIN INTENTS")
+    lines.append("-" * 80)
+    if cross_domain:
+        for intent, info in cross_domain.items():
+            lines.append(f"  {intent}:")
+            lines.append(f"    Domains: {', '.join(info['domains'])}")
+            for d, s in info["domain_similarities"].items():
+                lines.append(f"    Similarity to {d} centroid: {s:.4f}")
+            lines.append(f"    Leans toward: {info['leans_toward']}")
+            lines.append("")
+    else:
+        lines.append("  No cross-domain intents detected.")
+    lines.append("")
+
+    # Overall assessment
+    lines.append("=" * 80)
+    lines.append("  7. OVERALL CLUSTER QUALITY CLASSIFICATION")
+    lines.append("=" * 80)
+    lines.append("")
+
+    if intent_sil > 0.5 and overlaps["overlap_count"] == 0:
+        quality = "WELL-SEPARATED"
+    elif intent_sil > 0.25:
+        quality = "HIERARCHICAL WITH MODERATE OVERLAP"
+    elif overlaps["overlap_count"] > 5:
+        quality = "HIERARCHICAL WITH SIGNIFICANT BOUNDARY OVERLAP"
+    else:
+        quality = "HIERARCHICAL WITH BOUNDARY OVERLAP"
+
+    lines.append(f"  Classification: {quality}")
+    lines.append("")
+    lines.append("  The embedding space exhibits a natural hierarchical structure:")
+    lines.append("  - Domains form coarse clusters, but with high inter-domain similarity (0.78-0.95)")
+    lines.append("  - Intents within the same domain cluster more tightly than across domains")
+    lines.append("  - Several intent pairs at domain boundaries overlap significantly")
+    lines.append("  - This structure favors kNN and SVM classifiers over centroid-only methods")
+    lines.append("")
+
+    # Precautions
+    lines.append("=" * 80)
+    lines.append("  8. PRECAUTIONS & BEST PRACTICES FOR MODEL DEVELOPMENT")
+    lines.append("=" * 80)
+    lines.append("")
+    lines.append("  P1. CENTROID-ONLY CLASSIFIERS ARE INSUFFICIENT")
+    lines.append("      The overlapping intent pairs (especially Generic/Brand, rejection_reasons/")
+    lines.append("      RejectCode) cannot be separated by centroids alone. kNN or trained models")
+    lines.append("      that access the full exemplar distribution are required.")
+    lines.append("")
+    lines.append("  P2. KNN K VALUE MUST STAY AT 7")
+    lines.append("      Empirically validated; k=15 loses 2.7pp accuracy. k=7 balances granularity")
+    lines.append("      vs noise given 20 exemplars per intent.")
+    lines.append("")
+    lines.append("  P3. DISPERSION NORMALIZATION IS CRITICAL FOR DOMAIN ROUTING")
+    lines.append("      Domain centroids have different intra-cluster dispersions. Raw cosine")
+    lines.append("      similarity will over-route to tight (low-variance) domains. Use z-score")
+    lines.append("      normalization: (cos - mu_D) / sigma_D.")
+    lines.append("")
+    lines.append("  P4. CROSS-DOMAIN INTENTS NEED SPECIAL HANDLING")
+    lines.append("      claim_status exists in both cap_api and claim_history_search. The domain")
+    lines.append("      router must handle this ambiguity — do not collapse to a single domain.")
+    lines.append("")
+    lines.append("  P5. OUT-OF-SCOPE CLUSTER IS INTENTIONALLY DIVERSE")
+    lines.append("      out_of_scope (44 exemplars) will always have low silhouette. This is by")
+    lines.append("      design (covering 'anything else'). Do not remove outliers from this cluster.")
+    lines.append("")
+    lines.append("  P6. EMBEDDING DRIFT REQUIRES ARTIFACT REGENERATION")
+    lines.append("      If Google updates text-embedding-005, all artifacts (embeddings, centroids,")
+    lines.append("      trained models) must be regenerated. Version-stamp all artifacts.")
+    lines.append("")
+    lines.append("  P7. 7 INTENTS HAVE ZERO TEST DATA")
+    lines.append("      daw_info, government_claim_type, mail_order_info, medicare_part_d,")
+    lines.append("      network_info, prescriber_info, prior_auth_info — validate before production.")
+    lines.append("")
+    lines.append("  P8. CLASS IMBALANCE IS MILD (2.2x) — USE class_weight='balanced'")
+    lines.append("      No SMOTE or oversampling needed. sklearn's balanced weighting is sufficient.")
+    lines.append("")
+
+    report = "\n".join(lines)
+
+    if output_path:
+        with open(output_path, "w") as f:
+            f.write(report)
+        logger.info(f"Cluster quality report saved to {output_path}")
+
+    return report
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 3: PRODUCTION CLASSIFICATION MODEL (TASK 2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ── 3.1 Feature Engineering & Dispersion Stats ────────────────────────────
+
+def compute_dispersion_stats(
+    embeddings: Dict[str, Any],
+    centroids_domain: Dict[str, np.ndarray],
+    domain_registry: Dict,
+) -> Dict[str, Dict[str, float]]:
+    """Compute per-domain dispersion stats for z-score normalization (E3)."""
+    logger.info("Computing domain dispersion statistics (E3)...")
+    stats = {}
+
+    for domain_key, domain_info in domain_registry.items():
+        if domain_key not in centroids_domain:
+            continue
+
+        dc = _l2_normalize(centroids_domain[domain_key])
+        all_sims = []
+
+        for intent_name in domain_info["intents"]:
+            if intent_name in embeddings:
+                vecs = _l2_normalize(np.array(embeddings[intent_name], dtype=np.float32))
+                sims = vecs @ dc
+                all_sims.extend(sims.tolist())
+
+        if all_sims:
+            mu = float(np.mean(all_sims))
+            sigma = float(np.std(all_sims))
+            sigma = max(sigma, DISPERSION_SIGMA_FLOOR)
+        else:
+            mu, sigma = 0.0, DISPERSION_SIGMA_FLOOR
+
+        stats[domain_key] = {"mu": mu, "sigma": sigma}
+        logger.info(f"  {domain_key}: mu={mu:.4f}, sigma={sigma:.4f}")
+
+    return stats
+
+
+def build_training_data(
+    all_vectors: np.ndarray,
+    all_intent_labels: List[str],
+    all_domain_labels: List[str],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, LabelEncoder, LabelEncoder]:
+    """Build training arrays from flat vectors and labels."""
+    le_intent = LabelEncoder().fit(all_intent_labels)
+    le_domain = LabelEncoder().fit(all_domain_labels)
+    y_intent = le_intent.transform(all_intent_labels)
+    y_domain = le_domain.transform(all_domain_labels)
+    return all_vectors, y_intent, y_domain, le_intent, le_domain
+
+
+def build_domain_scoped_data(
+    embeddings: Dict[str, Any],
+    domain_registry: Dict,
+) -> Dict[str, Tuple[np.ndarray, np.ndarray, LabelEncoder]]:
+    """Build per-domain training sets for domain-scoped intent classifiers."""
+    per_domain = {}
+
+    for domain_key, domain_info in domain_registry.items():
+        vecs_list = []
+        labels_list = []
+
+        for intent_name in domain_info["intents"]:
+            if intent_name in embeddings:
+                mat = _l2_normalize(np.array(embeddings[intent_name], dtype=np.float32))
+                for row in mat:
+                    vecs_list.append(row)
+                    labels_list.append(intent_name)
+
+        if not vecs_list:
+            continue
+
+        X = np.array(vecs_list, dtype=np.float32)
+        le = LabelEncoder().fit(labels_list)
+        y = le.transform(labels_list)
+        per_domain[domain_key] = (X, y, le)
+        logger.info(f"  {domain_key}: {X.shape[0]} samples, {len(le.classes_)} intents")
+
+    return per_domain
+
+
+# ── 3.2 Model Training ───────────────────────────────────────────────────
+
+def _get_model_candidates(n_classes: int, n_samples: int) -> Dict[str, Any]:
+    """Return model candidates appropriate for the dataset size."""
+    models = {
+        "knn_cosine_k7": KNeighborsClassifier(
+            n_neighbors=min(KNN_K, n_samples - 1),
+            metric="cosine",
+            weights="distance",
+        ),
+        "nearest_centroid_cosine": None,  # handled separately
+        "svc_linear": SVC(
+            kernel="linear", C=1.0,
+            class_weight="balanced",
+            probability=True,
+            random_state=RANDOM_STATE,
+        ),
+        "logistic_regression": LogisticRegression(
+            solver="lbfgs",
+            C=1.0, max_iter=2000,
+            class_weight="balanced",
+            random_state=RANDOM_STATE,
+        ),
+    }
+
+    if n_samples >= 50 and n_classes >= 3:
+        models["svc_rbf"] = SVC(
+            kernel="rbf", C=10.0, gamma="scale",
+            class_weight="balanced",
+            probability=True,
+            random_state=RANDOM_STATE,
+        )
+
+    return models
+
+
+def _loo_evaluate(
+    model, X: np.ndarray, y: np.ndarray, model_name: str,
+) -> Dict[str, Any]:
+    """Run LOO cross-validation and return metrics."""
+    n = X.shape[0]
+    n_classes = len(np.unique(y))
+
+    if model_name == "nearest_centroid_cosine":
+        y_pred = np.zeros(n, dtype=int)
+        for i in range(n):
+            mask = np.ones(n, dtype=bool)
+            mask[i] = False
+            X_train, y_train = X[mask], y[mask]
+            query = X[i]
+
+            centroids = {}
+            for cls in np.unique(y_train):
+                cls_vecs = X_train[y_train == cls]
+                c = np.mean(cls_vecs, axis=0)
+                norm = np.linalg.norm(c)
+                if norm > 0:
+                    c = c / norm
+                centroids[cls] = c
+
+            best_cls, best_sim = None, -1.0
+            q_norm = query / (np.linalg.norm(query) + 1e-10)
+            for cls, c in centroids.items():
+                sim = float(np.dot(q_norm, c))
+                if sim > best_sim:
+                    best_sim = sim
+                    best_cls = cls
+            y_pred[i] = best_cls
+    else:
+        loo = LeaveOneOut()
+        n_jobs = -1 if n <= 2000 else 1
+        y_pred = cross_val_predict(model, X, y, cv=loo, n_jobs=n_jobs)
+
+    acc = float(accuracy_score(y, y_pred))
+    f1_mac = float(f1_score(y, y_pred, average="macro", zero_division=0))
+    f1_wt = float(f1_score(y, y_pred, average="weighted", zero_division=0))
+
+    return {
+        "accuracy": acc,
+        "f1_macro": f1_mac,
+        "f1_weighted": f1_wt,
+        "predictions": y_pred,
+    }
+
+
+def train_domain_classifier(
+    X: np.ndarray,
+    y_domain: np.ndarray,
+    le_domain: LabelEncoder,
+) -> Dict[str, Any]:
+    """Train and evaluate domain classifiers via LOO-CV."""
+    logger.info("Training domain classifiers...")
+    n_classes = len(le_domain.classes_)
+    n_samples = X.shape[0]
+    models = _get_model_candidates(n_classes, n_samples)
+
+    loo_results = {}
+    for name, model in models.items():
+        logger.info(f"  LOO-CV domain classifier: {name}...")
+        t0 = time.time()
+        result = _loo_evaluate(model, X, y_domain, name)
+        elapsed = time.time() - t0
+        result["elapsed_seconds"] = elapsed
+        loo_results[name] = result
+        logger.info(f"    acc={result['accuracy']:.4f}  f1m={result['f1_macro']:.4f}  ({elapsed:.1f}s)")
+
+    best_name = max(loo_results, key=lambda k: loo_results[k]["f1_macro"])
+    logger.info(f"  Best domain model: {best_name} (F1m={loo_results[best_name]['f1_macro']:.4f})")
+
+    best_model = _get_model_candidates(n_classes, n_samples).get(best_name)
+    if best_model is not None and best_name != "nearest_centroid_cosine":
+        best_model.fit(X, y_domain)
+    else:
+        best_model = None
+
+    return {
+        "loo_results": loo_results,
+        "best_model_name": best_name,
+        "best_model": best_model,
+        "label_encoder": le_domain,
+    }
+
+
+def train_intent_classifiers_per_domain(
+    per_domain_data: Dict[str, Tuple[np.ndarray, np.ndarray, LabelEncoder]],
+) -> Dict[str, Dict[str, Any]]:
+    """Train intent classifiers scoped to each domain via LOO-CV."""
+    logger.info("Training per-domain intent classifiers...")
+    results = {}
+
+    for domain_name, (X, y, le) in per_domain_data.items():
+        n_classes = len(le.classes_)
+        n_samples = X.shape[0]
+        logger.info(f"\n  Domain: {domain_name} ({n_samples} samples, {n_classes} intents)")
+
+        models = _get_model_candidates(n_classes, n_samples)
+        loo_results = {}
+
+        for model_name, model in models.items():
+            logger.info(f"    LOO-CV intent/{domain_name}: {model_name}...")
+            t0 = time.time()
+            result = _loo_evaluate(model, X, y, model_name)
+            elapsed = time.time() - t0
+            result["elapsed_seconds"] = elapsed
+            loo_results[model_name] = result
+            logger.info(f"      acc={result['accuracy']:.4f}  f1m={result['f1_macro']:.4f}  ({elapsed:.1f}s)")
+
+        best_name = max(loo_results, key=lambda k: loo_results[k]["f1_macro"])
+        logger.info(f"    Best for {domain_name}: {best_name} "
+                     f"(F1m={loo_results[best_name]['f1_macro']:.4f})")
+
+        best_model = _get_model_candidates(n_classes, n_samples).get(best_name)
+        if best_model is not None and best_name != "nearest_centroid_cosine":
+            best_model.fit(X, y)
+        else:
+            best_model = None
+
+        results[domain_name] = {
+            "loo_results": loo_results,
+            "best_model_name": best_name,
+            "best_model": best_model,
+            "label_encoder": le,
+            "n_classes": n_classes,
+            "n_samples": n_samples,
+        }
+
+    return results
+
+
+# ── 3.3 Model Comparison Report ──────────────────────────────────────────
+
+def generate_model_comparison_report(
+    domain_clf_results: Dict,
+    intent_clf_results: Dict,
+    output_path: str,
+) -> str:
+    """Generate a comparison table across all models and domains."""
+    lines = []
+    lines.append("=" * 90)
+    lines.append("  MODEL COMPARISON REPORT")
+    lines.append("=" * 90)
+
+    # Domain classifier
+    lines.append("\n  DOMAIN CLASSIFIERS (4-class, LOO-CV on all exemplars)")
+    lines.append("-" * 90)
+    lines.append(f"  {'Model':<30s} {'Accuracy':>10s} {'F1-Macro':>10s} {'F1-Weighted':>12s} {'Time':>8s}")
+    lines.append("-" * 90)
+    for name, res in sorted(
+        domain_clf_results["loo_results"].items(),
+        key=lambda x: x[1]["f1_macro"], reverse=True
+    ):
+        best_flag = " *" if name == domain_clf_results["best_model_name"] else ""
+        lines.append(f"  {name:<30s} {res['accuracy']:>10.4f} {res['f1_macro']:>10.4f} "
+                      f"{res['f1_weighted']:>12.4f} {res.get('elapsed_seconds', 0):>7.1f}s{best_flag}")
+    lines.append("")
+
+    # Per-domain intent classifiers
+    for domain_name, domain_res in intent_clf_results.items():
+        n_cls = domain_res["n_classes"]
+        n_sam = domain_res["n_samples"]
+        lines.append(f"\n  INTENT CLASSIFIERS — {domain_name} ({n_cls} intents, {n_sam} samples)")
+        lines.append("-" * 90)
+        lines.append(f"  {'Model':<30s} {'Accuracy':>10s} {'F1-Macro':>10s} {'F1-Weighted':>12s} {'Time':>8s}")
+        lines.append("-" * 90)
+        for name, res in sorted(
+            domain_res["loo_results"].items(),
+            key=lambda x: x[1]["f1_macro"], reverse=True
+        ):
+            best_flag = " *" if name == domain_res["best_model_name"] else ""
+            lines.append(f"  {name:<30s} {res['accuracy']:>10.4f} {res['f1_macro']:>10.4f} "
+                          f"{res.get('f1_weighted', 0):>12.4f} {res.get('elapsed_seconds', 0):>7.1f}s{best_flag}")
+    lines.append("")
+
+    # Estimated end-to-end accuracy
+    lines.append("=" * 90)
+    lines.append("  ESTIMATED END-TO-END ACCURACY (domain_acc * avg_intent_acc)")
+    lines.append("=" * 90)
+    best_domain_acc = domain_clf_results["loo_results"][domain_clf_results["best_model_name"]]["accuracy"]
+    intent_accs = []
+    for domain_name, domain_res in intent_clf_results.items():
+        best = domain_res["loo_results"][domain_res["best_model_name"]]
+        intent_accs.append(best["accuracy"])
+        lines.append(f"  {domain_name:<30s}  intent_acc={best['accuracy']:.4f}")
+
+    avg_intent_acc = float(np.mean(intent_accs))
+    e2e = best_domain_acc * avg_intent_acc
+    lines.append(f"\n  Domain accuracy (best):     {best_domain_acc:.4f}")
+    lines.append(f"  Avg intent accuracy (best): {avg_intent_acc:.4f}")
+    lines.append(f"  Estimated E2E:              {e2e:.4f}")
+    lines.append(f"\n  Baseline (hierarchical_knn): ~0.918 intent, ~0.941 domain")
+    lines.append("")
+
+    report = "\n".join(lines)
+
+    if output_path:
+        with open(output_path, "w") as f:
+            f.write(report)
+        logger.info(f"Model comparison report saved to {output_path}")
+
+    return report
+
+
+# ── 3.4 Prediction Pipeline ─────────────────────────────────────────────
+
+class DirectClassifier:
+    """Production classifier: hierarchical domain->intent with confidence scoring."""
+
+    def __init__(
+        self,
+        domain_model,
+        domain_le: LabelEncoder,
+        intent_models: Dict[str, Any],
+        intent_les: Dict[str, LabelEncoder],
+        centroids_domain: Dict[str, np.ndarray],
+        centroids_intent: Dict[str, np.ndarray],
+        embeddings: Dict[str, Any],
+        dispersion_stats: Dict[str, Dict[str, float]],
+        domain_registry: Dict,
+    ):
+        self.domain_model = domain_model
+        self.domain_le = domain_le
+        self.intent_models = intent_models
+        self.intent_les = intent_les
+        self.centroids_domain = centroids_domain
+        self.centroids_intent = centroids_intent
+        self.embeddings = embeddings
+        self.dispersion_stats = dispersion_stats
+        self.domain_registry = domain_registry
+        self.intent_to_domains = _build_intent_to_domains(domain_registry)
+
+        self._exemplar_index = self._build_exemplar_index()
+
+    def _build_exemplar_index(self) -> Dict[str, Dict[str, np.ndarray]]:
+        """domain -> {intent: (N,768) matrix}"""
+        index = {}
+        for domain_key, domain_info in self.domain_registry.items():
+            index[domain_key] = {}
+            for intent_name in domain_info["intents"]:
+                if intent_name in self.embeddings:
+                    mat = _l2_normalize(np.array(self.embeddings[intent_name], dtype=np.float32))
+                    index[domain_key][intent_name] = mat
+        return index
+
+    def classify(
+        self,
+        query_vec: np.ndarray,
+        gap_threshold_relative: float = 0.03,
+        abstain_score_floor: float = ABSTAIN_SCORE_FLOOR,
+        abstain_margin_ceil: float = ABSTAIN_MARGIN_CEIL,
+    ) -> Dict[str, Any]:
+        """Classify a single query embedding."""
+        q = _l2_normalize(query_vec.astype(np.float32))
+
+        # Stage 1: Domain scoring with dispersion normalization
+        domain_raw_scores = {}
+        domain_z_scores = {}
+        for domain_key, dc in self.centroids_domain.items():
+            dc_norm = _l2_normalize(dc)
+            raw = float(np.dot(q, dc_norm))
+            domain_raw_scores[domain_key] = raw
+
+            if domain_key in self.dispersion_stats:
+                mu = self.dispersion_stats[domain_key]["mu"]
+                sigma = self.dispersion_stats[domain_key]["sigma"]
+                z = (raw - mu) / sigma
+            else:
+                z = raw
+            domain_z_scores[domain_key] = z
+
+        sorted_domains = sorted(domain_z_scores.items(), key=lambda x: x[1], reverse=True)
+        top_domain = sorted_domains[0][0]
+        top_z = sorted_domains[0][1]
+        second_z = sorted_domains[1][1] if len(sorted_domains) > 1 else -float("inf")
+        top_raw = domain_raw_scores[top_domain]
+
+        # OOD check
+        if top_raw < 0.30:
+            return {
+                "predicted_domain": "general",
+                "predicted_intent": "out_of_scope",
+                "domain_confidence": top_z,
+                "intent_confidence": 0.0,
+                "intent_margin": 0.0,
+                "is_abstain": True,
+                "is_ambiguous_domain": False,
+                "candidate_domains": [],
+                "domain_z_scores": domain_z_scores,
+                "domain_raw_scores": domain_raw_scores,
+            }
+
+        # Relative gap ambiguity check
+        if top_z > 0:
+            relative_gap = (top_z - second_z) / abs(top_z)
+        else:
+            relative_gap = 0.0
+        is_ambiguous = relative_gap < gap_threshold_relative
+
+        candidate_domains = [top_domain]
+        if is_ambiguous and len(sorted_domains) > 1:
+            candidate_domains.append(sorted_domains[1][0])
+
+        # Stage 2: Intent classification within candidate domain(s)
+        best_intent = None
+        best_confidence = -1.0
+        second_confidence = -1.0
+        best_domain = candidate_domains[0]
+
+        for domain_key in candidate_domains:
+            if domain_key in self.intent_models and self.intent_models[domain_key] is not None:
+                model = self.intent_models[domain_key]
+                le = self.intent_les[domain_key]
+                proba = model.predict_proba(q.reshape(1, -1))[0]
+                sorted_idx = np.argsort(proba)[::-1]
+
+                top_prob = float(proba[sorted_idx[0]])
+                second_prob = float(proba[sorted_idx[1]]) if len(sorted_idx) > 1 else 0.0
+                top_intent_name = le.inverse_transform([sorted_idx[0]])[0]
+
+                if top_prob > best_confidence:
+                    second_confidence = best_confidence
+                    best_confidence = top_prob
+                    best_intent = top_intent_name
+                    best_domain = domain_key
+                    if second_prob > second_confidence:
+                        second_confidence = second_prob
+            else:
+                # Nearest centroid fallback
+                if domain_key in self._exemplar_index:
+                    best_sim = -1.0
+                    for intent_name, mat in self._exemplar_index[domain_key].items():
+                        sims = mat @ q
+                        max_sim = float(np.max(sims))
+                        if max_sim > best_sim:
+                            if max_sim > best_confidence:
+                                second_confidence = best_confidence
+                                best_confidence = max_sim
+                                best_intent = intent_name
+                                best_domain = domain_key
+                            best_sim = max_sim
+
+        if best_intent is None:
+            best_intent = "out_of_scope"
+            best_domain = "general"
+
+        margin = best_confidence - second_confidence
+
+        is_abstain = (best_confidence < abstain_score_floor and margin < abstain_margin_ceil)
+
+        return {
+            "predicted_domain": best_domain,
+            "predicted_intent": best_intent,
+            "domain_confidence": top_z,
+            "intent_confidence": best_confidence,
+            "intent_margin": margin,
+            "is_abstain": is_abstain,
+            "is_ambiguous_domain": is_ambiguous,
+            "candidate_domains": candidate_domains,
+            "domain_z_scores": domain_z_scores,
+            "domain_raw_scores": domain_raw_scores,
+        }
+
+    def classify_batch(
+        self,
+        query_vecs: np.ndarray,
+    ) -> List[Dict[str, Any]]:
+        """Classify a batch of query embeddings."""
+        return [self.classify(v) for v in query_vecs]
+
+
+# ── 3.5 Evaluation ──────────────────────────────────────────────────────
+
+def evaluate_on_testdata(
+    classifier: DirectClassifier,
+    test_df: pd.DataFrame,
+    output_path: str,
+    skip_api: bool = True,
+) -> Optional[Dict[str, Any]]:
+    """Evaluate the classifier on Testdata.csv."""
+    logger.info("Evaluating on test data...")
+
+    # Check for cached test embeddings
+    test_embeddings = None
+    if os.path.exists(TEST_EMBEDDINGS_PATH):
+        logger.info("Loading cached test embeddings...")
+        with open(TEST_EMBEDDINGS_PATH, "r") as f:
+            test_embeddings = json.load(f)
+    elif not skip_api:
+        logger.info("Generating test embeddings via Vertex AI (642 queries)...")
+        try:
+            from intent_detection_v4 import VertexEmbeddings
+            embedder = VertexEmbeddings()
+            test_embeddings = {}
+            prompts = test_df["Prompt"].tolist()
+            for i, prompt in enumerate(prompts):
+                if (i + 1) % 50 == 0:
+                    logger.info(f"  Embedded {i+1}/{len(prompts)} test queries...")
+                vecs = embedder.embed([prompt])
+                test_embeddings[prompt] = vecs[0] if isinstance(vecs[0], list) else vecs[0].tolist()
+
+            with open(TEST_EMBEDDINGS_PATH, "w") as f:
+                json.dump(test_embeddings, f)
+            logger.info(f"Test embeddings saved to {TEST_EMBEDDINGS_PATH}")
+        except Exception as e:
+            logger.warning(f"Vertex AI unavailable: {e}. Skipping test evaluation.")
+            return None
+    else:
+        logger.info("No cached test embeddings found and --skip-eval set. Skipping evaluation.")
+        return None
+
+    if test_embeddings is None:
+        return None
+
+    y_true_intent = []
+    y_pred_intent = []
+    y_true_domain = []
+    y_pred_domain = []
+    results_rows = []
+    n_abstain = 0
+
+    for _, row in test_df.iterrows():
+        prompt = row["Prompt"]
+        actual_intent = row["Intent"]
+        actual_domain = row["domain"]
+
+        if prompt not in test_embeddings:
+            continue
+
+        query_vec = np.array(test_embeddings[prompt], dtype=np.float32)
+        result = classifier.classify(query_vec)
+
+        y_true_intent.append(actual_intent)
+        y_pred_intent.append(result["predicted_intent"])
+        y_true_domain.append(actual_domain)
+        y_pred_domain.append(result["predicted_domain"])
+
+        if result["is_abstain"]:
+            n_abstain += 1
+
+        results_rows.append({
+            "Prompt": prompt,
+            "actual_intent": actual_intent,
+            "predicted_intent": result["predicted_intent"],
+            "intent_match": actual_intent == result["predicted_intent"],
+            "actual_domain": actual_domain,
+            "predicted_domain": result["predicted_domain"],
+            "domain_match": actual_domain == result["predicted_domain"],
+            "intent_confidence": result["intent_confidence"],
+            "intent_margin": result["intent_margin"],
+            "domain_confidence": result["domain_confidence"],
+            "is_abstain": result["is_abstain"],
+            "is_ambiguous_domain": result["is_ambiguous_domain"],
+        })
+
+    if not y_true_intent:
+        logger.warning("No test embeddings matched prompts in Testdata.csv")
+        return None
+
+    intent_acc = accuracy_score(y_true_intent, y_pred_intent)
+    domain_acc = accuracy_score(y_true_domain, y_pred_domain)
+    f1_mac_intent = f1_score(y_true_intent, y_pred_intent, average="macro", zero_division=0)
+    f1_wt_intent = f1_score(y_true_intent, y_pred_intent, average="weighted", zero_division=0)
+    f1_mac_domain = f1_score(y_true_domain, y_pred_domain, average="macro", zero_division=0)
+
+    # Per-domain breakdown
+    domain_breakdown = {}
+    for domain in sorted(set(y_true_domain)):
+        mask = [d == domain for d in y_true_domain]
+        d_true_i = [y_true_intent[j] for j, m in enumerate(mask) if m]
+        d_pred_i = [y_pred_intent[j] for j, m in enumerate(mask) if m]
+        d_true_d = [y_true_domain[j] for j, m in enumerate(mask) if m]
+        d_pred_d = [y_pred_domain[j] for j, m in enumerate(mask) if m]
+        domain_breakdown[domain] = {
+            "n": sum(mask),
+            "intent_acc": accuracy_score(d_true_i, d_pred_i),
+            "domain_acc": accuracy_score(d_true_d, d_pred_d),
+        }
+
+    # Save results
+    results_df = pd.DataFrame(results_rows)
+    results_csv_path = os.path.join(OUTPUTS_DIR, "classification_results_direct_classifier.csv")
+    results_df.to_csv(results_csv_path, index=False)
+
+    # Print report
+    print("\n" + "=" * 70)
+    print("  TEST SET EVALUATION — Direct Classifier")
+    print("=" * 70)
+    print(f"  Test samples:       {len(y_true_intent)}")
+    print(f"  Intent accuracy:    {intent_acc:.4f}  ({sum(r['intent_match'] for r in results_rows)}/{len(results_rows)})")
+    print(f"  Domain accuracy:    {domain_acc:.4f}  ({sum(r['domain_match'] for r in results_rows)}/{len(results_rows)})")
+    print(f"  F1-macro (intent):  {f1_mac_intent:.4f}")
+    print(f"  F1-weighted (int):  {f1_wt_intent:.4f}")
+    print(f"  F1-macro (domain):  {f1_mac_domain:.4f}")
+    print(f"  Abstain count:      {n_abstain}")
+    print()
+    print("  Per-domain breakdown:")
+    print(f"  {'Domain':<30s} {'N':>5s} {'Intent Acc':>12s} {'Domain Acc':>12s}")
+    print("  " + "-" * 60)
+    for domain, info in sorted(domain_breakdown.items()):
+        print(f"  {domain:<30s} {info['n']:>5d} {info['intent_acc']:>12.4f} {info['domain_acc']:>12.4f}")
+    print()
+
+    # Confusion matrices
+    _plot_confusion_matrices(y_true_intent, y_pred_intent, y_true_domain, y_pred_domain)
+
+    metrics = {
+        "intent_accuracy": intent_acc,
+        "domain_accuracy": domain_acc,
+        "f1_macro_intent": f1_mac_intent,
+        "f1_weighted_intent": f1_wt_intent,
+        "f1_macro_domain": f1_mac_domain,
+        "domain_breakdown": domain_breakdown,
+        "n_abstain": n_abstain,
+        "n_total": len(y_true_intent),
+    }
+
+    # Compare against baseline
+    baseline_path = os.path.join(OUTPUTS_DIR, "classification_results_hierarchical_knn.csv")
+    if os.path.exists(baseline_path):
+        _compare_against_baseline(metrics, baseline_path)
+
+    return metrics
+
+
+def _plot_confusion_matrices(
+    y_true_intent, y_pred_intent, y_true_domain, y_pred_domain,
+) -> None:
+    """Plot domain-level confusion matrix."""
+    logger.info("  Generating confusion matrices...")
+
+    # Domain confusion matrix (4x4)
+    domain_labels = sorted(set(y_true_domain + y_pred_domain))
+    cm = confusion_matrix(y_true_domain, y_pred_domain, labels=domain_labels)
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    if HAS_SEABORN:
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                    xticklabels=domain_labels, yticklabels=domain_labels, ax=ax)
+    else:
+        im = ax.imshow(cm, cmap="Blues")
+        ax.set_xticks(range(len(domain_labels)))
+        ax.set_yticks(range(len(domain_labels)))
+        ax.set_xticklabels(domain_labels, rotation=45, ha="right")
+        ax.set_yticklabels(domain_labels)
+        for i in range(len(domain_labels)):
+            for j in range(len(domain_labels)):
+                ax.text(j, i, str(cm[i, j]), ha="center", va="center")
+        plt.colorbar(im, ax=ax)
+
+    ax.set_xlabel("Predicted Domain")
+    ax.set_ylabel("True Domain")
+    ax.set_title("Domain Confusion Matrix — Direct Classifier")
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOTS_DIR, "confusion_matrix_domain.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _compare_against_baseline(metrics: Dict, baseline_path: str) -> None:
+    """Compare against the existing hierarchical_knn baseline."""
+    try:
+        baseline_df = pd.read_csv(baseline_path)
+        if "intent_match" in baseline_df.columns and "domain_match" in baseline_df.columns:
+            baseline_intent_acc = baseline_df["intent_match"].mean()
+            baseline_domain_acc = baseline_df["domain_match"].mean()
+        else:
+            return
+
+        print("\n" + "=" * 70)
+        print("  COMPARISON vs BASELINE (hierarchical_knn)")
+        print("=" * 70)
+        print(f"  {'Metric':<25s} {'Baseline':>12s} {'Direct Clf':>12s} {'Delta':>10s}")
+        print("  " + "-" * 60)
+
+        for metric_name, baseline_val, new_val in [
+            ("Intent Accuracy", baseline_intent_acc, metrics["intent_accuracy"]),
+            ("Domain Accuracy", baseline_domain_acc, metrics["domain_accuracy"]),
+        ]:
+            delta = new_val - baseline_val
+            sign = "+" if delta >= 0 else ""
+            print(f"  {metric_name:<25s} {baseline_val:>12.4f} {new_val:>12.4f} {sign}{delta:>9.4f}")
+        print()
+    except Exception as e:
+        logger.warning(f"Could not load baseline: {e}")
+
+
+# ── 3.6 Model Persistence ───────────────────────────────────────────────
+
+def save_classifier(
+    classifier: DirectClassifier,
+    domain_clf_results: Dict,
+    intent_clf_results: Dict,
+    dispersion_stats: Dict,
+) -> None:
+    """Save all model artifacts."""
+    logger.info(f"Saving classifier artifacts to {MODELS_DIR}...")
+
+    # Domain model
+    if classifier.domain_model is not None:
+        with open(os.path.join(MODELS_DIR, "domain_classifier.pkl"), "wb") as f:
+            pickle.dump(classifier.domain_model, f)
+        with open(os.path.join(MODELS_DIR, "domain_label_encoder.pkl"), "wb") as f:
+            pickle.dump(classifier.domain_le, f)
+
+    # Per-domain intent models
+    for domain_name in classifier.intent_models:
+        if classifier.intent_models[domain_name] is not None:
+            path = os.path.join(MODELS_DIR, f"intent_classifier_{domain_name}.pkl")
+            with open(path, "wb") as f:
+                pickle.dump(classifier.intent_models[domain_name], f)
+            le_path = os.path.join(MODELS_DIR, f"intent_label_encoder_{domain_name}.pkl")
+            with open(le_path, "wb") as f:
+                pickle.dump(classifier.intent_les[domain_name], f)
+
+    # Dispersion stats
+    serializable_stats = {k: {sk: float(sv) for sk, sv in v.items()} for k, v in dispersion_stats.items()}
+    with open(os.path.join(MODELS_DIR, "dispersion_stats.json"), "w") as f:
+        json.dump(serializable_stats, f, indent=2)
+
+    # Metadata
+    metadata = {
+        "timestamp": datetime.now().isoformat(),
+        "domain_model": domain_clf_results["best_model_name"],
+        "domain_loo_accuracy": domain_clf_results["loo_results"][domain_clf_results["best_model_name"]]["accuracy"],
+        "domain_loo_f1_macro": domain_clf_results["loo_results"][domain_clf_results["best_model_name"]]["f1_macro"],
+        "intent_models": {},
+        "knn_k": KNN_K,
+        "abstain_score_floor": ABSTAIN_SCORE_FLOOR,
+        "abstain_margin_ceil": ABSTAIN_MARGIN_CEIL,
+        "dispersion_sigma_floor": DISPERSION_SIGMA_FLOOR,
+    }
+    for domain_name, res in intent_clf_results.items():
+        best = res["best_model_name"]
+        metadata["intent_models"][domain_name] = {
+            "model": best,
+            "loo_accuracy": res["loo_results"][best]["accuracy"],
+            "loo_f1_macro": res["loo_results"][best]["f1_macro"],
+            "n_classes": res["n_classes"],
+            "n_samples": res["n_samples"],
+        }
+
+    with open(os.path.join(MODELS_DIR, "classifier_metadata.json"), "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    logger.info("All classifier artifacts saved.")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 4: MAIN ENTRYPOINT
+# ═════════════════════════════════════════════════════════════════════════════
+
+def run_cluster_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Run complete cluster quality analysis (Task 1)."""
+    print("\n" + "=" * 80)
+    print("  TASK 1: CLUSTER QUALITY ANALYSIS")
+    print("=" * 80)
+
+    all_vectors = data["all_vectors"]
+    intent_labels = data["all_intent_labels"]
+    domain_labels = data["all_domain_labels"]
+    centroids_intent = data["centroids_intent"]
+    centroids_domain = data["centroids_domain"]
+    domain_registry = data["domain_registry"]
+
+    # 2.1 Silhouette
+    sil_intent = compute_silhouette(all_vectors, intent_labels, "intent")
+    sil_domain = compute_silhouette(all_vectors, domain_labels, "domain")
+
+    # 2.2 WCSS
+    wcss_intent = compute_wcss(all_vectors, intent_labels, centroids_intent, "intent")
+    wcss_domain = compute_wcss(all_vectors, domain_labels, centroids_domain, "domain")
+
+    # Intra/inter ratio
+    intra_inter = compute_intra_inter_ratio(all_vectors, intent_labels, centroids_intent)
+
+    # 2.3 Diagnostics
+    overlaps = identify_overlapping_clusters(centroids_intent, domain_registry)
+    imbalance = analyze_class_imbalance(intent_labels, domain_labels)
+    cross_domain = analyze_cross_domain_intents(centroids_intent, centroids_domain, domain_registry)
+
+    # 2.4 Visualizations
+    logger.info("Generating visualizations...")
+    prefix = os.path.join(PLOTS_DIR, "cluster")
+
+    plot_silhouette(sil_intent["per_sample_scores"], intent_labels,
+                    "Silhouette Plot — Intent Level",
+                    os.path.join(PLOTS_DIR, "silhouette_intent.png"))
+    plot_silhouette(sil_domain["per_sample_scores"], domain_labels,
+                    "Silhouette Plot — Domain Level",
+                    os.path.join(PLOTS_DIR, "silhouette_domain.png"))
+
+    plot_pca_2d(all_vectors, domain_labels, intent_labels, prefix)
+    plot_pca_3d(all_vectors, domain_labels, os.path.join(PLOTS_DIR, "pca_3d_domain.png"))
+
+    plot_domain_similarity_heatmap(
+        centroids_domain,
+        os.path.join(PLOTS_DIR, "domain_similarity_heatmap.png"),
+    )
+
+    proximity_df = plot_intent_confusion_proximity(
+        centroids_intent, domain_registry,
+        top_n_pairs=15,
+        output_path=os.path.join(OUTPUTS_DIR, "intent_proximity_top15.csv"),
+    )
+
+    # 2.5 Report
+    report = generate_cluster_quality_report(
+        sil_intent, sil_domain,
+        wcss_intent, wcss_domain,
+        overlaps, imbalance,
+        cross_domain, intra_inter,
+        output_path=os.path.join(OUTPUTS_DIR, "cluster_quality_report.txt"),
+    )
+    print(report)
+
+    return {
+        "sil_intent": sil_intent,
+        "sil_domain": sil_domain,
+        "wcss_intent": wcss_intent,
+        "wcss_domain": wcss_domain,
+        "overlaps": overlaps,
+        "imbalance": imbalance,
+        "cross_domain": cross_domain,
+        "intra_inter": intra_inter,
+        "proximity_df": proximity_df,
+    }
+
+
+def run_model_training(data: Dict[str, Any], skip_eval: bool = True) -> Dict[str, Any]:
+    """Run complete model training pipeline (Task 2)."""
+    print("\n" + "=" * 80)
+    print("  TASK 2: PRODUCTION CLASSIFICATION MODEL")
+    print("=" * 80)
+
+    all_vectors = data["all_vectors"]
+    intent_labels = data["all_intent_labels"]
+    domain_labels = data["all_domain_labels"]
+    embeddings = data["embeddings"]
+    centroids_intent = data["centroids_intent"]
+    centroids_domain = data["centroids_domain"]
+    domain_registry = data["domain_registry"]
+
+    # 3.1 Feature engineering
+    X, y_intent, y_domain, le_intent, le_domain = build_training_data(
+        all_vectors, intent_labels, domain_labels,
+    )
+    per_domain_data = build_domain_scoped_data(embeddings, domain_registry)
+    dispersion_stats = compute_dispersion_stats(embeddings, centroids_domain, domain_registry)
+
+    # 3.2 Model training
+    domain_clf_results = train_domain_classifier(X, y_domain, le_domain)
+    intent_clf_results = train_intent_classifiers_per_domain(per_domain_data)
+
+    # 3.3 Model comparison
+    comparison_report = generate_model_comparison_report(
+        domain_clf_results, intent_clf_results,
+        output_path=os.path.join(OUTPUTS_DIR, "model_comparison_report.txt"),
+    )
+    print(comparison_report)
+
+    # 3.4 Build production classifier
+    intent_models = {}
+    intent_les = {}
+    for domain_name, res in intent_clf_results.items():
+        intent_models[domain_name] = res["best_model"]
+        intent_les[domain_name] = res["label_encoder"]
+
+    classifier = DirectClassifier(
+        domain_model=domain_clf_results["best_model"],
+        domain_le=domain_clf_results["label_encoder"],
+        intent_models=intent_models,
+        intent_les=intent_les,
+        centroids_domain=centroids_domain,
+        centroids_intent=centroids_intent,
+        embeddings=embeddings,
+        dispersion_stats=dispersion_stats,
+        domain_registry=domain_registry,
+    )
+
+    # 3.5 Evaluation
+    test_metrics = None
+    if data["test_df"] is not None:
+        test_metrics = evaluate_on_testdata(
+            classifier, data["test_df"],
+            output_path=os.path.join(OUTPUTS_DIR, "classification_results_direct_classifier.csv"),
+            skip_api=skip_eval,
+        )
+
+    # 3.6 Save
+    save_classifier(classifier, domain_clf_results, intent_clf_results, dispersion_stats)
+
+    return {
+        "domain_clf_results": domain_clf_results,
+        "intent_clf_results": intent_clf_results,
+        "dispersion_stats": dispersion_stats,
+        "classifier": classifier,
+        "test_metrics": test_metrics,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Cluster Analysis & Classification Model")
+    parser.add_argument("--cluster-only", action="store_true", help="Run only cluster analysis")
+    parser.add_argument("--train-only", action="store_true", help="Run only model training")
+    parser.add_argument("--skip-tsne", action="store_true", help="Skip t-SNE (slow)")
+    parser.add_argument("--skip-eval", action="store_true", default=True,
+                        help="Skip test set evaluation (requires Vertex AI)")
+    parser.add_argument("--run-eval", action="store_true", help="Run test set evaluation")
+    args = parser.parse_args()
+
+    if args.run_eval:
+        args.skip_eval = False
+
+    run_cluster = not args.train_only
+    run_train = not args.cluster_only
+
+    # Load data
+    data = load_all_artifacts()
+
+    cluster_results = None
+    model_results = None
+
+    if run_cluster:
+        # Generate t-SNE unless skipped
+        cluster_results = run_cluster_analysis(data)
+        if not args.skip_tsne:
+            logger.info("Generating t-SNE plots...")
+            prefix = os.path.join(PLOTS_DIR, "cluster")
+            plot_tsne(data["all_vectors"], data["all_domain_labels"],
+                      data["all_intent_labels"], prefix)
+        else:
+            logger.info("Skipping t-SNE (--skip-tsne)")
+
+    if run_train:
+        model_results = run_model_training(data, skip_eval=args.skip_eval)
+
+    print("\n" + "=" * 80)
+    print("  ALL DONE")
+    print("=" * 80)
+    print(f"  Plots:     {PLOTS_DIR}")
+    print(f"  Models:    {MODELS_DIR}")
+    print(f"  Reports:   {OUTPUTS_DIR}")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()
