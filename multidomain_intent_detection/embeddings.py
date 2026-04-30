@@ -60,6 +60,9 @@ class VertexEmbeddings:
 
     def embed(self, text: str) -> List[float]:
         """Embed a single text string → 768-dim vector."""
+        # Guard: skip empty or whitespace-only strings
+        if not text or not text.strip():
+            return []
         from google.genai import types
 
         backoff = self.INITIAL_BACKOFF
@@ -86,6 +89,10 @@ class VertexEmbeddings:
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """Embed multiple texts with rate-limit-aware pacing."""
+        # Guard: filter out empty or whitespace-only strings
+        texts = [t for t in texts if t and t.strip()]
+        if not texts:
+            return []
         results = []
         for i, text in enumerate(texts):
             if i > 0:
