@@ -6,15 +6,15 @@ starlette==0.49.2
 uvicorn[standard]==0.23.2
 
 # LangChain / LLM
-langchain-core==0.3.81
-langchain==0.3.20
-langchain-openai==0.2.10
-langchain-text-splitters==0.3.10
+# Codebase imports langchain_core only; keep core patched for Snyk (directory traversal fix in 1.2.22+).
+langchain-core==1.2.23
 langsmith>=0.3.45,<0.4.0
 
-# LangGraph
-langgraph==1.0.1
-langgraph-checkpoint-sqlite==3.0.1
+# LangGraph — 1.0.10+ and checkpoint 4.0.1+ address high-severity deserialization findings (Snyk SLA).
+langgraph==1.0.10
+langgraph-checkpoint==4.0.1
+langgraph-checkpoint-sqlite==3.0.3
+ormsgpack>=1.12.0
 
 # Data validation
 pydantic==2.8.2
@@ -27,12 +27,12 @@ pymongo>=4.9,<4.10  # Required for motor 3.6.0 compatibility
 motor==3.6.0  # Async MongoDB driver (required for MongoDB persistence store)
 
 # HTTP & Telemetry
-requests==2.32.4
+requests==2.33.0
 httpx==0.25.2
 langfuse==1.14.0
 aiofiles==23.2.1
 python-dotenv==1.0.0
-orjson==3.10.12
+orjson==3.11.6
 certifi==2025.11.12
 zstandard==0.23.0
 
@@ -56,6 +56,5 @@ pytest-cov==4.1.0
 
 nest-asyncio>=1.5.8
 
-## Trigger-4
-
+## Trigger-3
 

@@ -25,8 +25,6 @@ from nodes import (
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
-from Claims_search_api.claims_search_node import call_claims_search_node
-from Claims_search_api.intent_router import route_after_build_context
 from config.config import settings
 from core.logger import get_logger
 
@@ -163,7 +161,6 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
-    workflow.add_node("call_claims_search", call_claims_search_node)
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
@@ -212,20 +209,11 @@ def _build_workflow() -> StateGraph:
     # Clarification → Response Safety PII Precheck → Response Agent (LLM generates follow-up question)
     workflow.add_edge("clarification", "response_safety_pii_precheck")
     
-    # Build Context → Route to appropriate tool
-    # Claims search queries go to call_claims_search; standard queries go to call_claims_tool
-    workflow.add_conditional_edges(
-        "build_context",
-        route_after_build_context,
-        {
-            "call_claims_search": "call_claims_search",
-            "call_claims_tool": "call_claims_tool",
-        }
-    )
+    # Build Context → Call Claims Tool
+    workflow.add_edge("build_context", "call_claims_tool")
     
     # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
-    workflow.add_edge("call_claims_search", "response_safety_pii_precheck")
     workflow.add_edge("response_safety_pii_precheck", "response_agent")
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
     
