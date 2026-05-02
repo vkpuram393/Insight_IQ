@@ -276,7 +276,7 @@ def format_claims_for_llm(
 
     # Step 1: Trim
     if is_member_history:
-        trimmed = trim_api_response(api_response)
+        trimmed = trim_api_response(api_response, max_claims=max_claims)
     else:
         trimmed = trim_single_claim_response(api_response)
 
@@ -286,7 +286,7 @@ def format_claims_for_llm(
         filtered_raw = prefilter_claims_by_query(raw_claims, user_query)
         # Re-trim only the filtered claims
         filtered_response = {**api_response, "claims": filtered_raw}
-        trimmed = trim_api_response(filtered_response)
+        trimmed = trim_api_response(filtered_response, max_claims=max_claims)
 
     claims = trimmed.get("claims", [])[:max_claims]
     total = trimmed.get("totalCount", len(claims))
@@ -323,7 +323,7 @@ def format_claims_as_compact_json(
         return json.dumps({"error": "No claims data available."})
 
     if is_member_history:
-        trimmed = trim_api_response(api_response)
+        trimmed = trim_api_response(api_response, max_claims=max_claims)
     else:
         trimmed = trim_single_claim_response(api_response)
 
@@ -331,7 +331,7 @@ def format_claims_as_compact_json(
     if user_query and is_member_history:
         filtered_raw = prefilter_claims_by_query(raw_claims, user_query)
         filtered_response = {**api_response, "claims": filtered_raw}
-        trimmed = trim_api_response(filtered_response)
+        trimmed = trim_api_response(filtered_response, max_claims=max_claims)
 
     trimmed["claims"] = trimmed.get("claims", [])[:max_claims]
     trimmed["totalCount"] = len(trimmed["claims"])

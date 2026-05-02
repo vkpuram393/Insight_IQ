@@ -1,0 +1,274 @@
+"""
+Multidomain Intent Detection — LLM Fallback
+=============================================
+
+When the ensemble classifier confidence is below threshold, this module
+delegates to the domain-aware LLM fallback system in
+prompt_templates/domain_prompts/llm_fallback.py which has:
+
+  - Full domain-specific expert prompts with decision trees
+  - Confusion-pair disambiguation tables
+  - Cross-domain routing rules
+  - Entity extraction rules and PBM acronym glossary
+
+This module is a thin adapter that:
+  1. Converts the simple (query, candidates) API into the domain-aware format
+  2. Falls back to a direct Gemini call if the domain-aware system is unavailable
+"""
+
+import os
+import sys
+import re
+import json
+import time
+import logging
+import threading
+from typing import List, Optional, Tuple
+
+from multidomain_intent_detection.config import INTENT_DESCRIPTIONS, INTENT_TO_DOMAIN
+
+logger = logging.getLogger(__name__)
+
+# ── Singleton Gemini client (thread-safe, lazy-init) ─────────────────────────
+_llm_client = None
+_llm_lock = threading.Lock()
+
+
+def _get_llm_client():
+    """Return a shared genai.Client instance (one gRPC channel per process)."""
+    global _llm_client
+    if _llm_client is None:
+        with _llm_lock:
+            if _llm_client is None:
+                from google import genai
+                _llm_client = genai.Client(
+                    vertexai=True,
+                    project=os.getenv("PROJECT_ID", "pbm-poc-coderev-genai-poc"),
+                    location=os.getenv("LOCATION", "us-central1"),
+                )
+                logger.info("LLM fallback client initialized")
+    return _llm_client
+
+
+# ── Retry config ─────────────────────────────────────────────────────────────
+_LLM_MAX_RETRIES = 3
+_LLM_INITIAL_BACKOFF = 1.0
+
+# ── Domain-aware fallback availability ───────────────────────────────────────
+_domain_aware_available = None
+
+
+def _check_domain_aware():
+    """Check if the domain-aware fallback system is importable."""
+    global _domain_aware_available
+    if _domain_aware_available is not None:
+        return _domain_aware_available
+    try:
+        # Ensure prompt_templates is on the path
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from prompt_templates.domain_prompts.llm_fallback import llm_fallback_classify  # noqa: F401
+        _domain_aware_available = True
+        logger.info("Domain-aware LLM fallback available")
+    except ImportError as e:
+        _domain_aware_available = False
+        logger.warning(f"Domain-aware fallback unavailable, using simple fallback: {e}")
+    return _domain_aware_available
+
+
+def llm_classify(
+    query: str,
+    candidates: List[str],
+    ensemble_intent: Optional[str] = None,
+    ensemble_confidence: float = 0.0,
+) -> str:
+    """LLM fallback — routes to domain-aware system for high accuracy.
+
+    Tries the domain-aware fallback first (with full decision trees and
+    confusion-pair disambiguation), and falls back to a direct Gemini
+    call with a simpler prompt if the domain-aware system is unavailable.
+
+    Args:
+        query:               Raw user query (with claim numbers).
+        candidates:          Top-5 intent names from the ensemble.
+        ensemble_intent:     The ensemble's top prediction (for context).
+        ensemble_confidence: The ensemble's confidence (for context).
+
+    Returns:
+        Predicted intent name (guaranteed to be a valid intent).
+    """
+    if not candidates:
+        return ensemble_intent or "unknown"
+
+    # ── Try domain-aware fallback first (98%+ accuracy) ──────────────
+    if _check_domain_aware():
+        try:
+            return _domain_aware_classify(
+                query, candidates, ensemble_intent, ensemble_confidence
+            )
+        except Exception as e:
+            logger.warning(f"Domain-aware fallback failed, trying simple: {e}")
+
+    # ── Fallback: direct Gemini call with simple prompt ──────────────
+    return _simple_classify(query, candidates, ensemble_intent, ensemble_confidence)
+
+
+def _domain_aware_classify(
+    query: str,
+    candidates: List[str],
+    ensemble_intent: Optional[str],
+    ensemble_confidence: float,
+) -> str:
+    """Use the full domain-aware fallback with decision trees and expert prompts."""
+    from prompt_templates.domain_prompts.llm_fallback import llm_fallback_classify
+
+    # Build top5_intents as (name, probability) tuples
+    # Assign decreasing dummy probs since we only have names
+    top5_intents: List[Tuple[str, float]] = [
+        (c, max(0.05, ensemble_confidence - i * 0.08))
+        for i, c in enumerate(candidates)
+    ]
+
+    result = llm_fallback_classify(
+        query=query,
+        top5_intents=top5_intents,
+        ensemble_intent=ensemble_intent,
+        ensemble_confidence=ensemble_confidence,
+    )
+
+    predicted = result.get("intent", "")
+
+    # Validate against candidates or known intents
+    for c in candidates:
+        if c.lower() == predicted.lower():
+            return c
+    if predicted in INTENT_TO_DOMAIN:
+        return predicted
+
+    logger.warning(f"Domain-aware LLM returned '{predicted}', not in candidates")
+    return candidates[0]
+
+
+def _simple_classify(
+    query: str,
+    candidates: List[str],
+    ensemble_intent: Optional[str],
+    ensemble_confidence: float,
+) -> str:
+    """Direct Gemini call — used when domain-aware prompts are unavailable."""
+    from google.genai import types
+
+    client = _get_llm_client()
+
+    candidate_desc = "\n".join(
+        f"- {name}: {INTENT_DESCRIPTIONS.get(name, name)}" for name in candidates
+    )
+
+    system_instruction = f"""You are an expert intent classification system for a Pharmacy Benefit Manager (PBM).
+Classify the user query into exactly ONE of these candidate intents:
+
+{candidate_desc}
+
+KEY RULES:
+- cap_api intents = details about ONE specific claim (references "this claim" or a claim number)
+- claim_history_search intents = SEARCH/FILTER across MULTIPLE claims (no specific claim number)
+- member_domain intents = member demographics, eligibility, coverage (about the MEMBER, not a claim)
+- override_domain intents = PA management/configuration (about the PA RECORD itself)
+- benefits_api intents = benefit plan, approval logic, audit trail
+- general intents = greetings, help, unrelated queries
+
+CRITICAL DISAMBIGUATION (read carefully):
+
+CLAIM NUMBER lookups:
+- A bare claim number like "260302639954275" or "claim number 260302639954275" → ClaimNum (claim_history_search)
+- "status of claim X" or "details for claim X" → claim_status (cap_api)
+- "RX number / fill number / quantity for claim X" → rx_details (cap_api)
+
+SINGLE-CLAIM vs SEARCH confusion pairs:
+- settlement_info = settlement codes for ONE specific claim | Settlement = SEARCH claims BY settlement code
+- pricing_info = pricing for ONE claim | Pricing = cost of a DRUG across MANY claims  
+- pharmacy_info = which pharmacy filled ONE claim | Pharmacy = SEARCH claims FROM a pharmacy
+- prescriber_info = who prescribed ONE claim | Prescriber = SEARCH claims BY prescriber
+
+BENEFITS vs CAP confusion:
+- approval_info = WHY was claim APPROVED (overrides, TF, BPG) — approval LOGIC
+- claim_status = WHAT is the current status (paid/rejected/pending) — claim OUTCOME
+- beneficiary_info = benefit PHASE and ACCUMULATIONS for a claim
+- member_coverage = coverage ELIGIBILITY windows for a MEMBER (member_domain)
+- audit_info = WHEN was claim created/modified — timestamps
+
+PRICING confusion:
+- pricing_info = copay, ingredient cost, patient pay for ONE claim
+- medicare_part_d = MEDD pricing, PDE, Part D specific pricing
+- compound_info = COMPOUND drug ingredients, MIC breakdown
+- cob_info = coordination pricing, dual coverage pricing
+
+GREETING vs OUT_OF_SCOPE:
+- greeting = hello, hi, welcome, good morning — SALUTATION
+- out_of_scope = unrelated questions (weather, sports, recipes, etc.)
+- "What's up" = greeting (casual salutation)
+
+OUTPUT: Return ONLY valid JSON: {{"intent": "<name>", "confidence": <0-1>, "reasoning": "<brief>"}}
+"""
+
+    user_prompt = f"Query: {query}\n"
+    if ensemble_intent:
+        user_prompt += (
+            f"Note: Primary classifier suggested '{ensemble_intent}' "
+            f"({ensemble_confidence:.0%} confidence) but was uncertain.\n"
+        )
+
+    backoff = _LLM_INITIAL_BACKOFF
+    for attempt in range(_LLM_MAX_RETRIES):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=150,
+                    system_instruction=system_instruction,
+                ),
+            )
+            text = response.text.strip()
+            break
+        except Exception as e:
+            error_str = str(e).lower()
+            is_retriable = any(
+                k in error_str
+                for k in ("429", "503", "resource exhausted", "unavailable", "deadline")
+            )
+            if is_retriable and attempt < _LLM_MAX_RETRIES - 1:
+                logger.warning(f"LLM retry {attempt+1}/{_LLM_MAX_RETRIES} in {backoff:.0f}s: {e}")
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            logger.error(f"LLM fallback failed after {attempt+1} attempts: {e}")
+            return candidates[0]
+
+    try:
+        text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
+        text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+        text = text.strip()
+
+        json_match = re.search(r'\{[^{}]*"intent"[^{}]*\}', text, re.DOTALL)
+        if json_match:
+            llm_result = json.loads(json_match.group(0))
+        else:
+            llm_result = json.loads(text)
+
+        predicted = llm_result.get("intent", "")
+
+        for c in candidates:
+            if c.lower() == predicted.lower():
+                return c
+        if predicted in INTENT_TO_DOMAIN:
+            return predicted
+
+        logger.warning(f"LLM returned unknown intent '{predicted}', using ensemble pick")
+        return candidates[0]
+
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning(f"LLM response parse failed: {e}, text='{text[:100]}'")
+        return candidates[0]

@@ -8,14 +8,26 @@ tool (call_claims_tool).
 This module is used as a conditional router in the LangGraph graph,
 inserted between build_context and the tool nodes.
 
+Routing strategy (in order):
+  1. Honor `state["domain"]` if the multidomain classifier produced one
+     (preferred — semantic, accurate, domain-aware).
+  2. Honor `state["intent"]` if it maps to the claim_history_search domain
+     in api_routing_config.
+  3. Fall back to regex pattern matching on the raw user_input (legacy).
+
 No existing classifiers or config files are modified — this is an
-additive routing layer that checks for patterns the existing intents
-don't cover (member history, multi-claim filtering, etc.).
+additive routing layer that respects whichever upstream signal is present.
 """
 
 import re
 from typing import Dict, Any
 from core.logger import get_logger
+
+try:
+    from config.api_routing_config import is_claim_history_search_intent
+except Exception:  # pragma: no cover - defensive
+    def is_claim_history_search_intent(intent: str) -> bool:
+        return False
 
 logger = get_logger(__name__)
 
@@ -49,12 +61,15 @@ _CLAIMS_SEARCH_PATTERNS = [
     # Pharmacy / prescriber history
     re.compile(r'claims?\s+(filled|dispensed|from)\s+(at|by)', re.IGNORECASE),
     re.compile(r'(pharmacy|prescriber|doctor)\s+.+\s+claims', re.IGNORECASE),
+    re.compile(r'\bby\s+(prescriber|doctor|dr|physician|provider)\b', re.IGNORECASE),
+    re.compile(r'\bclaims?\s+by\s+(prescriber|doctor|dr|physician|provider)', re.IGNORECASE),
 
     # Cost across claims
     re.compile(r'(how\s+much|total|cost|copay|patient\s+pay).+(all|member|history)', re.IGNORECASE),
 
     # Generic/brand filter
-    re.compile(r'(generic|brand)\s+(drug|claim|medication)', re.IGNORECASE),
+    re.compile(r'(generic|brand)\s+(drug|claim|medication|name)', re.IGNORECASE),
+    re.compile(r'\b(generic|brand)\s+name\s+claims?', re.IGNORECASE),
 
     # Days supply / quantity filter
     re.compile(r'\d+\s+day\s+supply', re.IGNORECASE),
@@ -93,7 +108,26 @@ def is_claims_search_query(state: Dict[str, Any]) -> bool:
     Returns:
         True if the query matches claims-search patterns
     """
-    user_input = (state.get("user_input") or "").strip()
+    # ------------------------------------------------------------------
+    # 1. Domain-based routing (multidomain classifier output)
+    # ------------------------------------------------------------------
+    domain = (state.get("domain") or "").strip()
+    if domain == "claim_history_search":
+        logger.info("🔍 Domain == 'claim_history_search' → claims_search pipeline")
+        return True
+
+    # ------------------------------------------------------------------
+    # 2. Intent-based routing (api_routing_config mapping)
+    # ------------------------------------------------------------------
+    intent = (state.get("intent") or "").strip()
+    if intent and is_claim_history_search_intent(intent):
+        logger.info(f"🔍 Intent '{intent}' belongs to claim_history_search domain")
+        return True
+
+    # ------------------------------------------------------------------
+    # 3. Regex fallback (legacy / classifier-less paths)
+    # ------------------------------------------------------------------
+    user_input = (state.get("user_input") or state.get("text") or "").strip()
     if not user_input:
         return False
 

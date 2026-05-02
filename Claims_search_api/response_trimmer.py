@@ -172,7 +172,7 @@ def trim_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     return trimmed
 
 
-def trim_api_response(response: Dict[str, Any]) -> Dict[str, Any]:
+def trim_api_response(response: Dict[str, Any], max_claims: int = 100) -> Dict[str, Any]:
     """
     Trim the full API response payload.
 
@@ -183,6 +183,12 @@ def trim_api_response(response: Dict[str, Any]) -> Dict[str, Any]:
         "claims": [ ... ],           # trimmed per-claim (member removed from each)
         "summary": { ... }           # optional
     }
+
+    The optional ``max_claims`` cap protects the LLM context window when
+    the upstream /claims/search response contains tens of thousands of
+    rows.  Callers that have already filtered the list (e.g. the
+    claims_search_node after generalized_claims_query) can pass a small
+    cap such as 50.
     """
     if not response or not isinstance(response, dict):
         return response
@@ -200,6 +206,11 @@ def trim_api_response(response: Dict[str, Any]) -> Dict[str, Any]:
     member_info = _drop_keys(first_member, _MEMBER_DROP_KEYS)
     member_info = _strip_nulls_and_empty(member_info)
 
+    # Apply hard cap BEFORE the per-claim trim loop to avoid wasting work
+    total_in_response = len(claims_raw)
+    if max_claims and total_in_response > max_claims:
+        claims_raw = claims_raw[:max_claims]
+
     # Trim each claim and remove the duplicated member section
     trimmed_claims = []
     for claim in claims_raw:
@@ -208,7 +219,7 @@ def trim_api_response(response: Dict[str, Any]) -> Dict[str, Any]:
         trimmed_claims.append(tc)
 
     result = {
-        "totalCount": response.get("totalCount", len(trimmed_claims)),
+        "totalCount": response.get("totalCount", total_in_response),
         "member": member_info,
         "claims": trimmed_claims,
     }

@@ -23,6 +23,7 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
     Classify intent using configured classifier (ASYNC version - like team's pattern)
     
     Switches between:
+    - Multidomain Classifier (if settings.use_multidomain_classifier=True) - PCA + Ensemble + LLM fallback
     - Embedding Classifier (if settings.use_embedding_classifier=True) - semantic understanding
     - Keyword Classifier (if settings.use_embedding_classifier=False) - fast, rule-based
     
@@ -33,11 +34,48 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
         Dict with:
             - intent: str
             - confidence: float
+            - domain: str (optional, populated by multidomain classifier)
             - needs_clarification: bool (optional)
             - all_scores: dict (optional)
             - is_simple: bool (optional)
             - is_complex: bool (optional)
     """
+    # ------------------------------------------------------------------
+    # Option 0: Multidomain classifier (PCA + Ensemble + LLM fallback)
+    # Provides the `domain` field used to dispatch claim_history_search
+    # queries to the member-history search pipeline.
+    # ------------------------------------------------------------------
+    if getattr(settings, "use_multidomain_classifier", False):
+        logger.info("🟪 Using Multidomain Intent Classifier (PCA + Ensemble + LLM)")
+        try:
+            from multidomain_intent_detection import get_classifier
+            md_classifier = get_classifier()
+            # Run synchronous predict_single in an executor
+            import asyncio as _asyncio
+            loop = _asyncio.get_event_loop()
+            md_result = await loop.run_in_executor(None, md_classifier.classify, query)
+
+            # Normalize to the same shape the rest of the system expects
+            result = {
+                "intent": md_result.get("intent"),
+                "confidence": float(md_result.get("confidence") or 0.0),
+                "domain": md_result.get("domain"),
+                "domain_name": md_result.get("domain_name"),
+                "api_endpoint": md_result.get("api_endpoint"),
+                "needs_clarification": md_result.get("needs_clarification", False),
+                "is_complex": False,  # multidomain classifier doesn't compute this; let downstream decide
+                "all_scores": dict(md_result.get("top_5") or []),
+                "source": md_result.get("source"),
+                "entities_from_query": md_result.get("entities") or {},
+            }
+            return result
+        except FileNotFoundError as e:
+            logger.error(f"❌ Multidomain pipeline model missing: {e}")
+            logger.info("🔄 Falling back to embedding/keyword classifier path")
+        except Exception as e:
+            logger.error(f"❌ Multidomain classifier failed: {e}")
+            logger.info("🔄 Falling back to embedding/keyword classifier path")
+
     if settings.use_embedding_classifier:
         # Use Embedding-based Classifier (semantic understanding)
         logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic - Async)")

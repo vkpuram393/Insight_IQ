@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
     conversation_history_limit: int = 100  # Number of past messages (50 turns) to include in response generation and entity extraction
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
+    # When True, intent classification uses the multidomain_intent_detection
+    # package (PCA + Ensemble + LLM fallback). This produces a `domain` field
+    # used to route claim_history_search queries to the member-history pipeline
+    # under Claims_search_api/. When False, falls back to use_embedding_classifier.
+    use_multidomain_classifier: bool = True
 
     # Safety
     enable_safety_precheck: bool = True  # Match remote MVP-1

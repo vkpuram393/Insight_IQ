@@ -2545,6 +2545,87 @@ Use this structured format when presenting claim data. For conversational exchan
             str: Complete system prompt (base + domain)
         """
         return self._get_base_system_prompt() + self._get_claims_domain_prompt()
+
+    def _get_claim_history_system_prompt(self) -> str:
+        """
+        Specialized system prompt for claim_history_search queries.
+
+        Used when tool_results.data.is_claim_history_search == True.
+        These queries return MULTIPLE filtered claims for a member; the LLM must
+        summarize across them rather than focus on a single claim.
+        """
+        return """You are a pharmacy claims assistant answering MEMBER-LEVEL claim-history questions.
+
+CONTEXT YOU RECEIVE:
+- USER QUERY: a natural-language question about the member's claim history.
+- MEMBER CONTEXT: a single member's CAGM identifiers (carrier / account / group / member).
+- FILTER SUMMARY: how many of the member's total claims matched the user's filter.
+- CLAIMS DATA: a compact, pre-trimmed view of the matching claims, sorted newest-first.
+
+YOUR TASK:
+Read the CLAIMS DATA section and answer the user's question in one of two FIXED output formats.
+
+═══════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT A — SINGLE-CLAIM ANSWER
+Use when the user asks about ONE specific event (e.g. "when was X taken last?",
+"what was the last claim for X?", "how much did the member pay for X?").
+Always use the FIRST claim in CLAIMS DATA (it is the most recent).
+
+EXACT TEMPLATE:
+
+Prescription for Drug <DRUG_NAME> for <FIRST_NAME> <LAST_NAME> with member-ID <MEMBER_ID> was last <STATUS_VERB> on <FILL_DATE_YYYY-MM-DD> at <PHARMACY_NAME>.
+History Claim Details:
+Claim: <CLAIM_NUMBER> - <SEQ>
+Rx Number: <RX_NUMBER>
+
+Where:
+- <STATUS_VERB> is "paid" for Paid claims, "rejected" for Rejected claims,
+  "reversed" for Reversed/Cancelled claims.
+- All <fields> come ONLY from the FIRST claim in CLAIMS DATA. Do not invent.
+- If a field is missing, omit that line (do NOT print "N/A").
+
+═══════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT B — MULTI-CLAIM LIST
+Use when the user asks for MULTIPLE claims (e.g. "list all medicines",
+"all claims in January", "all rejected claims", "claims for reject code 79",
+"all generic claims", "all refills", etc.).
+
+EXACT TEMPLATE:
+
+Regarding claim number <PRIMARY_CLAIM_NUMBER>, below is the list of prescription claims taken by <FIRST_NAME> <LAST_NAME> with member-ID <MEMBER_ID><OPTIONAL_TIME_PHRASE>:
+
+Claim # - Seq # | Status | Fill date | Pharmacy | Rx# | Product ID | Drug | Pat. Pay
+<CLAIM_NUMBER>-<SEQ> | <STATUS_LINE> | <FILL_DATE> | <PHARMACY_NAME> | <RX_NUMBER> | <PRODUCT_NDC> | <DRUG_NAME> | $<PATIENT_PAY>
+<CLAIM_NUMBER>-<SEQ> | <STATUS_LINE> | <FILL_DATE> | <PHARMACY_NAME> | <RX_NUMBER> | <PRODUCT_NDC> | <DRUG_NAME> | $<PATIENT_PAY>
+… one row per claim, newest first …
+
+Rules for Format B:
+- <PRIMARY_CLAIM_NUMBER> is the claim number the user mentioned in their query
+  (or, if none, the claim number of the FIRST row).
+- <STATUS_LINE>:
+    * "Paid"             when claimStatus == P
+    * "Rejected - <CODE>" when claimStatus == R (use the FIRST reject code)
+    * "Reversed"         when claimStatus == X
+- <OPTIONAL_TIME_PHRASE>: include " during <Month Year>" or " for <date range>"
+  ONLY if the user explicitly asked for a time window.  Otherwise leave it out.
+- <PATIENT_PAY>: print the numeric value as "$1.54". If null/missing, print "$0.00".
+- One claim per line. Always include the header row exactly as shown above.
+- Plain text only — no markdown table syntax (no leading/trailing pipes, no `---`).
+
+═══════════════════════════════════════════════════════════════════════
+GLOBAL RULES (apply to BOTH formats):
+1. Answer ONLY from the CLAIMS DATA section — never invent or assume any field.
+2. Claims are sorted newest-first by fill date. The first claim is the most recent.
+3. Preserve any [TOKEN_HASH] placeholders EXACTLY as they appear (do not edit,
+   quote, unwrap or rewrap them — they are auto-unmasked downstream).
+4. Use plain conversational text — no markdown bold, italic, headings, or
+   bullet symbols.  The fixed templates above are the ONLY structure allowed.
+5. If FILTER SUMMARY shows 0 of N matched, reply with one short sentence
+   stating no claims matched, the filter the user applied, and how many total
+   claims the member has — do NOT use either template.
+6. Never say "I cannot help" — if the data doesn't answer the question,
+   explain what IS available and propose a refined query.
+"""
     
     def _map_entity_to_user_friendly(self, entity_name: str) -> str:
         """
@@ -2718,7 +2799,109 @@ Generate ONE specific, helpful follow-up question to get the missing information
             # Defensive check
             if state.get("clarification_context"):
                 self.logger.warning("⚠️ Unexpected: needs_clarification=False but clarification_context present")
-            
+
+            # ----------------------------------------------------------
+            # CLAIM-HISTORY (multi-claim) BRANCH
+            # Triggered when the upstream Claims_search_api node populated
+            # tool_results.data with the is_claim_history_search flag.
+            # ----------------------------------------------------------
+            tool_data = (tool_results or {}).get("data") or {}
+            is_claim_history = (
+                bool(tool_data.get("is_claim_history_search"))
+                or (state.get("domain") == "claim_history_search")
+            )
+            if is_claim_history:
+                self.logger.info("🔁 Claim-history branch active (multi-claim summary)")
+                claims_text = (
+                    tool_data.get("_masked_response")
+                    or "No claims data available."
+                )
+                member_info = tool_data.get("memberInfo") or {}
+                # Try to enrich member info with first/last name from the
+                # raw claims list when available — the prompt template uses
+                # them in both single-claim and multi-claim outputs.
+                raw_claims = tool_data.get("claims") or []
+                if raw_claims and isinstance(raw_claims[0], dict):
+                    first_member = raw_claims[0].get("member") or {}
+                    for k in ("firstName", "lastName", "memberId"):
+                        if first_member.get(k) and not member_info.get(k):
+                            member_info[k] = first_member[k]
+
+                total_claims = tool_data.get("totalCount", 0)
+                filtered_claims = tool_data.get("filteredCount", 0)
+
+                member_line_parts = []
+                first_name = member_info.get("firstName")
+                last_name = member_info.get("lastName")
+                if first_name or last_name:
+                    member_line_parts.append(
+                        f"Name={(first_name or '').strip()} {(last_name or '').strip()}".strip()
+                    )
+                for k_src, k_dst in [
+                    ("member", "Member"), ("memberId", "Member"),
+                    ("carrierId", "Carrier"), ("accountId", "Account"),
+                    ("groupId", "Group"),
+                ]:
+                    v = member_info.get(k_src)
+                    if v:
+                        member_line_parts.append(f"{k_dst}={v}")
+                member_line = " | ".join(member_line_parts) if member_line_parts else "N/A"
+
+                history_str_local = (
+                    self._format_conversation_history(history) if history else "No previous conversation"
+                )
+
+                ch_template = ChatPromptTemplate.from_messages([
+                    ("user", """USER QUERY: {user_query}
+
+INTENT: {intent}
+
+MEMBER CONTEXT: {member_line}
+
+FILTER SUMMARY: {filtered_claims} of {total_claims} total claims matched the user's filter.
+
+=== CLAIMS DATA (ANSWER FROM THIS SECTION ONLY — sorted newest-first) ===
+{claims_text}
+
+=== CONVERSATION HISTORY (FOR UNDERSTANDING CONTEXT ONLY — DO NOT REUSE IDS FROM HERE) ===
+{conversation_history}
+
+OUTPUT-FORMAT DECISION (read carefully):
+
+• Use FORMAT A (single-claim) when the user is asking about ONE specific event:
+    - "When was <drug> taken last…?"
+    - "What was the last claim for <drug>?"
+    - "How much did the member pay for <drug>?"
+    - Any "last/most-recent/latest" question.
+  Pull every field from the FIRST claim in CLAIMS DATA.
+
+• Use FORMAT B (multi-claim list) when the user wants MULTIPLE claims:
+    - "list / show / give me all …", "all medicines", "all refills"
+    - "claims in <month>", "claims for reject code <N>"
+    - "all rejected / paid / generic / brand / 90-day-supply / retail claims"
+    - "claims by prescriber X", "claims at pharmacy X"
+  One row per claim from CLAIMS DATA, newest first.  Header row is REQUIRED.
+
+In both formats, follow the EXACT templates from the system prompt — same
+labels, same punctuation, same field order.  Plain text only, no markdown.
+""")
+                ])
+
+                messages = ch_template.format_messages(
+                    user_query=user_text,
+                    intent=intent,
+                    member_line=member_line,
+                    total_claims=total_claims,
+                    filtered_claims=filtered_claims,
+                    claims_text=claims_text,
+                    conversation_history=history_str_local,
+                )
+                # Return early — skip the single-claim prompt below
+                return messages[0].content
+
+            # ----------------------------------------------------------
+            # STANDARD (single-claim) BRANCH
+            # ----------------------------------------------------------
             # Format tool results, history, and entities
             claim_data = self._format_tool_results(tool_results) if tool_results else "No claim data available"
             history_str = self._format_conversation_history(history) if history else "No previous conversation"
@@ -3510,16 +3693,28 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             logger.info("📝 Using follow-up question system prompt")
             recommendations_enabled = False  # Never generate recommendations during clarification
         else:
-            system_prompt = agent._get_system_prompt()
-            logger.info("📝 Using standard response system prompt")
-            
-            # Add recommendation instruction if enabled
-            recommendations_enabled = settings.enable_recommendations
-            if recommendations_enabled:
-                intent = state.get("intent", "unknown")
-                recommendation_instruction = agent._get_recommendation_instruction(intent)
-                system_prompt += recommendation_instruction
-                logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
+            # NEW: Detect claim-history mode (multi-claim member-history summary)
+            tool_data = (state.get("tool_results") or {}).get("data") or {}
+            is_claim_history = (
+                bool(tool_data.get("is_claim_history_search"))
+                or (state.get("domain") == "claim_history_search")
+            )
+
+            if is_claim_history:
+                system_prompt = agent._get_claim_history_system_prompt()
+                logger.info("📝 Using claim-history system prompt (multi-claim summary)")
+                recommendations_enabled = False  # No follow-up chips for member-history yet
+            else:
+                system_prompt = agent._get_system_prompt()
+                logger.info("📝 Using standard response system prompt")
+
+                # Add recommendation instruction if enabled (only for single-claim path)
+                recommendations_enabled = settings.enable_recommendations
+                if recommendations_enabled:
+                    intent = state.get("intent", "unknown")
+                    recommendation_instruction = agent._get_recommendation_instruction(intent)
+                    system_prompt += recommendation_instruction
+                    logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
         
         logger.debug(f"📋 System prompt: {len(system_prompt)} characters")
         

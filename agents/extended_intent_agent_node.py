@@ -27,7 +27,27 @@ from config.api_routing_config import get_api_config  # NEW: Get API endpoint fr
 from config.config import settings  # NEW: For classifier_type metadata
 from persistence import PersistenceStoreFactory
 
+# Safety net: detect claim-history-search queries even if the upstream
+# classifier doesn't know about them.  This guarantees that queries like
+# "show me all rejected claims" or "manufactured by MACLEODS" don't get
+# misrouted to the single-claim flow when the multidomain classifier is
+# unavailable / not trained.
+try:
+    from Claims_search_api.intent_router import _CLAIMS_SEARCH_PATTERNS
+except Exception:  # pragma: no cover - defensive
+    _CLAIMS_SEARCH_PATTERNS = []
+
 logger = get_logger(__name__)
+
+
+def _looks_like_claim_history_query(text: str) -> bool:
+    """Regex-based heuristic — mirror of intent_router.is_claims_search_query."""
+    if not text:
+        return False
+    for pat in _CLAIMS_SEARCH_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
 
 
 async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
@@ -74,12 +94,40 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         # ========== Normal flow (embedding succeeded) ==========
         intent = intent_result['intent']
         confidence = intent_result['confidence']
+        # NEW: domain (populated by multidomain classifier; may be None for legacy classifiers)
+        domain = intent_result.get('domain')
         
-        logger.info(f"🎯 Intent: {intent} ({confidence:.2f})")
+        logger.info(f"🎯 Intent: {intent} ({confidence:.2f}) | Domain: {domain}")
         
         # Extract entities
         entity_result = extract_entities_unified(text, intent=intent)
         entities = entity_result['entities']
+
+        # If the multidomain classifier extracted entities from the query
+        # (e.g. claim_number) merge those in too — they often catch IDs the
+        # generic entity extractor misses.
+        md_entities = intent_result.get('entities_from_query') or {}
+        if md_entities:
+            for k, v in md_entities.items():
+                if not v:
+                    continue
+                # Map common keys to the system's expected list-format
+                if k in ("claim_number", "claimNumber", "claim_id", "claimId"):
+                    existing = entities.get("claim_ids") or []
+                    if isinstance(existing, str):
+                        existing = [existing]
+                    val_list = v if isinstance(v, list) else [v]
+                    merged = list(dict.fromkeys(existing + val_list))
+                    if merged:
+                        entities["claim_ids"] = merged
+                elif k in ("sequence", "claimSequence", "claim_sequence"):
+                    existing = entities.get("claim_sequences") or []
+                    if isinstance(existing, str):
+                        existing = [existing]
+                    val_list = v if isinstance(v, list) else [v]
+                    entities["claim_sequences"] = list(dict.fromkeys(existing + val_list))
+                else:
+                    entities.setdefault(k, v)
         
         logger.info(f"📦 Entities: {entities}")
         
@@ -88,7 +136,39 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         api_endpoint = api_config.get("api_endpoint")
         required_entities_list = api_config.get("required_entities", [])
         requires_llm = api_config.get("requires_llm", False)
-        
+
+        # ------------------------------------------------------------------
+        # SAFETY NET: when the upstream classifier did NOT label this as a
+        # claim_history_search query (e.g. fallback embedding classifier
+        # doesn't know about NDC / RejectCode / DrugLast labels) but the
+        # raw text clearly looks like a member-history search, override
+        # the routing fields so the rest of the graph treats it as one:
+        #   - domain = claim_history_search        (router will dispatch)
+        #   - required_entities = ["claim_number"] (no sequence required)
+        #   - api_endpoint = /claims/search         (member-history endpoint)
+        # ------------------------------------------------------------------
+        if (domain != "claim_history_search"
+                and api_config.get("domain") != "claim_history_search"
+                and _looks_like_claim_history_query(text)):
+            from config.api_routing_config import CLAIM_HISTORY_SEARCH_ENDPOINT
+            logger.info(
+                "🛟 Claim-history pattern detected — overriding domain to "
+                "'claim_history_search' (claim_number only, no sequence)"
+            )
+            domain = "claim_history_search"
+            api_endpoint = CLAIM_HISTORY_SEARCH_ENDPOINT
+            required_entities_list = ["claim_number"]
+            requires_llm = False
+            # Boost confidence so confidence_check_router proceeds straight
+            # to build_context instead of detouring through llm_judge — the
+            # regex match is itself a high-precision signal.
+            if confidence < 0.75:
+                logger.info(
+                    f"🛟 Boosting confidence from {confidence:.2f} → 0.85 "
+                    f"(claim-history regex is a strong signal)"
+                )
+                confidence = 0.85
+
         # Log API routing decision
         if api_endpoint:
             logger.info(f"🔗 API Endpoint: {api_endpoint}")
@@ -113,6 +193,7 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         result = {
             "intent": intent,
             "confidence": confidence,
+            "domain": domain,  # NEW: propagate domain (used by claim_history_search router)
             "entities": entities,
             "is_complex": is_complex,  # Complexity detection for LLM routing
             # NOTE: needs_clarification and missing_slots are now determined by
@@ -126,10 +207,15 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
                 **state.get("metadata", {}),  # Preserve existing metadata
                 "all_scores": intent_result.get('all_scores', {}),  # All intent similarities for debugging
                 "is_complex": is_complex,  # Complex query flag (single source of truth)
-                "classifier_type": "embedding" if settings.use_embedding_classifier else "keyword",  # Which classifier was used
+                "classifier_type": (
+                    "multidomain" if getattr(settings, "use_multidomain_classifier", False)
+                    else ("embedding" if settings.use_embedding_classifier else "keyword")
+                ),
+                "intent_domain": domain,
                 "intent_classification_metadata": {
                     "top_intent": intent,
                     "top_confidence": confidence,
+                    "domain": domain,
                     "num_intents_evaluated": len(intent_result.get('all_scores', {})),
                 }
             }
