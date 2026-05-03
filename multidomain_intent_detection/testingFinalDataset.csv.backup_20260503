@@ -313,7 +313,7 @@ When was each prescription filled for this member?,fill_date_info,claim_history_
 Show fill dates across all claims for this member.,fill_date_info,claim_history_search
 What was the date of service for the most recent fill?,fill_date_info,claim_history_search
 List claims sorted by fill date.,fill_date_info,claim_history_search
-When was each medication last dispensed for this member?,DrugLast,claim_history_search
+When was each medication last dispensed for this member?,fill_date_info,claim_history_search
 Dispensing dates for all prescriptions on file.,fill_date_info,claim_history_search
 Show the date each claim was filled.,fill_date_info,claim_history_search
 Service dates across the member's claim history.,fill_date_info,claim_history_search
@@ -750,15 +750,15 @@ Does this override handle rejection code 70?,pa_override_reject,override_domain
 Which NCPDP rejects can this PA override?,pa_override_reject,override_domain
 Can this PA get around a reject 75 at the pharmacy?,pa_override_reject,override_domain
 What does the agent code field mean on a PA?,pa_field_help,override_domain
-Explain what the ignore status code does.,pa_ignore_status,override_domain
-Help me understand what the clinical admin code field is for.,pa_clinical_admin_code,override_domain
-What is the purpose of the transform care field on a PA?,pa_transform_care,override_domain
+Explain what the ignore status code does.,pa_field_help,override_domain
+Help me understand what the clinical admin code field is for.,pa_field_help,override_domain
+What is the purpose of the transform care field on a PA?,pa_field_help,override_domain
 Explain the drug type indicator field.,pa_field_help,override_domain
-What does the follow me logic field do?,pa_follow_me_logic,override_domain
+What does the follow me logic field do?,pa_field_help,override_domain
 Help me understand this PA field.,pa_field_help,override_domain
-What is the reason code field used for?,pa_reason_code,override_domain
+What is the reason code field used for?,pa_field_help,override_domain
 Explain what effectiveBeginDate means on a PA.,pa_field_help,override_domain
-What does the specialtyRxOverride indicator control?,pa_specialty_rx_override,override_domain
+What does the specialtyRxOverride indicator control?,pa_field_help,override_domain
 How does the copay on this PA affect member pricing?,pa_copay_pricing,override_domain
 Show the copay impact of this PA on out-of-pocket cost.,pa_copay_pricing,override_domain
 What copay override is set on this PA?,pa_copay_pricing,override_domain
