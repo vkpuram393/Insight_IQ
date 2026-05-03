@@ -77,7 +77,46 @@ async def startup_event():
         # Pre-initialize embedding classifier to ensure MongoDB has embeddings
         # (Embedding generation takes ~3 minutes, must happen before queries arrive)
         # This also loads embeddings into memory once (singleton pattern prevents reloads)
-        if settings.use_embedding_classifier:
+        #
+        # PRIORITY ORDER:
+        #   1. Multidomain classifier (PCA + Ensemble + LLM fallback, uses v3_pipeline.pkl)
+        #      → Provides `domain` field used to route claim_history_search queries
+        #      → Run `python -m multidomain_intent_detection.training` to generate the pickle
+        #   2. Embedding classifier (cosine similarity, uses MongoDB / pkl cache)
+        #      → Fallback when v3_pipeline.pkl is missing
+        #
+        if settings.use_multidomain_classifier:
+            print("[STARTUP] Pre-initializing Multidomain Intent Classifier (PCA + Ensemble)...")
+            try:
+                import concurrent.futures
+                from multidomain_intent_detection import get_classifier as get_md_classifier
+
+                def init_md_classifier():
+                    clf = get_md_classifier()
+                    # Force eager load of the pickle (default is lazy on first classify())
+                    clf._ensure_loaded()
+                    return clf
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(init_md_classifier)
+                    future.result()
+
+                print("[STARTUP] ✅ Multidomain classifier ready (pickle loaded)")
+            except FileNotFoundError as e:
+                print(f"[STARTUP] ⚠️  Multidomain pipeline pickle not found: {e}")
+                print("[STARTUP]    Run: python -m multidomain_intent_detection.training")
+                print("[STARTUP]    Falling back to embedding classifier...")
+                # Fall through to embedding classifier init below
+                settings.use_multidomain_classifier = False  # runtime override
+            except Exception as e:
+                import traceback
+                print(f"[STARTUP] ⚠️  Multidomain classifier init failed: {e}")
+                traceback.print_exc()
+                print("[STARTUP]    Falling back to embedding classifier...")
+                settings.use_multidomain_classifier = False
+
+        # Fallback: Embedding classifier (or primary if multidomain is disabled)
+        if not settings.use_multidomain_classifier and settings.use_embedding_classifier:
             print("[STARTUP] Pre-initializing embedding classifier...")
             import concurrent.futures
             from classifiers.embedded_classifier import get_embedded_classifier
