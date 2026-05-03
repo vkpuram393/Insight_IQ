@@ -1,0 +1,921 @@
+Prompt,actual_intent,predicted_intent,intent_match,actual_domain,predicted_domain,domain_match,confidence,raw_confidence,margin,source,agreement,is_confusion_pair,gate_reason
+What is the current adjudication outcome for claim 242905816136000 sequence 003?,claim_status,claim_status,True,cap_api,cap_api,True,0.8992465424605147,0.6330633858901791,0.8988925903612043,ensemble,True,True,pass
+Tell me whether claim 150692388845000 was paid or denied.,claim_status,claim_status,True,cap_api,cap_api,True,0.6972974077176397,0.28685621071355905,0.5044195088227411,ensemble,True,True,pass
+Has this claim been fully processed yet?,claim_status,claim_status,True,cap_api,cap_api,True,0.8998626296209346,0.7497915611524537,0.8998394791937753,ensemble,True,True,pass
+Claim 230381673488000 sequence 001 overall status.,claim_status,approval_info,False,cap_api,benefits_api,False,0.3488187615366961,0.11623038312025633,0.213035665001446,ensemble,False,True,disagreement
+Give me a quick rundown of what happened to this claim.,claim_status,claim_status,True,cap_api,cap_api,True,0.9932865433708599,0.4382956964626368,0.9915448368974287,ensemble,True,False,pass
+Paid or rejected? Claim 211263773300000 sequence 004.,claim_status,claim_status,True,cap_api,cap_api,True,0.8574512088134372,0.3821994503379157,0.8244950065025637,ensemble,True,True,pass
+I just need to know if this claim went through.,claim_status,claim_status,True,cap_api,cap_api,True,0.8998853443697326,0.7541914085928428,0.8998658881833046,ensemble,True,True,pass
+Pull the adjudication result for claim 220992183436835 sequence 002.,claim_status,claim_status,True,cap_api,cap_api,True,0.8283435137812009,0.21228588580250107,0.7208539480191496,ensemble,True,False,pass
+What is the final disposition on this prescription claim?,claim_status,claim_status,True,cap_api,cap_api,True,0.5642450660515037,0.1640823809124763,0.2690969055582408,ensemble,False,False,disagreement
+Status check on claim 201752592251000 sequence 001 please.,claim_status,claim_status,True,cap_api,cap_api,True,0.9977849240428526,0.5605766820827514,0.9972521713796555,ensemble,True,False,pass
+Can you give me a summary of all claims on file for this member?,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9998291617347222,0.7349458849789278,0.9997825546897018,ensemble,True,False,pass
+I need a complete overview of every claim submitted under this member ID.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9937129816980947,0.45387911311043977,0.9898322126328685,ensemble,True,False,pass
+Show me all the claims this member has had processed.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9997663550550386,0.7239386435520967,0.9996819981149523,ensemble,True,False,pass
+Full claims history overview for this member please.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9997483270580466,0.7305715752669298,0.9996191725843816,ensemble,True,False,pass
+Pull up a consolidated summary of this member's entire claims list.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9990809898045563,0.5867317731208143,0.9989331006797237,ensemble,True,False,pass
+How many total claims does this member have and what are they?,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9997607684713458,0.7023842175437371,0.9997072482590597,ensemble,True,False,pass
+List every claim associated with member 44781239.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.8821293515963271,0.209741932048555,0.8433041637910469,ensemble,True,False,pass
+Multi-claim summary for this patient.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9996801412155111,0.6609607963852205,0.9996476453098497,ensemble,True,False,pass
+Aggregate all claims for this individual and show me the highlights.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9926367033829531,0.3873569982789614,0.9909443629462482,ensemble,True,False,pass
+I want to see the big picture on all claims for this member.,multi_claim_summary,multi_claim_summary,True,cap_api,cap_api,True,0.9980851474734029,0.522895156428803,0.9974030820800383,ensemble,True,False,pass
+Which pharmacy location filled claim 201503823714118 sequence 001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.8970119151610838,0.578868959417282,0.8951909108174367,ensemble,True,True,pass
+Dispensing pharmacy name and address for this claim.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.8988280475008795,0.6311813690834156,0.8980669211493867,ensemble,True,True,pass
+What is the NCPDP number for the pharmacy on this fill?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9998243396048585,0.7080691111927722,0.9998029744332503,ensemble,True,False,pass
+Where was this prescription physically dispensed?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9998745669622957,0.7323849708354152,0.9998610323840784,ensemble,True,False,pass
+Pharmacy details for claim 230624075311000 sequence 002.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.8999052941258274,0.7936801110077779,0.8998757351694431,ensemble,True,True,pass
+What store filled this medication?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.885111324486896,0.3860553649373184,0.8774267575668215,ensemble,True,True,pass
+Can you look up the dispensing pharmacy for claim 221172865083001?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.8983027158645414,0.5230209681981115,0.8977465625990049,ensemble,True,True,pass
+Tell me the pharmacy name and store number on this claim.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9993561521133641,0.7005424051374208,0.999010722473671,ensemble,True,False,pass
+NCPDP and location of the dispensing pharmacy.,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.9858340464858479,0.31857258584215553,0.9834758879076738,ensemble,True,False,pass
+Which CVS or retail location processed this prescription?,pharmacy_info,pharmacy_info,True,cap_api,cap_api,True,0.8836198154337361,0.3539933734010423,0.8729484955063714,ensemble,True,True,pass
+Who prescribed the medication on claim 180571470939000 sequence 001?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.999947708738131,0.8010337905435281,0.9999395317839864,ensemble,True,False,pass
+Physician name and NPI for this claim.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.8947993931926543,0.5038921885985501,0.8910173576591214,ensemble,True,True,pass
+Prescribing doctor credentials for claim 220133725669000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.8969134166628197,0.46433879309843223,0.895552478474619,ensemble,True,True,pass
+What is the NPI of the prescriber on this fill?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.8687517371174545,0.3417273425555454,0.8477189795064353,ensemble,True,True,pass
+Tell me the doctor's information for this prescription.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9975830912893342,0.5451178188286578,0.9967342716725194,ensemble,True,False,pass
+Show prescriber details on claim 231865207544000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9995553139155772,0.6244771404670864,0.9994962975630846,ensemble,True,False,pass
+Who wrote this script?,prescriber_info,help,False,cap_api,general,False,0.34616940950981845,0.1133146644276346,0.1782186757086202,ensemble,False,False,disagreement
+Can I see the prescribing physician's name and license?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9967853361008597,0.43052981134077484,0.996296007710655,ensemble,True,False,pass
+Prescriber info claim 201990819198000 sequence 001.,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.893471032726866,0.37415668361350995,0.8915607458256418,ensemble,True,True,pass
+What provider is associated with this prescription claim?,prescriber_info,prescriber_info,True,cap_api,cap_api,True,0.9860730076935591,0.36132423155870863,0.9824181727133875,ensemble,True,False,pass
+Break down the copay and ingredient cost for claim 132435151040074 sequence 001.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.8926543992532368,0.5405594891834858,0.8869111865328747,ensemble,True,True,pass
+What did the patient end up paying out of pocket on this claim?,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9875055622504118,0.37368849441977015,0.9836024819575842,ensemble,True,False,pass
+Dispensing fee and total cost breakdown for this fill.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.899784979058038,0.719054329007069,0.8997406359895911,ensemble,True,True,pass
+How much was the copay on claim 220133725669000 sequence 001?,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9790390003973678,0.47029213215570254,0.961411818379255,ensemble,True,False,pass
+Patient pay amount for this prescription.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9985399267230117,0.6199877929942822,0.9977238430555282,ensemble,True,False,pass
+Claim 242905816136000 sequence 001 cost summary.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9889105366600176,0.3962412469520442,0.9831856803237197,ensemble,True,False,pass
+U&C price versus the plan-paid amount on this claim.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.8997777962650557,0.7352654147060891,0.8996513330200455,ensemble,True,True,pass
+Ingredient cost and member responsibility for claim 150692388845000.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.7736870805052763,0.26481720285236354,0.6610049770502578,ensemble,True,True,pass
+What was the total amount billed on this fill?,pricing_info,pricing_info,True,cap_api,cap_api,True,0.9597398309981643,0.3134384711487203,0.9414592289270016,ensemble,True,False,pass
+Show the pricing breakdown including AWP and dispensing fee.,pricing_info,pricing_info,True,cap_api,cap_api,True,0.8676728786181991,0.31848190571105317,0.8545606172549576,ensemble,True,True,pass
+How much did the plan reimburse the pharmacy for this claim?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.99985568649728,0.7384171999302529,0.9998198931201029,ensemble,True,False,pass
+Total payment to the dispensing pharmacy on claim 220992183436835.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9965475259901004,0.5166517905411457,0.994783582409855,ensemble,True,False,pass
+Pharmacy reimbursement amount for this fill.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9997929354922029,0.7382975452765755,0.9997300498695015,ensemble,True,False,pass
+What amount was paid out to the pharmacy?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998256455981069,0.733164275264121,0.9997896887802004,ensemble,True,False,pass
+Show the reimbursement calculation for claim 201503823714118 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9993267117260036,0.5905638520382228,0.9991456819242958,ensemble,True,False,pass
+Reimbursement details and rationale for this claim.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998432572956403,0.7150167039012169,0.9998238114693772,ensemble,True,False,pass
+How did the plan determine the pharmacy payment amount?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9998048676515247,0.7017145274160478,0.999778396658351,ensemble,True,False,pass
+Was the pharmacy paid MAC or AWP on this fill?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9997216729994315,0.6797104272282675,0.9996952946620514,ensemble,True,False,pass
+Payment made to pharmacy for claim 230381673488000 sequence 001.,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9930383171025251,0.42816904913782,0.9914279039456915,ensemble,True,False,pass
+What was the final reimbursement to the dispensing location?,reimbursement_info,reimbursement_info,True,cap_api,cap_api,True,0.9712737107690614,0.31059681076501333,0.9549577148336716,ensemble,True,False,pass
+Why did claim 211263773300000 sequence 004 get denied?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9994559852780465,0.6593282491397308,0.9992734307465394,ensemble,True,False,pass
+What reject codes came back on this claim?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.8087300721614571,0.4388532664791953,0.6983432329257603,ensemble,False,False,disagreement
+Show me the failed edits for claim 150692388845000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9943900318260783,0.48755347347741557,0.9911592245147028,ensemble,True,False,pass
+"This claim was denied — why, and how can I resolve it?",rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.8964591935117306,0.58490242211454,0.8934363517049724,ensemble,True,True,pass
+What NCPDP rejection codes were returned?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9885314490555688,0.4767525992453161,0.9787956695319093,ensemble,True,False,pass
+Explain the denial reason on claim 220133725669000 sequence 001.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.999482162307283,0.6806002508683621,0.9993229313993645,ensemble,True,False,pass
+Claim 242905816136000 sequence 001: rejection explanation.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9994206522858528,0.6162652425790898,0.9992908376505186,ensemble,True,False,pass
+What edits failed on this claim and what are the override options?,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9835553059767238,0.3717608815721466,0.9750794416184477,ensemble,True,False,pass
+Tell me why this prescription could not be processed.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.8675565626153467,0.21675341086724859,0.7781982578942074,ensemble,True,False,pass
+Rejection codes and resolution steps for this fill.,rejection_reasons,rejection_reasons,True,cap_api,cap_api,True,0.9902389501202508,0.3748016980247235,0.9880459133961504,ensemble,True,False,pass
+What are the pharmacy response codes on claim 201752592251000?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9983080671639937,0.5077879289784271,0.9980643237985457,ensemble,True,False,pass
+Show settlement feedback for this claim.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9985835246614401,0.561945953059191,0.9981522814493586,ensemble,True,False,pass
+Feedback codes for claim 220133725669000 sequence 001.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9960365052136101,0.4260550919782235,0.9953540529402566,ensemble,True,False,pass
+What did the pharmacy system return as the settlement?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9863887035441468,0.3970307010211411,0.9809772086449572,ensemble,True,False,pass
+Settlement code and response info for this specific claim.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.8266334972848809,0.5150864642897185,0.7536522845155945,ensemble,True,True,pass
+Claim 230624075311000 sequence 002 settlement details.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9985150396218285,0.5939425687262582,0.9980270266984481,ensemble,True,False,pass
+What are the pharmacy feedback messages on this fill?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9899976171589644,0.33766517062399204,0.9884359387293564,ensemble,True,False,pass
+Pull the settlement response code for claim 242905816136000.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.45429249145870276,0.33358720523917884,0.08147043733329207,ensemble,False,True,disagreement
+What response was sent back to the pharmacy on this claim?,settlement_info,settlement_info,True,cap_api,cap_api,True,0.9968608779344378,0.47275729537332745,0.9962174945207035,ensemble,True,False,pass
+Show me the NCPDP response fields for this transaction.,settlement_info,settlement_info,True,cap_api,cap_api,True,0.7109084204661009,0.16872435264402136,0.6800337435492997,ensemble,False,False,disagreement
+What is the prescription number on claim 132435151040074 sequence 001?,rx_details,rx_details,True,cap_api,cap_api,True,0.9963097318915972,0.5201075529059416,0.9941045100617507,ensemble,True,False,pass
+How many days supply was dispensed on this fill?,rx_details,rx_details,True,cap_api,cap_api,True,0.9997358170044612,0.7471358050544924,0.9995729170252534,ensemble,True,False,pass
+Show the RX number and quantity for claim 201503823714118.,rx_details,rx_details,True,cap_api,cap_api,True,0.99920536945857,0.5622197117707814,0.9991268063982888,ensemble,True,False,pass
+What fill number is this — is it original or a refill?,rx_details,Refills,False,cap_api,claim_history_search,False,0.6004987422968292,0.20439886836206358,0.39898937233664905,ensemble,False,True,disagreement
+RX details for claim 220992183436835 sequence 002.,rx_details,rx_details,True,cap_api,cap_api,True,0.9985138571080268,0.5351953368979009,0.9980268164501438,ensemble,True,False,pass
+Drug strength and dosage form on this claim.,rx_details,rx_details,True,cap_api,cap_api,True,0.9996163024547043,0.6708463060949464,0.9994914690986638,ensemble,True,False,pass
+Quantity dispensed and days supply for this prescription.,rx_details,rx_details,True,cap_api,cap_api,True,0.9999066493295612,0.7810480147648928,0.9998806303197619,ensemble,True,False,pass
+What is the fill count for claim 230381673488000?,rx_details,pa_claim_usage,False,cap_api,override_domain,False,0.7036242100341438,0.24154691767672265,0.5018442028996062,ensemble,False,False,disagreement
+Tell me the prescription specifics — RX number and quantity.,rx_details,rx_details,True,cap_api,cap_api,True,0.999932529724136,0.7702976439092071,0.9999266988150592,ensemble,True,False,pass
+Is this a new fill or a continuation?,rx_details,claim_status,False,cap_api,cap_api,True,0.5799800995272789,0.148768299465441,0.5106017696546914,ensemble,False,True,disagreement
+Was claim 201503823714118 sequence 001 reversed?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9998589671320068,0.7428799422464236,0.9998238540656081,ensemble,True,False,pass
+Show me the R&R details for this claim.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9977536915351362,0.48368460598870266,0.9973235417211407,ensemble,True,False,pass
+Is there a reversal or resubmission on claim 242905816136000?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9988225916334699,0.5651910249175364,0.9984800952134774,ensemble,True,False,pass
+Has this claim been adjusted or reversed?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9987349708594926,0.5763989970470111,0.9984186668710632,ensemble,True,False,pass
+Reversal and rebill information for this fill.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9922119760209108,0.3632223706039898,0.9913806335616764,ensemble,True,False,pass
+Claim 220133725669000 sequence 001: was it reversed and resubmitted?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.997850906997367,0.5539563082637049,0.996463050509285,ensemble,True,False,pass
+Any manual adjustments or R&R activity on this claim?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9972707480318512,0.45746500040467175,0.9969223002820984,ensemble,True,False,pass
+Did the pharmacy reverse and rebill this prescription?,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9903356585778369,0.34625021368677095,0.9887867700603565,ensemble,True,False,pass
+Show reversal history for claim 150692388845000.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.9986061840548037,0.579380488957669,0.9980415148356063,ensemble,True,False,pass
+Tell me if there was a claim reversal on this transaction.,reversal_info,reversal_info,True,cap_api,cap_api,True,0.991257759780518,0.3530273945377453,0.9901541609609291,ensemble,True,False,pass
+Is there coordination of benefits on claim 220992183436835 sequence 002?,cob_info,cob_info,True,cap_api,cap_api,True,0.9969193363526087,0.4471734541993123,0.9963224366398289,ensemble,True,False,pass
+Show COB details for this claim.,cob_info,cob_info,True,cap_api,cap_api,True,0.9998286563350951,0.7339079773393822,0.9997948365673675,ensemble,True,False,pass
+Was a secondary payer involved in this claim?,cob_info,cob_info,True,cap_api,cap_api,True,0.9997574266700253,0.7309863228035811,0.999612962964998,ensemble,True,False,pass
+Coordination of benefits summary for claim 201752592251000.,cob_info,cob_info,True,cap_api,cap_api,True,0.99916230737046,0.5734942401193626,0.9990785499160274,ensemble,True,False,pass
+Did another insurance pay before this plan?,cob_info,cob_info,True,cap_api,cap_api,True,0.9997588231428698,0.6852157586937233,0.99972258754524,ensemble,True,False,pass
+Other payer information on this fill.,cob_info,cob_info,True,cap_api,cap_api,True,0.9997041688849707,0.6644831700710251,0.9996710034014197,ensemble,True,False,pass
+COB breakdown for claim 211263773300000 sequence 004.,cob_info,cob_info,True,cap_api,cap_api,True,0.9987146043450376,0.5286369746892052,0.9985272328631682,ensemble,True,False,pass
+Is this member dual-covered and how did COB apply to this claim?,cob_info,cob_info,True,cap_api,cap_api,True,0.9962523683714641,0.4648672759233618,0.9943546602642187,ensemble,True,False,pass
+What was the other insurance payment on this prescription?,cob_info,cob_info,True,cap_api,cap_api,True,0.7712445430229107,0.25969643441875145,0.69146193470775,ensemble,False,False,disagreement
+Show me secondary coverage details applied to this specific claim.,cob_info,cob_info,True,cap_api,cap_api,True,0.8861404139853591,0.33356936045347985,0.7779831064007289,ensemble,True,False,pass
+Are there generic alternatives available for the drug on this claim?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8997057895003087,0.7674589930700846,0.8994941611399762,ensemble,True,True,pass
+Is a generic substitute available for this medication?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.899819093766707,0.766663348022141,0.8996878777864236,ensemble,True,True,pass
+Show therapeutic equivalents for claim 132435151040074.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8841196984035183,0.4294863438416581,0.8705776401485421,ensemble,True,True,pass
+Can this prescription be switched to a generic version?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8997167927254497,0.732980591888712,0.8995173743915293,ensemble,True,True,pass
+Generic substitution options for this drug.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8987747364634615,0.6957950906339208,0.8976469426753022,ensemble,True,True,pass
+Does a formulary alternative exist for this medication?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9994563567357784,0.6463218159328203,0.9991646382764897,ensemble,True,False,pass
+What generic equivalents are on the formulary?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8847090992757597,0.39148051737524875,0.877752094261838,ensemble,True,True,pass
+Is there a cheaper generic version of this drug available?,generic_availability,generic_availability,True,cap_api,cap_api,True,0.8987141620385075,0.5428747520017996,0.8982794714301782,ensemble,True,True,pass
+Therapeutic alternatives for the medication on this fill.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9979793769858593,0.4850309533763948,0.9976032731992923,ensemble,True,False,pass
+Check if a generic is available for this NDC.,generic_availability,generic_availability,True,cap_api,cap_api,True,0.9889361892881597,0.44042673535972165,0.9842756130930135,ensemble,True,False,pass
+What is the dispense as written code on claim 132435151040074?,daw_info,daw_info,True,cap_api,cap_api,True,0.9976510726098354,0.47517114415152395,0.9972880184795238,ensemble,True,False,pass
+Is this prescription DAW or was substitution allowed?,daw_info,daw_info,True,cap_api,cap_api,True,0.9998434594615371,0.7255935339455937,0.9998032061282028,ensemble,True,False,pass
+Show the DAW indicator for this fill.,daw_info,daw_info,True,cap_api,cap_api,True,0.9998240157251888,0.7035259038306347,0.9998012336618073,ensemble,True,False,pass
+Was the brand name required by the prescriber on this claim?,daw_info,daw_info,True,cap_api,cap_api,True,0.9933823823871331,0.503576868429293,0.9886261370718356,ensemble,True,False,pass
+DAW code for claim 220133725669000 sequence 001.,daw_info,daw_info,True,cap_api,cap_api,True,0.9986317215973527,0.5304094283640626,0.9982809962838033,ensemble,True,False,pass
+Did the doctor mandate brand on this prescription?,daw_info,daw_info,True,cap_api,cap_api,True,0.9229389099572547,0.32629372329594714,0.8552309378479449,ensemble,True,False,pass
+What DAW was applied — was generic substitution blocked?,daw_info,daw_info,True,cap_api,cap_api,True,0.9968204730749671,0.4857063516142188,0.9958473584619413,ensemble,True,False,pass
+Tell me the substitution status for this claim.,daw_info,daw_info,True,cap_api,cap_api,True,0.9717675309037875,0.39598092512589145,0.9469159782382554,ensemble,True,False,pass
+Check the dispense as written indicator on claim 201503823714118.,daw_info,daw_info,True,cap_api,cap_api,True,0.9874546046410476,0.3368759371109325,0.9849471418141195,ensemble,True,False,pass
+Is this a DAW 1 or DAW 0 claim?,daw_info,daw_info,True,cap_api,cap_api,True,0.9999318871205223,0.7746318167520805,0.9999247983668167,ensemble,True,False,pass
+DAW?,daw_info,daw_info,True,cap_api,cap_api,True,0.995238698191102,0.5064505623337812,0.9925640313621698,ensemble,True,False,pass
+Was the pharmacist allowed to substitute on this script?,daw_info,daw_info,True,cap_api,cap_api,True,0.9056172238877304,0.3484278101405484,0.8975799397509241,ensemble,False,False,disagreement
+Brand required by prescriber or patient preference?,daw_info,daw_info,True,cap_api,cap_api,True,0.9332635981764711,0.3633247823545111,0.8705490696968246,ensemble,True,False,pass
+What substitution code is on file for this fill?,daw_info,daw_info,True,cap_api,cap_api,True,0.8499484643958654,0.21882927996727797,0.8155786440994154,ensemble,False,False,disagreement
+Show whether generic substitution was permitted on this claim.,daw_info,daw_info,True,cap_api,cap_api,True,0.9930167403015452,0.5683687276841566,0.9874851105167602,ensemble,True,False,pass
+Was this claim processed under a government program?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9999060595317846,0.760741106708704,0.9998951287147638,ensemble,True,False,pass
+Is this a Medicare or Medicaid claim?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9998934219380946,0.7488180652388847,0.9998653298643202,ensemble,True,False,pass
+Government claim classification for claim 242905816136000 sequence 001.,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9997332459786243,0.6807432223350498,0.9997021037264068,ensemble,True,False,pass
+What federal program does this claim fall under?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9998734214265104,0.7379434188914664,0.9998502607098301,ensemble,True,False,pass
+Is this a commercial or government-sponsored claim?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9998743487867793,0.7442739112035051,0.9998455764364818,ensemble,True,False,pass
+Show the government claim type indicator for this fill.,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9982486989887986,0.4981852201077574,0.9979864495007074,ensemble,True,False,pass
+Was this prescription covered under Medicaid managed care?,government_claim_type,medicare_part_d,False,cap_api,cap_api,True,0.3445686825320188,0.08913905570943619,0.1403212014619439,ensemble,False,False,disagreement
+Claim type — Medicare Part D or commercial?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9657294707474676,0.40148137374786413,0.9367364646469017,ensemble,True,False,pass
+Is this claim subject to state Medicaid rules?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.8596030965171089,0.18141130431215716,0.8056744509491868,ensemble,True,False,pass
+Tell me the program classification for this prescription claim.,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.989196718668166,0.44045155145884285,0.980619777979571,ensemble,True,False,pass
+What program type was this claim processed under?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9999001596000036,0.7797518778812724,0.9998717449164463,ensemble,True,False,pass
+Government program indicator on claim 201752592251000.,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9952685408970419,0.4062723127012493,0.9941448707052899,ensemble,True,False,pass
+Govt claim type?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9998859896943477,0.7490678649069542,0.9998659320519538,ensemble,True,False,pass
+Was this filled under a state or federal plan?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.999803169051217,0.7117558613932661,0.9997714743436273,ensemble,True,False,pass
+Is this claim flagged as Medicare or Medicaid in the system?,government_claim_type,government_claim_type,True,cap_api,cap_api,True,0.9956818698156654,0.42275528878485724,0.9947678249597468,ensemble,True,False,pass
+Was this prescription filled through mail order?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8999028646053094,0.7624117467233555,0.8998712570606446,ensemble,True,True,pass
+Is this a home delivery or retail fill?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8998384338004204,0.7187059298582812,0.8997808499791595,ensemble,True,True,pass
+Mail order status for claim 220133725669000 sequence 001.,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.898345294470338,0.5679826160197411,0.8976202450467253,ensemble,True,True,pass
+Was this medication shipped to the patient?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.9998386728276479,0.72307053634005,0.9998024392867068,ensemble,True,False,pass
+Show the delivery channel for this claim.,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8997832143733305,0.6917929414917805,0.8997487363726989,ensemble,True,True,pass
+Is this a mail-order pharmacy fill or a walk-in?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8079933881734974,0.3548168878329031,0.7196832424851656,ensemble,True,True,pass
+Home delivery information for claim 201503823714118.,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.9990653112020067,0.5506053353604212,0.9989689439505406,ensemble,True,False,pass
+Did this come from a mail service pharmacy?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8998767869022267,0.7467306682843488,0.8998327149587795,ensemble,True,True,pass
+Was this prescription dispensed via home delivery?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.9999150499618533,0.7679989592966363,0.9999006054046581,ensemble,True,False,pass
+Mail order?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.889039779219085,0.4302387233832164,0.8810213654035023,ensemble,True,True,pass
+What is the fulfillment channel — retail or mail?,mail_order_info,PharmType,False,cap_api,claim_history_search,False,0.6934191003311263,0.29946077985852804,0.5647027721398864,ensemble,False,True,disagreement
+Show whether this was shipped or picked up at a store.,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.9872326805029463,0.3603065006243569,0.979993947444435,ensemble,True,False,pass
+Is this a 90-day mail order fill?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.46145567210807575,0.20714104638391923,0.03000569625812632,ensemble,False,False,disagreement
+Was this filled at a mail-service or specialty pharmacy?,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8873037193293118,0.4654114118032221,0.8762079476898825,ensemble,True,True,pass
+Check if this claim was processed through the mail order channel.,mail_order_info,mail_order_info,True,cap_api,cap_api,True,0.8942484584200903,0.5595877094132297,0.8889962117006703,ensemble,True,True,pass
+Show the Medicare Part D details for claim 242905816136000 sequence 001.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8963103215680405,0.662051062433391,0.8927935939931786,ensemble,True,True,pass
+What are the PDE fields on this claim?,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.9998403837783041,0.7179846050193874,0.9997975119453059,ensemble,True,False,pass
+MEDD pricing breakdown for this specific claim.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8999068203484523,0.7739460999354935,0.8998689879548238,ensemble,True,True,pass
+Is there a low income subsidy applied to the pricing on this claim?,medicare_part_d,lics_status,False,cap_api,member_domain,False,0.9710235240052867,0.37784775485423505,0.9461503171047119,ensemble,True,False,pass
+Medicare Part D summary for claim 201752592251000 sequence 001.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8981450122744514,0.6129382583202244,0.8966101803074635,ensemble,True,True,pass
+Show the N1 segment details for this Part D claim.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.9998843859335875,0.7375256099766576,0.9998690521439046,ensemble,True,False,pass
+What is the LICS tier pricing on this specific claim?,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.6885489127535547,0.2598444120408129,0.49140038516881723,ensemble,False,False,disagreement
+PDE data for claim 132435151040074 sequence 001.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.9993120644025495,0.5797844377308312,0.9992587928537465,ensemble,True,False,pass
+Part D cost sharing breakdown on this fill.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.9997681615334475,0.7134662891307759,0.9997195249259049,ensemble,True,False,pass
+What Medicare plan paid and what the beneficiary owes on this claim.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8970294782246433,0.509647953280237,0.8961148683932554,ensemble,True,True,pass
+Show the true out-of-pocket amount for this Part D claim.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8998063747205245,0.7320921932800967,0.8997167527576398,ensemble,True,True,pass
+CMS pricing fields on claim 220133725669000.,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8844541970637333,0.42149560332526115,0.871175564375251,ensemble,True,True,pass
+MEDD?,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.864231133543569,0.32207932696736774,0.8445171081545055,ensemble,True,True,pass
+Was the catastrophic coverage phase reached on this claim?,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.8833630910845506,0.2834197531422202,0.8635695477086399,ensemble,False,False,disagreement
+What Part D benefit phase applies to the pricing on this claim?,medicare_part_d,medicare_part_d,True,cap_api,cap_api,True,0.9108304980065175,0.4805140941286601,0.9042674486632548,ensemble,False,False,disagreement
+Which pharmacy network processed claim 132435151040074 sequence 001?,network_info,network_info,True,cap_api,cap_api,True,0.9988786905091761,0.6148038658412729,0.9984227108758166,ensemble,True,False,pass
+Is this an in-network or out-of-network claim?,network_info,network_info,True,cap_api,cap_api,True,0.9997932735500596,0.6883912517766398,0.9997747358520419,ensemble,True,False,pass
+Network details for this prescription fill.,network_info,network_info,True,cap_api,cap_api,True,0.9999102120273102,0.7562560890688068,0.9999012396230171,ensemble,True,False,pass
+What paying network was used on this claim?,network_info,network_info,True,cap_api,cap_api,True,0.9999292784937496,0.790767057894468,0.9999142512166403,ensemble,True,False,pass
+Show the network code associated with claim 220133725669000.,network_info,network_info,True,cap_api,cap_api,True,0.9968151489391522,0.42834264680065093,0.9966222750241729,ensemble,True,False,pass
+Was this claim filled through the preferred pharmacy network?,network_info,network_info,True,cap_api,cap_api,True,0.9998751897027613,0.738515610739964,0.9998602378562139,ensemble,True,False,pass
+Which network tier does this pharmacy fall into for this claim?,network_info,network_info,True,cap_api,cap_api,True,0.9675844307478898,0.3207688521849562,0.9593092865144832,ensemble,True,False,pass
+Network information for claim 201503823714118 sequence 001.,network_info,network_info,True,cap_api,cap_api,True,0.9984854736457924,0.5095594261687161,0.9982973121910267,ensemble,True,False,pass
+Is the dispensing pharmacy in the narrow or broad network?,network_info,network_info,True,cap_api,cap_api,True,0.9890541171180295,0.34781312400629794,0.9843193698019801,ensemble,True,False,pass
+What network classification applies to this fill?,network_info,network_info,True,cap_api,cap_api,True,0.9897925116197203,0.3484402194632996,0.9867371026623548,ensemble,True,False,pass
+Network?,network_info,network_info,True,cap_api,cap_api,True,0.99084903539851,0.397548250574669,0.9872168909867619,ensemble,True,False,pass
+Was this pharmacy in the plan's preferred network when the claim was processed?,network_info,network_info,True,cap_api,cap_api,True,0.9972300166270543,0.49812114523758066,0.9961833525836951,ensemble,True,False,pass
+What is the network status of the pharmacy on this claim?,network_info,network_info,True,cap_api,cap_api,True,0.9998393424995208,0.7356442218498007,0.9998137987783676,ensemble,True,False,pass
+Show the paying network details for this prescription.,network_info,network_info,True,cap_api,cap_api,True,0.9999005679603822,0.7493005493246045,0.9998852707057339,ensemble,True,False,pass
+Which pharmacy network tier was this fill processed under?,network_info,network_info,True,cap_api,cap_api,True,0.9641764034093873,0.2876099964745855,0.9538559023521412,ensemble,True,False,pass
+Was prior authorization required for claim 201752592251000 sequence 001?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8929465203540994,0.5491391935099581,0.8864462141777315,ensemble,True,True,pass
+Show the PA status on this specific claim.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8998395969861575,0.7257157360112998,0.8998094541805799,ensemble,True,True,pass
+Did this claim need prior authorization?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8999175248147886,0.7969336303590733,0.8998757695420697,ensemble,True,True,pass
+Is there a Smart PA attached to this claim?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8998201534784794,0.695460758160175,0.8997847090751179,ensemble,True,True,pass
+PA details for claim 220133725669000 sequence 001.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.4314154218644195,0.17525045441747147,0.10368216450360054,ensemble,False,True,disagreement
+What is the authorization number on this claim?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8996710642166431,0.673457564331634,0.8995826855057653,ensemble,True,True,pass
+Tell me if this prescription required prior auth to process.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8997961020544848,0.7101590514264289,0.899720248219451,ensemble,True,True,pass
+Was a member PA or plan PA used on this fill?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.7727357804783254,0.261761105900984,0.7447396351473133,ensemble,False,True,disagreement
+Prior authorization requirements for this claim.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.9996664045736025,0.6887223096445718,0.9995562263070807,ensemble,True,False,pass
+Show whether this claim passed PA validation.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.9998257377540404,0.7145583417354413,0.9997873535692745,ensemble,True,False,pass
+Prior auth on this claim?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8950837693640481,0.4408723214888741,0.8940309828863431,ensemble,True,True,pass
+Was PA needed and was it approved for this specific fill?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.7977946990488987,0.33329789680001704,0.7759651231181425,ensemble,False,True,disagreement
+What authorization was checked when processing this claim?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8139018788330872,0.39313663280709665,0.8030957669893302,ensemble,False,True,disagreement
+Does this claim have an associated PA number on file?,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.8997841097427842,0.691044392486033,0.8997541660006638,ensemble,True,True,pass
+PA status for claim 242905816136000 sequence 001.,prior_auth_info,prior_auth_info,True,cap_api,cap_api,True,0.4314154218644195,0.17525045441747147,0.10368216450360054,ensemble,False,True,disagreement
+Was a transition fill applied to claim 132435151040074 sequence 001?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9961310233845493,0.6143948504208184,0.9925477727834383,ensemble,True,False,pass
+Show the approval overrides for claim 220133725669000.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9990215777242358,0.6260792198651421,0.9986769457923689,ensemble,True,False,pass
+What BPG configuration led to approval of this claim?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9987411900718666,0.5376364997143741,0.9984835120121098,ensemble,True,False,pass
+TF eligibility and approval details for this fill.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.8998502195579683,0.7177701146622188,0.8998329858681817,ensemble,True,True,pass
+Did any plan override get triggered for claim 201503823714118?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.6629952114186972,0.25330984879948815,0.4171541396695075,ensemble,False,False,disagreement
+Approval pathway and override logic for this claim.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.8964610138051581,0.44879952774449755,0.8955772305429289,ensemble,True,True,pass
+What transition fill type was applied here?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9996396034721067,0.6716992380629642,0.9994854820884272,ensemble,True,False,pass
+Claim 242905816136000 sequence 001 approval messages and codes.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9836670035429017,0.3812124161885913,0.9730020801098453,ensemble,True,False,pass
+Were there any plan-level overrides that approved this claim?,approval_info,approval_info,True,benefits_api,benefits_api,True,0.9955495320651618,0.5129237765959572,0.9923286849814104,ensemble,True,False,pass
+Show all approval information including BPG and TF status.,approval_info,approval_info,True,benefits_api,benefits_api,True,0.8183244953540636,0.39442297286822087,0.8115695456688957,ensemble,False,True,disagreement
+When was claim 201752592251000 sequence 001 first entered into the system?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9889996228428276,0.3731428338388798,0.9838988928812019,ensemble,True,False,pass
+Show the modification history for this claim.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9999000986612941,0.8444306499499712,0.9998329466459425,ensemble,True,False,pass
+Who was the last user to make changes to this claim?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9464028102142686,0.28579500142664366,0.9284159788800345,ensemble,True,False,pass
+Audit log for claim 220992183436835 sequence 002.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.998467744145417,0.51785751991816,0.998280769425018,ensemble,True,False,pass
+What timestamps are on record for this claim's processing?,audit_info,fill_date_info,False,benefits_api,claim_history_search,False,0.5096286568815529,0.158786013703069,0.23823724078111708,ensemble,False,False,disagreement
+Change history and audit trail for this fill.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9814769433228342,0.3193570629819313,0.976566856264658,ensemble,True,False,pass
+When was this claim record last modified?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.999820894704704,0.7619223183065749,0.9997270501794194,ensemble,True,False,pass
+Show me the create date and last update date for this claim.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9824481162500899,0.4137833121911416,0.9687338018175452,ensemble,True,False,pass
+Pull the full audit trail for claim 230624075311000.,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9916453961922546,0.37238164431184273,0.9889887647582684,ensemble,True,False,pass
+What system events are logged against this claim?,audit_info,audit_info,True,benefits_api,benefits_api,True,0.9998002142983843,0.6950586431140853,0.9997695899246717,ensemble,True,False,pass
+What benefit phase is this member currently in?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9582148101278253,0.301964867036233,0.9383806020999528,ensemble,True,False,pass
+Show the accumulation totals for this member.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9806482343137055,0.3595876103782413,0.9723533907441865,ensemble,True,False,pass
+Coverage tier and eligibility details for this beneficiary.,beneficiary_info,family_type,False,benefits_api,member_domain,False,0.4059516529595623,0.13597452677777805,0.22723418055932398,ensemble,False,True,disagreement
+Is this member in the deductible or coverage phase?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9013413853771538,0.3133232307362868,0.8936091242794568,ensemble,False,False,disagreement
+Beneficiary accumulation summary for this member.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9908550446369081,0.37635308142687846,0.987232806966674,ensemble,True,False,pass
+How close is this member to reaching the coverage gap?,beneficiary_info,member_coverage,False,benefits_api,member_domain,False,0.6694355244685569,0.15058222604740806,0.581364185110459,ensemble,False,False,disagreement
+What are the current accumulator amounts for this member?,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.6985522095232619,0.24304287215698123,0.6198742090854615,ensemble,False,False,disagreement
+Show this member's benefit phase progression.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9925391038516425,0.4181216327480927,0.9896970075590938,ensemble,True,False,pass
+Tier and accumulation breakdown for this beneficiary.,beneficiary_info,beneficiary_info,True,benefits_api,benefits_api,True,0.9590192876283092,0.2650115388766734,0.9422036820973567,ensemble,True,False,pass
+What is the total year-to-date spend for this member?,beneficiary_info,pricing_info,False,benefits_api,cap_api,False,0.5701028474524047,0.13966539062686936,0.3218931770701299,ensemble,False,False,disagreement
+Give me an overview of the current benefit plan for this member.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.9995438693942447,0.6660252240683991,0.9993570145925356,ensemble,True,False,pass
+What plan is this member enrolled in right now?,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.7140137613867192,0.17435537501458107,0.6350062022843477,ensemble,True,True,pass
+Active plan snapshot for member 44781239.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.9876650140628069,0.3244501876830984,0.9857314928081808,ensemble,True,False,pass
+Show me the current coverage summary for this member's plan.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.8906103998411504,0.43664822488580396,0.8849786475159838,ensemble,True,True,pass
+What is the plan name and effective date for this member?,plan_summary,benefit_reset_date,False,benefits_api,member_domain,False,0.6182395704829142,0.15653302832423152,0.4410421615266192,ensemble,False,False,disagreement
+Current benefit plan configuration overview.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.9472957872647149,0.28758711696469424,0.9157154905833652,ensemble,True,False,pass
+Plan summary for this member.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.9947969182301827,0.40975816501181184,0.9936620682041766,ensemble,True,False,pass
+What formulary is associated with this member's current plan?,plan_summary,drug_info,False,benefits_api,claim_history_search,False,0.5150497619034102,0.13867530605389283,0.28753821825403764,ensemble,False,False,disagreement
+Show the active plan details including tier structure.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.6323422635703057,0.15322405076503387,0.5831337403752876,ensemble,False,False,disagreement
+Pull up the plan overview for this enrollment.,plan_summary,plan_summary,True,benefits_api,benefits_api,True,0.6359864434117987,0.19589586819018603,0.4809341212107676,ensemble,False,False,disagreement
+Show me the plan revision history for this member.,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9983868215330042,0.5196156241932091,0.9980063110107451,ensemble,True,False,pass
+When was the last plan change made for member 44781239?,plan_history,plan_history,True,benefits_api,benefits_api,True,0.4272313772844438,0.10021104354656064,0.3127019975487168,ensemble,False,False,disagreement
+Has this member's plan been amended recently?,plan_history,plan_history,True,benefits_api,benefits_api,True,0.973272279484657,0.3011617272957626,0.9644749051230149,ensemble,True,False,pass
+Plan change log and amendment history.,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9989794216672623,0.554212096287569,0.9988278633380826,ensemble,True,False,pass
+What prior plan versions were in effect for this member?,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9953135741295891,0.40541978265026124,0.994815671083431,ensemble,True,False,pass
+Show the timeline of plan updates for this enrollment.,plan_history,plan_history,True,benefits_api,benefits_api,True,0.903429909343859,0.25185689423453417,0.8281190932813565,ensemble,True,False,pass
+Historical plan changes for this member.,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9930076329159896,0.3934009488309682,0.9912869871385447,ensemble,True,False,pass
+When did the current plan go into effect and what was the prior plan?,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9828326301989508,0.3424763218087661,0.9751321144651033,ensemble,True,False,pass
+Plan revision audit trail for this member.,plan_history,plan_history,True,benefits_api,benefits_api,True,0.9968003820710865,0.4891273861417632,0.9950212455804224,ensemble,True,False,pass
+Were there any mid-year plan changes for this member?,plan_history,Month,False,benefits_api,claim_history_search,False,0.8402936684876594,0.22550126431429096,0.8085377416667405,ensemble,False,False,disagreement
+Search for available plans that match this member's eligibility.,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.9714205411093918,0.4000936705936664,0.9461944613015542,ensemble,True,False,pass
+Which benefit plans are available for this client group?,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.9994615794887514,0.5931038367013427,0.9993974390000794,ensemble,True,False,pass
+Find a plan that covers specialty medications.,plan_finder,pa_specialty_rx_override,False,benefits_api,override_domain,False,0.5275526480120013,0.17040242895010219,0.2751014391154764,ensemble,False,False,disagreement
+Plan catalog lookup for member 44781239.,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.93095362069078,0.2066384473125691,0.9186805282486823,ensemble,True,False,pass
+What plans are available for enrollment in this account group?,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.9859182391886613,0.3407814532993972,0.9789650252041993,ensemble,True,False,pass
+Show me plans that match this member's demographic profile.,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.8890046542327017,0.3426537270015506,0.8632374155946718,ensemble,False,False,disagreement
+Search the plan catalog for this carrier.,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.9940193655577889,0.3680837853782174,0.993384609632867,ensemble,True,False,pass
+Which plans offer mail-order benefits in this group?,plan_finder,mail_order_info,False,benefits_api,cap_api,False,0.8113613718563,0.2849687522191026,0.7555603120437433,ensemble,True,True,pass
+Find available benefit plan options for this enrollment.,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.9941604771352792,0.4000189671450079,0.9927104128986681,ensemble,True,False,pass
+What plans can this member switch to?,plan_finder,plan_finder,True,benefits_api,benefits_api,True,0.8885672933023437,0.2053627347568921,0.8175273905646112,ensemble,True,False,pass
+Show compound medication ingredient breakdown for this member's claims.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9995690744580388,0.6243705228907823,0.9995142098045567,ensemble,True,False,pass
+MIC details for the compound fills in this member's history.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9897938826009768,0.31877130742266124,0.9887843327744682,ensemble,True,False,pass
+Were there any compound claims with funded and unfunded ingredients?,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9969672573914261,0.45001376953097705,0.9963047491922922,ensemble,True,False,pass
+Ingredient cost report across compound claims for this member.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.8882488532461585,0.45480219530686183,0.8779694144316262,ensemble,True,True,pass
+List all compound prescriptions filled for this member.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9950033577401044,0.40908254512262865,0.9942937821689578,ensemble,True,False,pass
+Compound drug ingredient list and costs across claims.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.8982942882028176,0.5265629721018195,0.8977431813496082,ensemble,True,True,pass
+Show compound claims and their MIC breakdowns.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.8904710430864518,0.27104102608064,0.8855525127120067,ensemble,False,False,disagreement
+Are there any compound medications in this member's claim history?,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.996829644011134,0.46219703573714715,0.9961510897708773,ensemble,True,False,pass
+Pull compound ingredient details across all fills.,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.9937316065285823,0.3708783645538419,0.9930178599395475,ensemble,True,False,pass
+Which claims involved compounded medications?,compound_info,compound_info,True,claim_history_search,claim_history_search,True,0.964269951702793,0.29991590008961516,0.9418347225487391,ensemble,True,False,pass
+Show me all claims from March through June.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9998166629871595,0.7886041337809678,0.9996787697924739,ensemble,True,False,pass
+Claims within the last 90 days for this member.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9997881069261545,0.7233157281922695,0.9997304457394389,ensemble,True,False,pass
+Pull claims that contributed to the deductible this year.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.999904116848266,0.7505597220084834,0.9998964029961882,ensemble,True,False,pass
+Show claim accumulation history for the past 6 months.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.8819758900554964,0.3316985632551047,0.8576794360210263,ensemble,False,False,disagreement
+What claims were processed between January 1 and April 30?,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9987988233496387,0.7401490814273075,0.9976757969848549,ensemble,True,False,pass
+List claims from the current benefit year.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9997943676695682,0.7438971418394621,0.9996940209966647,ensemble,True,False,pass
+Date range search: claims from 2025-01-01 to 2025-06-30.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9367725107281643,0.23070937349069595,0.9210568779147028,ensemble,True,False,pass
+Show deductible-contributing claims for this member.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9969652180033769,0.47072607193893523,0.9960674155479481,ensemble,True,False,pass
+What claims fell within this quarter?,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.8776857998775539,0.3664554336523736,0.8408307074382289,ensemble,False,False,disagreement
+Pull the claim history for the last 12 months.,date_range_claims,date_range_claims,True,claim_history_search,claim_history_search,True,0.9998647254529991,0.7394666618375402,0.9998491817614267,ensemble,True,False,pass
+What drug was dispensed on the claims for this member?,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998881357810758,0.7558690451786552,0.9998655638688648,ensemble,True,False,pass
+Show me the NDC and GPI for drugs in this member's history.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9846347273336121,0.37636712023475993,0.979103329259501,ensemble,True,False,pass
+What is the formulary status of the drugs this member has been taking?,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9956693537427983,0.448352008345619,0.9940419331698538,ensemble,True,False,pass
+Drug name and therapeutic class for claims on this member.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998627987913827,0.7504706864360349,0.9998267083228907,ensemble,True,False,pass
+GPI lookup across this member's prescriptions.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998141890313881,0.7021472928555086,0.9997846929445279,ensemble,True,False,pass
+List all medications and their NDCs from this member's claims.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.950800185465769,0.29010508322750156,0.9270629631903023,ensemble,True,False,pass
+Show the drug details including RxClaim status for this member.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9853371393877012,0.4131503376957649,0.9739746659070085,ensemble,True,False,pass
+What therapeutic classes are represented in this member's fills?,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.999827805117518,0.7100230326876501,0.9998069971235837,ensemble,True,False,pass
+Formulary and drug classification for this member's medications.,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9142158506765109,0.4546958063649791,0.9122187390046467,ensemble,False,False,disagreement
+Which drugs has this member been prescribed?,drug_info,drug_info,True,claim_history_search,claim_history_search,True,0.9998420009569796,0.7218073730696303,0.9998224314593546,ensemble,True,False,pass
+Were there any DUR edits triggered across this member's claims?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998874075581469,0.7483811007392094,0.9998740743678775,ensemble,True,False,pass
+Show drug interaction alerts for this member's prescription history.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.999916930242535,0.7432942427568732,0.999911098586248,ensemble,True,False,pass
+What clinical screening flags appeared on this member's claims?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.8501777039605345,0.15745726778040023,0.8180985186878301,ensemble,True,False,pass
+DUR edit details across all fills for this member.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998551499574092,0.7106413435690573,0.9998337441553645,ensemble,True,False,pass
+Are there drug-drug interaction warnings in the claim history?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998365646378036,0.7337963372892862,0.9997917282255703,ensemble,True,False,pass
+List any interaction alerts or clinical edits for this member.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9989929510938692,0.538263574158509,0.9988102898097482,ensemble,True,False,pass
+Show DUR results for this member's recent fills.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.97580837010017,0.28671873758631816,0.9721723912969037,ensemble,True,False,pass
+Were any claims flagged for therapeutic duplication?,drug_interaction_info,drug_info,False,claim_history_search,claim_history_search,True,0.6638439375894493,0.17255042452278163,0.572118857655454,ensemble,False,False,disagreement
+Drug utilization review alerts across this member's history.,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998344492242482,0.731972409238858,0.999778658157477,ensemble,True,False,pass
+What clinical edits were triggered for this member's medications?,drug_interaction_info,drug_interaction_info,True,claim_history_search,claim_history_search,True,0.9998195505060959,0.7223318484868393,0.9997416345077735,ensemble,True,False,pass
+When was each prescription filled for this member?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9997691909731333,0.7241164482139422,0.9997033311710037,ensemble,True,False,pass
+Show fill dates across all claims for this member.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9998241070765761,0.7255488134295471,0.9997768467453478,ensemble,True,False,pass
+What was the date of service for the most recent fill?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.8997964090350012,0.6997717608774319,0.8997326191209917,ensemble,True,True,pass
+List claims sorted by fill date.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9997149465264583,0.6997287438240245,0.9996448396277173,ensemble,True,False,pass
+When was each medication last dispensed for this member?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.6890450446507723,0.27768035709497474,0.5786592594537583,ensemble,False,True,disagreement
+Dispensing dates for all prescriptions on file.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.8998303879503033,0.7085992874251581,0.8998092223066635,ensemble,True,True,pass
+Show the date each claim was filled.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9985417774075488,0.5464636693565216,0.998141293608725,ensemble,True,False,pass
+Service dates across the member's claim history.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.896777540187759,0.23131174434819082,0.8454468074880757,ensemble,True,False,pass
+Fill date timeline for this member's prescriptions.,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.9998281918601865,0.7345789575981634,0.9997881995412312,ensemble,True,False,pass
+What are the dispense dates for this member's recent fills?,fill_date_info,fill_date_info,True,claim_history_search,claim_history_search,True,0.6732479542264146,0.2103099025944346,0.5762142664165226,ensemble,False,True,disagreement
+How many refills remain on this member's prescriptions?,Refills,Refills,True,claim_history_search,claim_history_search,True,0.8999396383550217,0.7872915131485589,0.8999277395288111,ensemble,True,True,pass
+Show refill history for this member.,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9998921848134746,0.7362543945193869,0.9998794868033798,ensemble,True,False,pass
+Which prescriptions have been refilled more than 3 times?,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9999458907902481,0.7907579075092388,0.9999389831875841,ensemble,True,False,pass
+List claims by refill count.,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9999323661814875,0.7957677662221911,0.9999199871908108,ensemble,True,False,pass
+Are there any prescriptions eligible for refill?,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9999167842315917,0.7600861599009345,0.9999064944768928,ensemble,True,False,pass
+Refill count across this member's medications.,Refills,Refills,True,claim_history_search,claim_history_search,True,0.8999656137854125,0.814878950198439,0.8999616538975564,ensemble,True,True,pass
+How many times has LISINOPRIL been refilled for this member?,Refills,Refills,True,claim_history_search,claim_history_search,True,0.8411865330004767,0.38154865419201023,0.7688452141776991,ensemble,False,False,disagreement
+Show which fills are original versus refills.,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9928802965019435,0.42240191320095255,0.9886839722453225,ensemble,True,False,pass
+Pull the refill history for this member's maintenance meds.,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9987331982556248,0.5571337607751059,0.9982467841402624,ensemble,True,False,pass
+Which claims show a high refill number?,Refills,Refills,True,claim_history_search,claim_history_search,True,0.9992964246650823,0.5929174565509723,0.9992073468058014,ensemble,True,False,pass
+Filter claims by days supply — show only 90-day fills.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9998943643828236,0.7622304275405458,0.999867195130989,ensemble,True,False,pass
+Which prescriptions had 30 days supply or less?,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9999273172462809,0.7848288014911622,0.9999074927545596,ensemble,True,False,pass
+Show all 60-day supply fills for this member.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.999897089909183,0.7581508954633648,0.9998792663328785,ensemble,True,False,pass
+List claims where days supply exceeds 30.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9999318494935383,0.7844003130467236,0.9999181954745858,ensemble,True,False,pass
+How many claims were dispensed as 90-day supplies?,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9999011400344123,0.7601582522541342,0.999879211313102,ensemble,True,False,pass
+Days supply breakdown across this member's fills.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9998303087628733,0.7106758174879666,0.9997954423917867,ensemble,True,False,pass
+Show claims with 7-day supply only.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9939202150401001,0.39001156934556314,0.9922897084132933,ensemble,True,False,pass
+Which prescriptions were filled for less than 14 days?,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9937119561991926,0.4433022797031305,0.9909949254619652,ensemble,True,False,pass
+Filter by days supply for this member.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9085857630735338,0.4891412140798175,0.8983802852387418,ensemble,False,False,disagreement
+List all short-supply fills under 10 days.,DaysSupply,DaysSupply,True,claim_history_search,claim_history_search,True,0.9959426890484697,0.4338834215823914,0.9951338562972404,ensemble,True,False,pass
+Which claims required prior authorization approval?,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.9986505808779476,0.6887250007849114,0.9975443794965838,ensemble,True,False,pass
+Show all PA-required claims for this member.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.999823384580186,0.7464747098277924,0.999785377500828,ensemble,True,False,pass
+List fills that had a prior auth attached.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.8618424446378697,0.2536492125895107,0.8264760316150936,ensemble,False,False,disagreement
+Were any of this member's claims flagged for PA?,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.879159734321661,0.3043050977003407,0.8548322183512271,ensemble,False,False,disagreement
+Filter claims by prior authorization requirement.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.9998817511522833,0.763996233371878,0.9998487385356347,ensemble,True,False,pass
+How many claims needed PA approval in this member's history?,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.8345521295614452,0.3244968648786032,0.7685771500165303,ensemble,False,False,disagreement
+Show claims that passed PA review.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.7014293533622112,0.1874670745015556,0.6137413576307208,ensemble,False,False,disagreement
+Which prescriptions triggered a PA check?,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.882448683011307,0.26136136814302113,0.874055779276493,ensemble,False,False,disagreement
+List all prior-auth claims for this member in 2025.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.6836694492755025,0.1781886897108534,0.5963241661726543,ensemble,False,False,disagreement
+Pull claims where prior authorization was required.,PriorAuth,PriorAuth,True,claim_history_search,claim_history_search,True,0.9959309716760275,0.5005649052150425,0.9934758963876091,ensemble,True,False,pass
+Filter claims by ICD-10 diagnosis code.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9999111846651539,0.7814460424228775,0.9998927744902791,ensemble,True,False,pass
+Show claims associated with diagnosis J45.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9999631059962432,0.833658021449814,0.9999560145918973,ensemble,True,False,pass
+Which claims have a diabetes-related diagnosis code?,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.999927363341455,0.7685884675797503,0.9999155089870497,ensemble,True,False,pass
+List claims by diagnosis for this member.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9998477133696183,0.7404331903481658,0.9998192059290403,ensemble,True,False,pass
+What diagnosis codes appear on this member's claims?,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9999019438407696,0.758674826143743,0.9998821745193044,ensemble,True,False,pass
+Filter by diagnosis code E11 for this member.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9999569030964126,0.8095825876049239,0.9999520066562936,ensemble,True,False,pass
+Show claims with a specific ICD-10 on file.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9978976152913462,0.4796722955340865,0.9976932620581795,ensemble,True,False,pass
+Which fills are linked to a cardiovascular diagnosis?,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.2581990762675128,0.0753554292648584,0.10309818527325983,ensemble,False,False,disagreement
+Pull claims by diagnosis code for this member.,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9895269117886234,0.3556317679140945,0.9865606938147041,ensemble,True,False,pass
+Are there any claims with diagnosis code K21?,Diagnosis,Diagnosis,True,claim_history_search,claim_history_search,True,0.9979985615438196,0.5331334371894436,0.9970926825667317,ensemble,True,False,pass
+Show all claims with settlement code 358.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.9998185211600759,0.7008828593984422,0.9997989856038253,ensemble,True,False,pass
+Filter claims by settlement response code.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.9991733988212582,0.6636024399573286,0.9987828562543768,ensemble,True,False,pass
+Which claims returned settlement code 2?,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.8976815939978874,0.5880513309454583,0.8960391357461693,ensemble,True,True,pass
+List claims where the settlement code is 5.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.9959938773756497,0.4937658517714749,0.9948555353770848,ensemble,True,False,pass
+Search claims by pharmacy response code number.,Settlement,settlement_info,False,claim_history_search,cap_api,False,0.5086346244215921,0.16160681568728502,0.2879993647390675,ensemble,False,True,disagreement
+What settlement codes appear across this member's history?,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.4540449261666135,0.20034059725997352,0.09324603264955043,ensemble,False,True,disagreement
+Show claims that came back with settlement 300.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.887489847891308,0.3699655215384249,0.8818570794772739,ensemble,True,True,pass
+Filter by response code 400 across all fills.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.738662186340163,0.18882181338703283,0.7163802776559152,ensemble,False,False,disagreement
+Which claims have a non-zero settlement code?,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.8034886314612584,0.4651831852660208,0.7801551454606496,ensemble,False,True,disagreement
+Pull claims with a specific settlement code.,Settlement,Settlement,True,claim_history_search,claim_history_search,True,0.8973649885857666,0.5519631580745084,0.8953860381312901,ensemble,True,True,pass
+Show claims filled at specialty pharmacies only.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.999926506468128,0.7968330534564769,0.999905827746913,ensemble,True,False,pass
+Filter by pharmacy type — retail versus mail order.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.8998733611221965,0.7519942975921934,0.8998133968989919,ensemble,True,True,pass
+Which claims came from a mail-service pharmacy?,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.8998293357894233,0.7538455250502369,0.8997279354556103,ensemble,True,True,pass
+List claims by pharmacy channel for this member.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.8998555386705477,0.7404430255145354,0.8998095053115548,ensemble,True,True,pass
+Show only retail pharmacy fills.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.8998861522963668,0.7430097168324215,0.8998610512544359,ensemble,True,True,pass
+Filter claims by pharmacy type code.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.8998559705534266,0.7324418636006771,0.8998273164401936,ensemble,True,True,pass
+Were any claims processed at a long-term care pharmacy?,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.9998479691866726,0.7208178319121215,0.9998247737525779,ensemble,True,False,pass
+Which fills came from a specialty pharmacy?,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.9998845403330787,0.7592737866051525,0.9998545057333124,ensemble,True,False,pass
+Show claims by dispensing pharmacy type.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.9999073320147605,0.7874902144218142,0.9998741383431063,ensemble,True,False,pass
+Pull claims from retail locations only.,PharmType,PharmType,True,claim_history_search,claim_history_search,True,0.9997753858270871,0.7039594808518247,0.9997052568825103,ensemble,True,False,pass
+Filter claims by plan code for this member.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9998804712428206,0.7466327153782876,0.9998669778184567,ensemble,True,False,pass
+Show claims under plan ABC123.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9999393058024374,0.7887775160913673,0.9999277892681917,ensemble,True,False,pass
+Which claims were processed under this specific insurance plan?,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9986620273619181,0.6075034253072402,0.9978987788522921,ensemble,True,False,pass
+List claims by benefit plan.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9998996817923501,0.7799828673520381,0.9998788135099335,ensemble,True,False,pass
+Show all fills under the current plan ID.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9998791679202046,0.728365572627695,0.9998634966852413,ensemble,True,False,pass
+Filter by insurance plan code.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9999217660770751,0.7541882783307665,0.999914021516354,ensemble,True,False,pass
+Which plan was used to process each claim?,Plan,Plan,True,claim_history_search,claim_history_search,True,0.6899312180264126,0.18137222777553647,0.5518895595956966,ensemble,False,False,disagreement
+Show claims grouped by plan for this member.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9670097938383864,0.34041897470596894,0.9511918540237593,ensemble,True,False,pass
+Pull claims under a specific plan identifier.,Plan,Plan,True,claim_history_search,claim_history_search,True,0.9803085938506013,0.310095925236934,0.974052578681222,ensemble,True,False,pass
+Were any claims processed under a different plan?,Plan,Plan,True,claim_history_search,claim_history_search,True,0.8374456567242105,0.2372902707029371,0.7989289593067148,ensemble,False,False,disagreement
+Show all claims filled at Walgreens.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.8978573704044429,0.4952784581869651,0.8973946396127513,ensemble,True,True,pass
+List claims from CVS PHARMACY 00610 for this member.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.9896113806066443,0.4322149605147553,0.9834489393177634,ensemble,True,False,pass
+Which pharmacy has dispensed the most claims for this member?,Pharmacy,pharmacy_info,False,claim_history_search,cap_api,False,0.3908819735993768,0.1252387098318755,0.11916247399086972,ensemble,False,False,disagreement
+Filter claims by pharmacy name.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.7998044127240042,0.448336145758008,0.7810428502044667,ensemble,False,True,disagreement
+Show fills at Walmart Pharmacy for this member.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.9983548517426661,0.524694823859216,0.9978314679382675,ensemble,True,False,pass
+Claims processed at Rite Aid locations.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.89330922489865,0.40558050774309995,0.8912104050875782,ensemble,True,True,pass
+Which stores filled prescriptions for this member?,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.8997175590800984,0.7199444471887045,0.8995705940651282,ensemble,True,True,pass
+List claims by dispensing pharmacy name.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.8996804011899137,0.7346173763128852,0.8995274427210801,ensemble,True,True,pass
+Show fills at Costco pharmacy.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.8973560681443802,0.49032847212848246,0.8962124973779388,ensemble,True,True,pass
+Pull claims from a specific pharmacy location.,Pharmacy,Pharmacy,True,claim_history_search,claim_history_search,True,0.6919203246290699,0.2883368465639454,0.6123963347578514,ensemble,False,True,disagreement
+Search claims by prescriber name across this member's history.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.8832810144569155,0.4296127239711811,0.8702885211485684,ensemble,True,True,pass
+Show claims written by Dr. Smith.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.9914341803964042,0.3830709874410684,0.9898000012280234,ensemble,True,False,pass
+Which prescribers have written for this member?,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.8991142532601955,0.5745466211401876,0.8988212475459494,ensemble,True,True,pass
+Filter claims by prescriber NPI across history.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.7789566302918485,0.30137017105086056,0.7435517466828003,ensemble,False,True,disagreement
+List claims from a specific doctor for this member.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.694788271591132,0.3167798376880601,0.5665737796301848,ensemble,False,True,disagreement
+Show all fills prescribed by NPI 1234567890.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.9992524330863511,0.6071515907870385,0.9991194969520648,ensemble,True,False,pass
+How many different prescribers appear in this member's claims?,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.9138724744518736,0.2546572654002769,0.8673370847805131,ensemble,True,False,pass
+Claims by prescriber for this member.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.8922585210727763,0.5038693908194047,0.8885944598495471,ensemble,True,True,pass
+Which doctor wrote the most prescriptions for this member?,Prescriber,prescriber_info,False,claim_history_search,cap_api,False,0.45751361785755656,0.1419012801582993,0.15697211438731556,ensemble,False,True,disagreement
+Pull claims filtered by prescribing physician.,Prescriber,Prescriber,True,claim_history_search,claim_history_search,True,0.6458116870744679,0.2396888589769069,0.4846363813415647,ensemble,False,True,disagreement
+How much has this member spent on ATORVASTATIN across all fills?,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.9794202338453318,0.44729721964304503,0.96100621283275,ensemble,True,False,pass
+Total cost breakdown for METFORMIN across all claims.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.9946547712509475,0.5098030587674061,0.9909842909821142,ensemble,True,False,pass
+Show pricing history for LISINOPRIL for this member.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.7951009040153216,0.3568081952638181,0.673742197229278,ensemble,False,False,disagreement
+What did the member pay for each fill of AMLODIPINE?,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.8332532441059037,0.28458898091043433,0.7584173411289228,ensemble,False,False,disagreement
+Copay trend across fills for a specific drug.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.8121750710214662,0.2895354871915663,0.7317273053849026,ensemble,False,False,disagreement
+Cost per fill for OMEPRAZOLE over the past year.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.9999145720275859,0.8153888722657866,0.9998694095411953,ensemble,True,False,pass
+How has the price changed across refills for this medication?,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.8015002511312627,0.2615549817047189,0.6311255050165929,ensemble,True,False,pass
+Total out-of-pocket for METFORMIN across all fills.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.9962148670428638,0.5719314860883711,0.9932107786899217,ensemble,True,False,pass
+Show the pricing trend for this drug across claims.,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.6241962793881375,0.1968249627934055,0.4980492658625488,ensemble,False,False,disagreement
+What is the average copay for this medication across claims?,Pricing,Pricing,True,claim_history_search,claim_history_search,True,0.9830059611155698,0.4222781760267642,0.9738395882718573,ensemble,True,False,pass
+Show all paid claims for this member.,Status,Status,True,claim_history_search,claim_history_search,True,0.9997201064487148,0.7293462432287611,0.9995770957392941,ensemble,True,False,pass
+List rejected claims in this member's history.,Status,Status,True,claim_history_search,claim_history_search,True,0.9830643968161891,0.40222758091683936,0.9763916923237211,ensemble,True,False,pass
+Filter claims by status — show pending only.,Status,Status,True,claim_history_search,claim_history_search,True,0.9999088495540114,0.7756967128847558,0.9998871177430897,ensemble,True,False,pass
+Which claims are currently reversed?,Status,reversal_info,False,claim_history_search,cap_api,False,0.9150104654068738,0.392661488498219,0.832338203964954,ensemble,True,False,pass
+Show all claims with a paid status for this member.,Status,Status,True,claim_history_search,claim_history_search,True,0.996243823433551,0.5233120658005368,0.9944880758523019,ensemble,True,False,pass
+List claims that were denied for this member.,Status,Status,True,claim_history_search,claim_history_search,True,0.9895785251351797,0.4930402020091595,0.9811752351169124,ensemble,True,False,pass
+Filter by claim status across this member's history.,Status,Status,True,claim_history_search,claim_history_search,True,0.770775389564278,0.24924800742695585,0.7376847113371808,ensemble,False,False,disagreement
+How many claims are in pending status?,Status,Status,True,claim_history_search,claim_history_search,True,0.9840621241177859,0.3923887063850829,0.9754305081687361,ensemble,True,False,pass
+Show only the reversed claims.,Status,Status,True,claim_history_search,claim_history_search,True,0.783360033009103,0.2658092246697641,0.6567710031396732,ensemble,False,False,disagreement
+Pull claims by adjudication status for this member.,Status,Status,True,claim_history_search,claim_history_search,True,0.988481783621529,0.391300864367531,0.9845768438959134,ensemble,True,False,pass
+Show claims rejected with code 75.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.997808683507664,0.6522783968388615,0.9959570663426612,ensemble,True,False,pass
+Filter claims by NCPDP reject code 70.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9928665339900734,0.42511203168275713,0.9898058800867875,ensemble,True,False,pass
+Which claims have rejection code 76?,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9982360446282237,0.5743702709216171,0.9973355831145877,ensemble,True,False,pass
+List claims with reject code MR.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9990511812172642,0.6016704661955291,0.9986862623909984,ensemble,True,False,pass
+Search by reject code for this member.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9942105464971813,0.4398087770907556,0.992688985772741,ensemble,True,False,pass
+Show all claims that hit reject 79.,RejectCode,pa_override_reject,False,claim_history_search,override_domain,False,0.4733342758813576,0.17226528732465698,0.06020967325306624,ensemble,False,False,disagreement
+Which fills were denied with code 75?,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.8823456370231972,0.21794123987952427,0.8152124835255053,ensemble,True,False,pass
+Filter claims by specific rejection code.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.999882263020125,0.7758388133346201,0.9998364856323524,ensemble,True,False,pass
+Pull claims rejected with NCPDP code 70.,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9692437346468403,0.30203929300495924,0.9543036593558323,ensemble,True,False,pass
+How many claims were rejected with code 75 for this member?,RejectCode,RejectCode,True,claim_history_search,claim_history_search,True,0.9949862440089309,0.5403077396754256,0.9907737846299663,ensemble,True,False,pass
+When was LISINOPRIL last dispensed for this member?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.9999575093704672,0.7998141358653463,0.9999506768744971,ensemble,True,False,pass
+Last fill date for METFORMIN.,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.9999192555646269,0.8008710418033846,0.9998822060597752,ensemble,True,False,pass
+When was the most recent fill of ATORVASTATIN?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.999925347018405,0.8005163776714868,0.9999001308158207,ensemble,True,False,pass
+How long ago was OMEPRAZOLE last dispensed?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.9999445843884788,0.8035902988518455,0.9999297950396453,ensemble,True,False,pass
+Show the last dispensing date for AMLODIPINE.,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.999950457549193,0.8012950685662432,0.9999436390369862,ensemble,True,False,pass
+When did this member last pick up their prescription?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.899700708468272,0.6887239818471559,0.8996007675902731,ensemble,True,True,pass
+Most recent fill date for this drug.,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.8999320491974422,0.7811953549387987,0.8999164584957289,ensemble,True,True,pass
+Last time GABAPENTIN was filled for this member.,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.9998927731519966,0.7657435048780459,0.9998524694995992,ensemble,True,False,pass
+When was the last time this member got HYDROCHLOROTHIAZIDE?,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.999936377904644,0.774026215528707,0.999924283977071,ensemble,True,False,pass
+Show the most recent dispensing date for this medication.,DrugLast,DrugLast,True,claim_history_search,claim_history_search,True,0.8995687328273866,0.740648826636588,0.8992300395610676,ensemble,True,True,pass
+Show all claims from January.,Month,Month,True,claim_history_search,claim_history_search,True,0.9998868401005463,0.7895979998422908,0.9998266852741934,ensemble,True,False,pass
+Claims processed in March for this member.,Month,Month,True,claim_history_search,claim_history_search,True,0.999795253308184,0.7475332637189094,0.9996715190723175,ensemble,True,False,pass
+List fills from October.,Month,Month,True,claim_history_search,claim_history_search,True,0.999915066405845,0.7720208726985276,0.999898146181396,ensemble,True,False,pass
+Filter claims by month — show February only.,Month,Month,True,claim_history_search,claim_history_search,True,0.9997164652130545,0.7484231938696868,0.9995269212372433,ensemble,True,False,pass
+Which claims were processed in December?,Month,Month,True,claim_history_search,claim_history_search,True,0.9995085275895816,0.7498243650302874,0.999116892675324,ensemble,True,False,pass
+Show claims from the month of June.,Month,Month,True,claim_history_search,claim_history_search,True,0.9990518000933412,0.5987968684891057,0.9986924712763786,ensemble,True,False,pass
+April claims for this member.,Month,Month,True,claim_history_search,claim_history_search,True,0.9999325470815701,0.808971487873706,0.9998962908164929,ensemble,True,False,pass
+Pull all claims from September.,Month,Month,True,claim_history_search,claim_history_search,True,0.9935226036411975,0.44172615574534824,0.9905459729605912,ensemble,True,False,pass
+Filter by calendar month — August.,Month,Month,True,claim_history_search,claim_history_search,True,0.8839068211933973,0.2863596882730404,0.8636255715095426,ensemble,False,False,disagreement
+List claims from November for this member.,Month,Month,True,claim_history_search,claim_history_search,True,0.9848419830872523,0.4091569497829655,0.9755126525522317,ensemble,True,False,pass
+Look up claim number 132435151040074.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.8999516063208243,0.8198396894900364,0.8999401966440956,ensemble,True,True,pass
+Find claim 220133725669000 in the system.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.9998602903813498,0.7403305173077128,0.9998397228744569,ensemble,True,False,pass
+Pull up claim 201503823714118.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.9998614594467737,0.7268257277988408,0.9998453039772314,ensemble,True,False,pass
+Search for claim number 242905816136000.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.8999493385073253,0.8077459942071822,0.899932988542197,ensemble,True,True,pass
+Claim 150692388845000 lookup.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.8713006141882409,0.3369057259642882,0.8515677780075857,ensemble,True,True,pass
+Find this claim: 211263773300000.,ClaimNum,claim_status,False,claim_history_search,cap_api,False,0.8781880633926,0.33085208699387625,0.867152956604323,ensemble,True,True,pass
+Look up 230381673488000.,ClaimNum,greeting,False,claim_history_search,general,False,0.7162902525066948,0.252313125771127,0.6369797860301024,ensemble,False,True,disagreement
+Search for claim 220992183436835 in the history.,ClaimNum,audit_info,False,claim_history_search,benefits_api,False,0.7635135247860838,0.21097611863295648,0.6463940961041468,ensemble,False,False,disagreement
+Can you pull up claim number 201752592251000?,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.8999234140229669,0.7737480312652036,0.8999091292978535,ensemble,True,True,pass
+Locate claim 180571470939000 for this member.,ClaimNum,ClaimNum,True,claim_history_search,claim_history_search,True,0.9998356547362143,0.7337704763473187,0.9998033825691076,ensemble,True,False,pass
+Search claims by NDC 00071-0155-23.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9999661254110149,0.8322156579344717,0.9999618553498519,ensemble,True,False,pass
+Show fills for NDC 33342-0395-44.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9999118428863623,0.7782687753842102,0.9998945908228941,ensemble,True,False,pass
+Which claims used NDC 00093-7180-98?,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9999414450031266,0.7940355960395861,0.9999334996018964,ensemble,True,False,pass
+Filter by national drug code.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.999747380197202,0.6866747417248295,0.999715867312333,ensemble,True,False,pass
+NDC 68462-0263-90 claims.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9989113130281796,0.5502869601034261,0.998776106442776,ensemble,True,False,pass
+List claims with this NDC number.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9999112561446379,0.7940722020027218,0.9998742334016396,ensemble,True,False,pass
+Show all fills for a specific NDC.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.7343718093266938,0.17362484132414574,0.7156383516103412,ensemble,False,False,disagreement
+Search by NDC 00378-1805-01.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9989769730637176,0.5833156194063998,0.998750395851199,ensemble,True,False,pass
+Which claims match this national drug code?,NDC,NDC,True,claim_history_search,claim_history_search,True,0.8914630484028949,0.3052488876023806,0.8825615644759539,ensemble,False,False,disagreement
+Pull claims for NDC 16729-0044-01.,NDC,NDC,True,claim_history_search,claim_history_search,True,0.9999610814444128,0.8154222159771939,0.9999562189838856,ensemble,True,False,pass
+Filter claims by drug manufacturer — show Teva only.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9999071438066518,0.7747500018571387,0.9998891298526627,ensemble,True,False,pass
+Which manufacturers appear in this member's claim history?,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9943906275162919,0.40879697357195743,0.9933418980438327,ensemble,True,False,pass
+Show claims for drugs made by Mylan.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9999398752085877,0.7975494677664723,0.9999284659545908,ensemble,True,False,pass
+List claims by manufacturer name.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9999022549372969,0.7706095032426834,0.9998607085637629,ensemble,True,False,pass
+Claims from Pfizer products for this member.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9998807788492563,0.7513322016343993,0.9998571844604446,ensemble,True,False,pass
+Filter by drug manufacturer.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9853212561213904,0.4342993856070672,0.9728845183636319,ensemble,True,False,pass
+Show fills from AbbVie manufactured drugs.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9907629964159477,0.37845333245904805,0.988984635792471,ensemble,True,False,pass
+Which drug makers have the most claims for this member?,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.4362302983946073,0.11841723658173611,0.22965822123139545,ensemble,False,False,disagreement
+Pull claims for medications made by Novartis.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.9999220011043995,0.7769864793018194,0.9999078724623007,ensemble,True,False,pass
+List manufacturers across this member's prescriptions.,Manufacturer,Manufacturer,True,claim_history_search,claim_history_search,True,0.8905418951681887,0.33317249600802945,0.8676269833360752,ensemble,False,False,disagreement
+Show only generic drug claims for this member.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9999257260622451,0.7919323248131642,0.9999049819197477,ensemble,True,False,pass
+Filter for generics only.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9998655987652375,0.7491452628604642,0.9998240791606041,ensemble,True,False,pass
+Which claims were dispensed as generic medications?,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9998176984986464,0.7777376334590707,0.9996993687858633,ensemble,True,False,pass
+List all generic fills.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.999847212099107,0.733565033805202,0.9998253021039363,ensemble,True,False,pass
+How many generic prescriptions has this member had?,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9997993760265832,0.7034514877064034,0.9997776412779872,ensemble,True,False,pass
+Show generic-only claims in the history.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9808504541037748,0.3490304535559644,0.9724222422678396,ensemble,True,False,pass
+Filter by generic indicator.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9997908021753066,0.6996892347575318,0.9997588688725392,ensemble,True,False,pass
+Pull generic drug fills for this member.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9998017295529603,0.7133262860714857,0.9997217879138205,ensemble,True,False,pass
+Which fills were generic versus brand?,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9296930373001522,0.2786561473841788,0.8912469774675877,ensemble,True,False,pass
+Show claims where a generic was dispensed.,Generic,Generic,True,claim_history_search,claim_history_search,True,0.9999099095100447,0.8234678216861522,0.9998618176960572,ensemble,True,False,pass
+Show only brand name drug claims for this member.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9998487673581793,0.7840043923850839,0.9997635525935775,ensemble,True,False,pass
+Filter for brand-name fills only.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9998838034557096,0.7745153035118104,0.9998383872945508,ensemble,True,False,pass
+Which claims were dispensed as brand medications?,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9999216737390468,0.8011689677373637,0.9998894548811971,ensemble,True,False,pass
+List all brand drug fills.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9997761601053067,0.7254271932844364,0.9996855895228266,ensemble,True,False,pass
+How many brand prescriptions does this member have?,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9998174490340814,0.708330499688412,0.9997961234671288,ensemble,True,False,pass
+Show brand-only claims in this member's history.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9946262227385546,0.44880680636566694,0.9927112739535277,ensemble,True,False,pass
+Filter by brand indicator.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9998445367828225,0.7363431149155166,0.9998101855587178,ensemble,True,False,pass
+Pull brand drug fills for this member.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9996515949862792,0.7079173303450568,0.9994628486418766,ensemble,True,False,pass
+Which fills used a brand-name product?,Brand,Brand,True,claim_history_search,claim_history_search,True,0.9956969374582716,0.460854624974227,0.9944479978312843,ensemble,True,False,pass
+Show claims where the brand was dispensed instead of generic.,Brand,Brand,True,claim_history_search,claim_history_search,True,0.999759719762468,0.7945919827983388,0.9995711780300353,ensemble,True,False,pass
+Is member 88654321 currently eligible for pharmacy benefits?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.5289226773374799,0.08816576513822336,0.42472419771068076,ensemble,True,False,confusion_prone
+Check if this member has active coverage as of today.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9996867884703576,0.664468365331738,0.9996430444882605,ensemble,True,False,pass
+What are the coverage start and end dates for member 77234581?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9908876817128517,0.3551586048381159,0.9896173466394681,ensemble,True,False,pass
+When does this member's enrollment expire?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9747479071757352,0.3512113745183365,0.957210609600607,ensemble,True,False,pass
+Coverage status for member 44781239.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9381100380727118,0.22081046922814443,0.9258018424900604,ensemble,True,False,pass
+Is this member active or terminated?,member_coverage,member_coverage,True,member_domain,member_domain,True,0.7375644137329009,0.1615573069194276,0.6493210484417262,ensemble,False,False,disagreement
+Verify eligibility for member 99123456 as of March 15.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9826002237886559,0.30871597500671316,0.9765307038163997,ensemble,True,False,pass
+Does this member have current pharmacy benefits?,member_coverage,medicare_coverage,False,member_domain,member_domain,True,0.8150544939844225,0.1924321659045156,0.7751828714375864,ensemble,False,False,disagreement
+Enrollment dates and coverage status for this member.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9986533215303234,0.5797312541811646,0.9982791231677611,ensemble,True,False,pass
+Show the effective dates of this member's coverage.,member_coverage,member_coverage,True,member_domain,member_domain,True,0.9968971631264953,0.6134978044703238,0.9945041293266015,ensemble,True,False,pass
+What is the client-account-group structure for this member?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9998491571864486,0.7043927914078165,0.9998247775898037,ensemble,True,False,pass
+Show the CAG chain for member 88654321.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9887362181910373,0.33977621338215225,0.9863788509928851,ensemble,True,False,pass
+Which carrier does this member belong to?,member_hierarchy,network_info,False,member_domain,cap_api,False,0.33896210985769404,0.08737297088976612,0.20794548953792946,ensemble,False,False,disagreement
+Organizational hierarchy for this member.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9984462221762004,0.5031987585287736,0.9982473144281295,ensemble,True,False,pass
+What account group is member 77234581 assigned to?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9874936963635227,0.33619631482923507,0.9843997716922059,ensemble,True,False,pass
+Tell me the client and group for this member.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9997687735362148,0.6734358221299119,0.9997148748316449,ensemble,True,False,pass
+CAG hierarchy lookup for this member.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9987884260770095,0.5685403362821764,0.9981679471234773,ensemble,True,False,pass
+What is the parent organization in this member's chain?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.6667052146812079,0.1875389224502914,0.4815902417460079,ensemble,False,False,disagreement
+Show the carrier-account-group mapping for member 44781239.,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.976833609588789,0.2722824360872965,0.9732605795119519,ensemble,True,False,pass
+Who is the client sponsor for this member's group?,member_hierarchy,member_hierarchy,True,member_domain,member_domain,True,0.9820268294148137,0.29011776050685667,0.9772550687848439,ensemble,True,False,pass
+When do this member's accumulators reset?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9989765114844886,0.5646657201697485,0.9987555933421729,ensemble,True,False,pass
+What is the plan year anniversary date for member 88654321?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9942154784241911,0.37554296939388293,0.9935365131658093,ensemble,True,False,pass
+Benefit renewal date for this member.,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.99926977079859,0.6008235904629922,0.99915039854595,ensemble,True,False,pass
+When does the new benefit cycle begin?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9916244134217432,0.3510010830357637,0.9905714279359655,ensemble,True,False,pass
+Plan year start date for member 77234581.,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9927772275896108,0.36584497910222175,0.991516916001155,ensemble,True,False,pass
+What is the accumulator reset date?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9976563488721611,0.49294680901394605,0.9971107604276357,ensemble,True,False,pass
+When do deductibles reset for this member?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9761923703900027,0.3056420079339413,0.9638712652187004,ensemble,True,False,pass
+Benefit year start and end for member 44781239.,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9735273966701228,0.2947444084867945,0.9656226282846838,ensemble,True,False,pass
+OOP reset date for this member.,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9741730288593186,0.2639937792868512,0.9690710286285339,ensemble,True,False,pass
+When does the next benefit period begin?,benefit_reset_date,benefit_reset_date,True,member_domain,member_domain,True,0.9852164916822208,0.33451090354532514,0.9803151728461038,ensemble,True,False,pass
+Is this member on a family or individual plan?,family_type,family_type,True,member_domain,member_domain,True,0.8999652324471793,0.8279305876897818,0.8999503330107057,ensemble,True,True,pass
+Show the coverage tier designation for member 88654321.,family_type,family_type,True,member_domain,member_domain,True,0.8749292574949477,0.32085313806465665,0.8576914519010884,ensemble,True,True,pass
+What is the family coverage classification for this member?,family_type,family_type,True,member_domain,member_domain,True,0.8999450182679875,0.8094507642239525,0.8999341292530809,ensemble,True,True,pass
+Employee-only or employee-plus-spouse?,family_type,family_type,True,member_domain,member_domain,True,0.9998220855262545,0.7027990784100835,0.9997940749154316,ensemble,True,False,pass
+Coverage tier for member 77234581.,family_type,family_type,True,member_domain,member_domain,True,0.8744065756722497,0.2849122609110072,0.8621681208907903,ensemble,True,True,pass
+Is this an individual or family enrollment?,family_type,family_type,True,member_domain,member_domain,True,0.9999682093904919,0.8318711887885607,0.999963144038309,ensemble,True,False,pass
+What plan tier is this member enrolled in?,family_type,family_type,True,member_domain,member_domain,True,0.89979854087541,0.7077487543951336,0.8997385583741206,ensemble,True,True,pass
+Show the family status indicator for this member.,family_type,family_type,True,member_domain,member_domain,True,0.8998183476285118,0.7139607145079456,0.8997549243728259,ensemble,True,True,pass
+Is this member's plan single or family coverage?,family_type,family_type,True,member_domain,member_domain,True,0.8999082992048372,0.7509073766254588,0.8998900917789155,ensemble,True,True,pass
+Family or individual designation for this enrollment.,family_type,family_type,True,member_domain,member_domain,True,0.8998930358232026,0.7293954543640333,0.899873502448813,ensemble,True,True,pass
+List all dependents under this member's plan.,family_members,family_members,True,member_domain,member_domain,True,0.9964801320211828,0.4499103023252262,0.9955769465462382,ensemble,True,False,pass
+Who else is covered under member 88654321's family ID?,family_members,family_members,True,member_domain,member_domain,True,0.972609994164353,0.28632955665015397,0.965871240342473,ensemble,True,False,pass
+Show the subscriber and all dependents for this family.,family_members,family_members,True,member_domain,member_domain,True,0.9993335736075285,0.6301257792050252,0.9990021996914152,ensemble,True,False,pass
+How many people are on this member's household plan?,family_members,family_members,True,member_domain,member_domain,True,0.9718467955606525,0.3286281216537861,0.9517386499851823,ensemble,True,False,pass
+List family members enrolled under this group.,family_members,family_members,True,member_domain,member_domain,True,0.9935362532134122,0.46349709697396324,0.9893350737797747,ensemble,True,False,pass
+Who are the dependents for member 77234581?,family_members,family_members,True,member_domain,member_domain,True,0.9488193452996769,0.24425220291809321,0.9373828057667041,ensemble,True,False,pass
+Show all individuals covered under this family plan.,family_members,family_members,True,member_domain,member_domain,True,0.9855590361702934,0.48322953896781257,0.9726877121727368,ensemble,True,False,pass
+Is there a spouse or dependent on this plan?,family_members,family_type,False,member_domain,member_domain,True,0.39757761868199365,0.150465077114226,0.01935469491034557,ensemble,False,True,disagreement
+Family member list for this enrollment.,family_members,family_members,True,member_domain,member_domain,True,0.8704186391046508,0.36442412560637055,0.824694081564939,ensemble,False,False,disagreement
+Who is the subscriber and who are the dependents here?,family_members,family_members,True,member_domain,member_domain,True,0.984805783410936,0.32948194206225395,0.9790966847551379,ensemble,True,False,pass
+Does member 88654321 have secondary insurance on file?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.8820747777971316,0.32023360960851444,0.8506318152217183,ensemble,False,False,disagreement
+Show other insurance details for this member.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.999392338540279,0.6809210438406923,0.9989551712328969,ensemble,True,False,pass
+Is there a second payer listed?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9148878236126972,0.2968434810744293,0.8378397420469005,ensemble,True,False,pass
+Alternate insurance on file for member 77234581.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9949443666846167,0.39576954570101636,0.9943475797743863,ensemble,True,False,pass
+Does this member carry supplemental pharmacy coverage?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9804811788122054,0.3398604038954072,0.9685710420542684,ensemble,True,False,pass
+Other insurance information for this member.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9976318473511497,0.5536483528376975,0.9959291081736272,ensemble,True,False,pass
+Is there a dual-coverage indicator on this member?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9588264911415295,0.2649398897757426,0.9387794056063471,ensemble,True,False,pass
+Show secondary coverage details for member 44781239.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9680736457723191,0.29549327495929784,0.946416170215514,ensemble,True,False,pass
+Does this member have additional prescription coverage?,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9824305271462264,0.322559220609538,0.9747183016091866,ensemble,True,False,pass
+Check for other insurance on file.,alternate_insurance,alternate_insurance,True,member_domain,member_domain,True,0.9946229669138363,0.4897882744959672,0.9903336863405263,ensemble,True,False,pass
+Is this member enrolled in a Medicare drug plan?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9998067837973816,0.703102838043215,0.9997825280431414,ensemble,True,False,pass
+Show Medicare Part D enrollment status for member 88654321.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9811656578589608,0.38782000251873733,0.965608415651196,ensemble,True,False,pass
+Does this member have Med-D benefits?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.978467701324594,0.37053738676580483,0.9608404615477815,ensemble,True,False,pass
+Medicare prescription plan status for this member.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9953985014169913,0.3970792926142744,0.9945881216156429,ensemble,True,False,pass
+Is member 77234581 participating in Medicare Part D?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.8599034026143761,0.26634316682642506,0.8202272323218371,ensemble,False,False,disagreement
+Check Medicare enrollment for this member.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9996011008018463,0.64541312575492,0.9994764017608138,ensemble,True,False,pass
+Does this member have a Medicare drug benefit?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9987314927964362,0.5362041188071799,0.9984155449255345,ensemble,True,False,pass
+Med-D status for member 44781239.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.7694589790052602,0.24199713208527696,0.6351152623291606,ensemble,False,False,disagreement
+Is this member enrolled in a Part D plan?,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9991390699792525,0.6550103223639372,0.9984788458586281,ensemble,True,False,pass
+Show Medicare coverage indicator for this member.,medicare_coverage,medicare_coverage,True,member_domain,member_domain,True,0.9951457894002135,0.4489325000186702,0.992919338100117,ensemble,True,False,pass
+What is the LICS level for member 88654321?,lics_status,lics_status,True,member_domain,member_domain,True,0.991513858877337,0.36611829037206944,0.9893962379143666,ensemble,True,False,pass
+Is this member designated as low income subsidy?,lics_status,lics_status,True,member_domain,member_domain,True,0.9996987059701761,0.6392262593319854,0.9996832783511855,ensemble,True,False,pass
+Show the LIS cost-sharing reduction level for this member.,lics_status,lics_status,True,member_domain,member_domain,True,0.9983281033436945,0.5178170034310967,0.9976770103094083,ensemble,True,False,pass
+LICS status for member 77234581.,lics_status,lics_status,True,member_domain,member_domain,True,0.9869387837035873,0.3296840434082595,0.9846714781919812,ensemble,True,False,pass
+Does this member qualify for low income cost sharing?,lics_status,lics_status,True,member_domain,member_domain,True,0.9993251779893803,0.5777905395265767,0.9992427063136344,ensemble,True,False,pass
+What subsidy level is on file for this member?,lics_status,lics_status,True,member_domain,member_domain,True,0.9980422355936208,0.45878299181885984,0.9979103186188688,ensemble,True,False,pass
+Is there an LIS indicator on this member's record?,lics_status,lics_status,True,member_domain,member_domain,True,0.9956526314255204,0.40996132952352204,0.9941305050360948,ensemble,True,False,pass
+Check the low income subsidy designation for member 44781239.,lics_status,lics_status,True,member_domain,member_domain,True,0.9915355893716347,0.38109075821413296,0.9872690735343637,ensemble,True,False,pass
+LICS?,lics_status,lics_status,True,member_domain,member_domain,True,0.9912019005580821,0.4145641263490646,0.9876551963240089,ensemble,True,False,pass
+What copay reduction applies based on this member's LIS status?,lics_status,lics_status,True,member_domain,member_domain,True,0.9946093090581569,0.4003110241397538,0.9932585442899008,ensemble,True,False,pass
+Show STCOB records for member 88654321.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.992907057006522,0.352316766809051,0.9922209406643828,ensemble,True,False,pass
+Are there short-term COB links for this member?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9984274251867193,0.5438683732868133,0.997529286203426,ensemble,True,False,pass
+Pull up the STCOB member connections.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.998736280713713,0.5205012307379063,0.9985630042127167,ensemble,True,False,pass
+Does this member have active short-term coordination linkages?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.8735525861708744,0.28424655995110454,0.8384563483687457,ensemble,False,False,disagreement
+STCOB linkage details for member 77234581.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9953746117030302,0.4078360614141463,0.9949409225748693,ensemble,True,False,pass
+Show all STCOB records on file.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9955628896422154,0.3930594557983752,0.9946656264894911,ensemble,True,False,pass
+Short-term COB links for this member.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9982565114449933,0.5106363148484961,0.9976938342728429,ensemble,True,False,pass
+STCOB?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9780348956818906,0.39328092620119215,0.9623954795020169,ensemble,True,False,pass
+Are there any linked STCOB records for member 44781239?,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9919742329504387,0.3516732140846294,0.991010469330735,ensemble,True,False,pass
+Check short-term coordination of benefits linkage.,stcob_linkage,stcob_linkage,True,member_domain,member_domain,True,0.9665742119105669,0.35958734284478544,0.9386471760060658,ensemble,True,False,pass
+What CVS ID is associated with member 88654321?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9894744212940855,0.36502023000687134,0.9848646229888127,ensemble,True,False,pass
+Look up the CVS member identifier for this member.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9997723961430957,0.7470752353714323,0.9996095402651339,ensemble,True,False,pass
+CVS ID for member 77234581.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9888188904934154,0.3402296521267795,0.9864020831298057,ensemble,True,False,pass
+What is the CVS number on file?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9912263248133873,0.34606833342745535,0.9894732845055785,ensemble,True,False,pass
+Show the CVS identifier stored for this member.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9957483633176479,0.46449368263047075,0.9932232556110381,ensemble,True,False,pass
+CVS ID lookup for member 44781239.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.993147577238954,0.3908591769729203,0.9911789858058992,ensemble,True,False,pass
+What CVS member number is associated here?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9898189030171454,0.4240852562970139,0.9832666497867003,ensemble,True,False,pass
+Retrieve the CVS ID for this enrollment.,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9668932678182943,0.299626332895091,0.9443167094498125,ensemble,True,False,pass
+Does this member have a CVS ID on file?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9990085280965332,0.5735470519036119,0.9986530744630041,ensemble,True,False,pass
+CVS ID?,cvs_id_lookup,cvs_id_lookup,True,member_domain,member_domain,True,0.9924944562263657,0.394784794744088,0.9896066313523247,ensemble,True,False,pass
+Show other CAGMs linked by the same CVS ID.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9999911756046933,0.8797161247423158,0.9999901081638892,ensemble,True,False,pass
+Find CAGM records matching member 88654321 by family.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9834734263464817,0.3351559327595605,0.9749931761364244,ensemble,True,False,pass
+Which members share this CVS identifier?,related_cagm,related_cagm,True,member_domain,member_domain,True,0.898890910939455,0.6974021868150629,0.8978705883893782,ensemble,True,True,pass
+Related CAGMs for this member.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9999039056159862,0.7575224904055262,0.9998825002288861,ensemble,True,False,pass
+List CAGMs by family ID under this client.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9999124654367103,0.7643571506191946,0.9998804702199129,ensemble,True,False,pass
+Who else is linked to this member by CVS ID?,related_cagm,related_cagm,True,member_domain,member_domain,True,0.8992210830369153,0.6960074438008717,0.8985546850086954,ensemble,True,True,pass
+Show linked CAGM records for member 77234581.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9880133458808521,0.3635930950434495,0.9814278065189738,ensemble,True,False,pass
+Find all related CAGMs for this member.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9999163705206229,0.7775124398034718,0.999884918743489,ensemble,True,False,pass
+CAGM links for this enrollment.,related_cagm,related_cagm,True,member_domain,member_domain,True,0.9998281985964558,0.706142355477221,0.9998045273418023,ensemble,True,False,pass
+Which members share the same family identifier?,related_cagm,related_cagm,True,member_domain,member_domain,True,0.8990506113389438,0.6606278586713968,0.8985091997710035,ensemble,True,True,pass
+What other IDs are on file for member 88654321?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9624176002045508,0.25567073108416083,0.9533261212688107,ensemble,True,False,pass
+List all cross-reference identifiers for this member.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.994604775153514,0.4087768143898743,0.9926091558664574,ensemble,True,False,pass
+Show alternate member IDs.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.999274802940049,0.5555621776645876,0.999182956578587,ensemble,True,False,pass
+What cross-reference numbers exist for member 77234581?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.3668653084305855,0.09732227125146173,0.10724143724914934,ensemble,False,False,disagreement
+Alt IDs on file?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9969443452812055,0.43171986075259305,0.9965183924206021,ensemble,True,False,pass
+Pull all alternate identifiers for this member.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9998676405340682,0.7118038075070667,0.9998550684375964,ensemble,True,False,pass
+Does this member have additional IDs in the system?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9991001573344991,0.5461719456622163,0.9990220787902724,ensemble,True,False,pass
+Show all member identifiers across systems.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9603392676787433,0.26286037041391785,0.9434313904515834,ensemble,True,False,pass
+Alternate ID lookup for member 44781239.,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.9033550804329159,0.2976507303891229,0.8995680780073051,ensemble,False,False,disagreement
+What other system IDs are linked to this member?,alternate_ids,alternate_ids,True,member_domain,member_domain,True,0.996554244734629,0.4348849922522323,0.9956060338572618,ensemble,True,False,pass
+What is the member's full name and date of birth?,member_demographics,member_demographics,True,member_domain,member_domain,True,0.8997174167356822,0.6504236624617864,0.8996730272643235,ensemble,True,True,pass
+Show the DOB and gender for member 88654321.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9879819914905834,0.3253698317597511,0.9865939416373584,ensemble,True,False,pass
+Member name and person code for this enrollment.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.8175390496913648,0.20813655400265058,0.762851841858023,ensemble,False,False,disagreement
+What is the relationship code for this member?,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9989200358687246,0.575730258162931,0.9984723102395512,ensemble,True,False,pass
+Demographics for member 77234581.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.7145232141473343,0.13629253623425808,0.6909002756898763,ensemble,False,False,disagreement
+First name and last name on file.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.741601482670342,0.1791699080609058,0.7209345043601961,ensemble,False,False,disagreement
+DOB and gender for this member.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9987816695899069,0.5210855063372506,0.9986432697393257,ensemble,True,False,pass
+What is the middle name for member 44781239?,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9753007955000652,0.28405299449752397,0.9683337831161247,ensemble,True,False,pass
+Show the subscriber's name and date of birth.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9653776633984288,0.2805294591731151,0.9434806705254463,ensemble,True,False,pass
+Person code and relationship code for this member.,member_demographics,member_demographics,True,member_domain,member_domain,True,0.9984858088631391,0.5444865464895192,0.9980882011860032,ensemble,True,False,pass
+What is the email address on file for member 88654321?,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9909930072738571,0.3574584924840087,0.989237399102226,ensemble,True,False,pass
+Show this member's phone number and mailing address.,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.8997533120212121,0.676182451354141,0.8997106484047179,ensemble,True,True,pass
+Contact details for member 77234581.,member_contact_info,approval_info,False,member_domain,benefits_api,False,0.5541740674913285,0.1562620034673784,0.348119071854,ensemble,False,False,disagreement
+What is the postal address for this member?,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9993335429961326,0.5990723712699627,0.9991900816391445,ensemble,True,False,pass
+Phone number on file for this member.,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9995875095201646,0.6186805297774904,0.9995424935733659,ensemble,True,False,pass
+Show the mailing address including city state and zip.,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9982745986987028,0.4954588959425531,0.9978272075411571,ensemble,True,False,pass
+Member email and phone.,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.8996415862232444,0.6329813317289685,0.8995763482033876,ensemble,True,True,pass
+What address is on file for member 44781239?,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9879299835114207,0.3198613281797774,0.9859454057307255,ensemble,True,False,pass
+Contact information for this enrollment.,member_contact_info,member_coverage,False,member_domain,member_domain,True,0.4822671103122837,0.1348607464805543,0.39763664244599256,ensemble,False,False,disagreement
+Show the member's zip code and state.,member_contact_info,member_contact_info,True,member_domain,member_domain,True,0.9965939157385872,0.457196189241878,0.995546711632306,ensemble,True,False,pass
+What is the brand copay on this member's eligibility?,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9983973470569026,0.5705661987548508,0.9978999417744793,ensemble,True,False,pass
+Show copayBrand and copayGeneric for member 88654321.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9756896196673763,0.27365025987092395,0.9717841112337112,ensemble,True,False,pass
+What are the copay fields on this member's record?,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9868372270326393,0.41404575530483495,0.9783452031174752,ensemble,True,False,pass
+Eligibility copay amounts for this member.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9985792148482203,0.5598429038263468,0.9981109843410189,ensemble,True,False,pass
+What is copay3 and copay4 for member 77234581?,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9547465329993637,0.24317774526929506,0.9417113695390046,ensemble,True,False,pass
+Show the member-level copay configuration.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9984297929979216,0.5373395855384598,0.9981080158011724,ensemble,True,False,pass
+Copay details from eligibility for this member.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9994216650161628,0.6484470327524453,0.9992719521496773,ensemble,True,False,pass
+What are the copay tiers on file?,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9586864545759269,0.28743017823326167,0.9440998405549037,ensemble,True,False,pass
+Brand and generic copay for member 44781239.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9698223238981549,0.2964419586367638,0.9570166700298567,ensemble,True,False,pass
+Member eligibility copay breakdown.,member_eligibility_copay,member_eligibility_copay,True,member_domain,member_domain,True,0.9967879624180503,0.46201648066243123,0.9954916781371088,ensemble,True,False,pass
+What is the transition fill status for member 88654321?,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.8311284916915901,0.281640140439972,0.7508194395200362,ensemble,False,False,disagreement
+Show the transition status and start date from eligibility.,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.9995368664329157,0.6342167768979224,0.9994193586640682,ensemble,True,False,pass
+Is this member in transition status?,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.9996551489625546,0.6486550277746927,0.9995794149514005,ensemble,True,False,pass
+Transition fill indicator for member 77234581.,member_transition_status,approval_info,False,member_domain,benefits_api,False,0.8796647698901553,0.27817965463514144,0.8522298973548832,ensemble,False,False,disagreement
+What is the TF status on this member's eligibility record?,member_transition_status,approval_info,False,member_domain,benefits_api,False,0.985040112348457,0.39897418781538,0.9765263443612909,ensemble,True,False,pass
+Show the member transition start date.,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.9993268290762001,0.6088709340289908,0.999166321216623,ensemble,True,False,pass
+Transition status for this member.,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.9998429611396464,0.7331481117164309,0.9997783217450653,ensemble,True,False,pass
+Is there a transition fill flag on this member's record?,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.9336932985500748,0.32613410423260686,0.8720414302795116,ensemble,True,False,pass
+Member transition details for member 44781239.,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.8999956886176848,0.27636050399791123,0.8949570909531729,ensemble,False,False,disagreement
+Check the transition status on this enrollment.,member_transition_status,member_transition_status,True,member_domain,member_domain,True,0.8940638073599034,0.28902099913482576,0.8858268032308211,ensemble,False,False,disagreement
+What is the DUR key for member 88654321?,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9873980436843881,0.3411794941951725,0.9850948540449029,ensemble,True,False,pass
+Show the drug utilization review configuration for this member.,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9980164698040191,0.5908576784100108,0.9963998847997867,ensemble,True,False,pass
+DUR process flag for member 77234581.,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9906696694497964,0.38100244586745613,0.9863505627566432,ensemble,True,False,pass
+What is the DUR config key on file?,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9898050471770606,0.4016566856514016,0.9851967330845309,ensemble,True,False,pass
+Show the DUR processing indicator for this member.,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9962821218482484,0.5222102130350437,0.9932898578864567,ensemble,True,False,pass
+DUR configuration for this enrollment.,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.7692447912750032,0.2230699490256089,0.6572609368227383,ensemble,False,False,disagreement
+What DUR settings are configured for member 44781239?,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9784269481741084,0.3303194134259931,0.9643222316415635,ensemble,True,False,pass
+DUR key?,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9829159825028606,0.38420391378826385,0.9746605114889803,ensemble,True,False,pass
+Is the DUR process flag active for this member?,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9996086786202015,0.677123307709407,0.999382084988461,ensemble,True,False,pass
+Show the drug utilization review key and flag.,member_dur_config,member_dur_config,True,member_domain,member_domain,True,0.9979124138387339,0.5352388513360339,0.9966556923814767,ensemble,True,False,pass
+What is the MBI number for member 88654321?,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.988095588107148,0.33261826717674475,0.9832505321073989,ensemble,True,False,pass
+Show the Medicare Beneficiary Identifier for this member.,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.995671662843521,0.573010992275782,0.9918104991801608,ensemble,True,False,pass
+MBI for member 77234581.,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.8954730772963032,0.2746295892451429,0.886980853229576,ensemble,False,False,disagreement
+What is the MBI on file?,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9922207412389429,0.3693418131224186,0.9903183626616712,ensemble,True,False,pass
+Pull the Medicare beneficiary ID from the Part D record.,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.8425410760336846,0.24959463690977604,0.7501342953072536,ensemble,True,False,pass
+MBI number for this member.,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9998644967546616,0.713824273089352,0.9998495924699937,ensemble,True,False,pass
+What MBI is stored for member 44781239?,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9055597179554592,0.30040702271208464,0.9038299927780715,ensemble,False,False,disagreement
+MBI?,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9929938099271008,0.4179705276186982,0.9911739757848438,ensemble,True,False,pass
+Show the Medicare beneficiary identifier from eligibility.,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9828388258918672,0.36369501857300557,0.9708287435670481,ensemble,True,False,pass
+Does this member have an MBI on record?,member_mbi_number,member_mbi_number,True,member_domain,member_domain,True,0.9952197659135841,0.38108355734929167,0.9947350149898452,ensemble,True,False,pass
+Show the caretaker information for member 88654321.,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9954605805782216,0.4039270584430894,0.9943056904286364,ensemble,True,False,pass
+Who is the caretaker on this Medicare record?,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9993564767971017,0.5782106778231302,0.9992803664546517,ensemble,True,False,pass
+Caretaker name and address from the Part D record.,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.999621266416537,0.6406560556270224,0.9995092714200191,ensemble,True,False,pass
+What is the caretaker's name for member 77234581?,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9943003632310613,0.38009278334434315,0.9929232220298263,ensemble,True,False,pass
+Show the caretaker details from Medicare.,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9993807122264352,0.5992948072540492,0.9992624528646582,ensemble,True,False,pass
+Is there a caretaker on file for this member?,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.999655490938039,0.6324007306184902,0.9996255700249445,ensemble,True,False,pass
+Caretaker information for member 44781239.,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.995067374157874,0.39786509323251407,0.9938963940796747,ensemble,True,False,pass
+Who is listed as the caretaker for this beneficiary?,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9941265428088261,0.3816692936150833,0.9932129237087848,ensemble,True,False,pass
+Pull the caretaker name from the Part D record.,member_caretaker_info,member_caretaker_info,True,member_domain,member_domain,True,0.9996287496935747,0.6341879815567906,0.9995181445398624,ensemble,True,False,pass
+Show the authorized representative for this Medicare member.,member_caretaker_info,prior_auth_info,False,member_domain,cap_api,False,0.28806927128685705,0.10943249399517709,0.03858978105379262,ensemble,False,False,disagreement
+What language preference is set for member 88654321?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9976271667108805,0.46100353965079455,0.9972230513854696,ensemble,True,False,pass
+Show the mbrLangCode for this member.,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9923721179943726,0.3988743604983501,0.9885048512775858,ensemble,True,False,pass
+What is the communication language on file?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9075685979544617,0.3123805308479938,0.9046040403660136,ensemble,False,False,disagreement
+Language code for member 77234581.,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9940653173802306,0.38056512107887436,0.9931710284924715,ensemble,True,False,pass
+What language does this member prefer?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9997419646843564,0.6552535213600096,0.9997182447775055,ensemble,True,False,pass
+Show the language preference indicator.,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9919551998552432,0.3508813749940574,0.9902990551233001,ensemble,True,False,pass
+Member language setting for member 44781239.,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9980326209202153,0.48264498783160337,0.9977969678903323,ensemble,True,False,pass
+Is there a language code on this member's record?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9981818929638812,0.4671326556725921,0.9979732678482988,ensemble,True,False,pass
+What is the preferred language for communication?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9899076467252208,0.37321424397384856,0.9854225347710186,ensemble,True,False,pass
+Language pref?,member_language_pref,member_language_pref,True,member_domain,member_domain,True,0.9954195621368486,0.44263137103750627,0.9937299607325786,ensemble,True,False,pass
+What discount program is assigned to member 88654321?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9952348367760133,0.3828649165448398,0.9945563109735639,ensemble,True,False,pass
+Show the discount program type for this member.,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9999703730424617,0.8384861796147137,0.9999609786708564,ensemble,True,False,pass
+Is there a discount program on file?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9949486560049987,0.36959482956085526,0.9945894283729422,ensemble,True,False,pass
+Discount program for member 77234581.,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9090956878560765,0.31642369955115457,0.9070459449697337,ensemble,False,False,disagreement
+What type of discount is applied to this member's account?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.994620633529024,0.40012074906760986,0.9930135890861689,ensemble,True,False,pass
+Show the member discount program indicator.,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9966378783658244,0.41038432255225704,0.9963431807060813,ensemble,True,False,pass
+Does this member have a discount program assigned?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9998030218570358,0.6887823134486865,0.9997623924162475,ensemble,True,False,pass
+Discount program details for member 44781239.,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9115152592589165,0.3221697053322833,0.9103820460424289,ensemble,False,False,disagreement
+What member-level discount applies?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.8499625899389469,0.25421994866009756,0.7921760001273238,ensemble,False,False,disagreement
+Is a discount card or program active for this enrollment?,member_discount_program,member_discount_program,True,member_domain,member_domain,True,0.9949437121893305,0.3785235756575475,0.9944114922586487,ensemble,True,False,pass
+Does member 88654321 have an override plan on file?,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9893257542102751,0.3683024061176931,0.9839070060445282,ensemble,True,False,pass
+Show the memberOverridePlan from eligibility.,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9994000967129311,0.5882497299719853,0.9992919653543634,ensemble,True,False,pass
+Is there an override plan ID set for this member?,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9992979077548924,0.5960060169227408,0.999048455024052,ensemble,True,False,pass
+Override plan for member 77234581.,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.8976496368335373,0.3238690071323291,0.8871963823526496,ensemble,False,False,disagreement
+What is the member-level override plan?,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9950917681552857,0.42629501107360923,0.9937540052902404,ensemble,True,False,pass
+Show the override plan from eligibility.,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.999342811481285,0.5924570301252766,0.9991358847888682,ensemble,True,False,pass
+Does this member have a plan override set?,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9988795183907592,0.5569011592742975,0.9984503039664956,ensemble,True,False,pass
+Member override plan for member 44781239.,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9033147179053251,0.3123851775452444,0.8962807246083022,ensemble,False,False,disagreement
+Is there an override plan ID on this enrollment?,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9805469816458903,0.2954402076422652,0.9753252936992657,ensemble,True,False,pass
+Show the memberOverridePlan field for this member.,member_override_plan,member_override_plan,True,member_domain,member_domain,True,0.9980285021240232,0.48009886340373154,0.9976231871679013,ensemble,True,False,pass
+Give me a high-level overview of this PA.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9993641798205353,0.5964463914896254,0.999267731601166,ensemble,True,False,pass
+Show the key fields on this prior authorization.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9920836653974544,0.43630101419462175,0.9877229034698655,ensemble,True,False,pass
+PA summary for this member's override record.,pa_summary,member_override_plan,False,override_domain,member_domain,False,0.8793788230068824,0.22862202973086737,0.8701577384778019,ensemble,False,False,disagreement
+What are the main configuration details on this PA?,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9970779175265273,0.47136327183085164,0.9961532378919495,ensemble,True,False,pass
+Quick rundown of this PA record.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9995223629510694,0.6120736345307178,0.9994568002737384,ensemble,True,False,pass
+Show me everything about this PA at a glance.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9990846344335249,0.5727001094449006,0.9989327837303433,ensemble,True,False,pass
+PA overview for PA JW012726LC.,pa_summary,prior_auth_info,False,override_domain,cap_api,False,0.8476207961172134,0.22523469516810674,0.8358541025046349,ensemble,True,True,pass
+Summarize the prior auth configuration.,pa_summary,pa_summary,True,override_domain,override_domain,True,0.7729122467146284,0.25050448127591807,0.6425708846726303,ensemble,False,False,disagreement
+Show the PA record details for this member.,pa_summary,prior_auth_info,False,override_domain,cap_api,False,0.7890059269133018,0.34578879265941653,0.7595908468228425,ensemble,False,True,disagreement
+What are the key facts on this prior authorization?,pa_summary,pa_summary,True,override_domain,override_domain,True,0.9682354898678375,0.3508227280556714,0.945088233102029,ensemble,True,False,pass
+Will this PA override reject code 75?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9990103417381673,0.6473721938000185,0.9982579361280406,ensemble,True,False,pass
+Does this PA handle a reject 70?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9951589235903712,0.4672529415424601,0.9921274454720905,ensemble,True,False,pass
+Can this PA override reject 76?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9992835042050305,0.6462546502911337,0.9988262260448475,ensemble,True,False,pass
+Which reject codes does this PA override?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.4897583281982495,0.23397852909427724,0.14288839852524904,ensemble,False,False,disagreement
+Show reject override capability for this PA.,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.969408885022593,0.2680191367711366,0.9613165062911195,ensemble,True,False,pass
+Will this prior authorization bypass a specific rejection?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9545762923111719,0.28269243349834106,0.9438154644996688,ensemble,True,False,pass
+PA reject override for codes 75 and 76.,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9765231104182694,0.28574923837828714,0.9663628617007209,ensemble,True,False,pass
+Does this override handle rejection code 70?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9675320641737487,0.3322004502991272,0.9415432894048581,ensemble,True,False,pass
+Which NCPDP rejects can this PA override?,pa_override_reject,rejection_reasons,False,override_domain,cap_api,False,0.5990055775110235,0.17258463959034068,0.5295948956679463,ensemble,False,False,disagreement
+Can this PA get around a reject 75 at the pharmacy?,pa_override_reject,pa_override_reject,True,override_domain,override_domain,True,0.9969157219779429,0.43879680752216393,0.9965617291979039,ensemble,True,False,pass
+What does the agent code field mean on a PA?,pa_field_help,pa_agent_code,False,override_domain,override_domain,True,0.8586199115112075,0.4046846571412767,0.7985406965022591,ensemble,False,False,disagreement
+Explain what the ignore status code does.,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.9979797675944337,0.48320485215921033,0.9976625393117723,ensemble,True,False,pass
+Help me understand what the clinical admin code field is for.,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9952753084813267,0.4310570068360267,0.992912474439208,ensemble,True,False,pass
+What is the purpose of the transform care field on a PA?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9449158049533446,0.3311344014125175,0.8953141718534325,ensemble,True,False,pass
+Explain the drug type indicator field.,pa_field_help,pa_field_help,True,override_domain,override_domain,True,0.7691495664399243,0.3105829372302387,0.6245729417830159,ensemble,False,False,disagreement
+What does the follow me logic field do?,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9964012058395159,0.472053859216244,0.9947230532171794,ensemble,True,False,pass
+Help me understand this PA field.,pa_field_help,pa_summary,False,override_domain,override_domain,True,0.6286115378534116,0.1781459557177259,0.40582817725640985,ensemble,False,False,disagreement
+What is the reason code field used for?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9776970727646884,0.37405147018883783,0.9593446179418089,ensemble,True,False,pass
+Explain what effectiveBeginDate means on a PA.,pa_field_help,pa_effective_dates,False,override_domain,override_domain,True,0.6602660932413165,0.2943090122397829,0.40572263770753575,ensemble,False,False,disagreement
+What does the specialtyRxOverride indicator control?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9926706981023896,0.4397781579972865,0.9874571855647482,ensemble,True,False,pass
+How does the copay on this PA affect member pricing?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9991113813672705,0.6425339352743281,0.998713041101516,ensemble,True,False,pass
+Show the copay impact of this PA on out-of-pocket cost.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.990882617730796,0.4280218151402766,0.9867353831516935,ensemble,True,False,pass
+What copay override is set on this PA?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9342595223539917,0.2870286544859928,0.8865419163376411,ensemble,True,False,pass
+PA copay influence on member cost.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9741045255698575,0.2898116672326549,0.9681224283422494,ensemble,True,False,pass
+Does this PA change the member's copay amount?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9331556773658995,0.374302954086958,0.8746370351646613,ensemble,True,False,pass
+Show the pricing effect of the copay on this PA.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9985167647195629,0.5824685492248276,0.9976834428235959,ensemble,True,False,pass
+How does this PA override affect copay?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9990244382853517,0.6437907825749577,0.9986621674661271,ensemble,True,False,pass
+What is the copay amount configured on this PA?,pa_copay_pricing,member_eligibility_copay,False,override_domain,member_domain,False,0.9357337018103578,0.35041013403646515,0.8821694477921803,ensemble,True,False,pass
+Does this PA modify the cost to the member?,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.8541997238806087,0.22682159054166076,0.7485728869773545,ensemble,True,False,pass
+Copay override pricing for this PA.,pa_copay_pricing,pa_copay_pricing,True,override_domain,override_domain,True,0.9967634622099734,0.4610343632342784,0.9959104837619295,ensemble,True,False,pass
+What drugs are covered by this PA?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9995458189772237,0.6631932387331253,0.9993931915089014,ensemble,True,False,pass
+Show the GPI or NDC list on this PA.,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9640493178852627,0.34349388409024484,0.9421985831021232,ensemble,True,False,pass
+Which medications does this PA authorize?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9884930079286139,0.3507619172399914,0.9833419173475464,ensemble,True,False,pass
+Drug scope for this prior authorization.,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9969935011467019,0.5166317066938715,0.995873744715006,ensemble,True,False,pass
+What is the authorized drug list for this PA?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.993211337561401,0.5462029164809648,0.987155439198918,ensemble,True,False,pass
+Does this PA cover LISINOPRIL?,pa_drug_coverage,Pricing,False,override_domain,claim_history_search,False,0.544903851689281,0.23905641496689042,0.18225483446561008,ensemble,False,False,disagreement
+Show the drugs this PA applies to.,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.986601624400918,0.3488177553957984,0.9823536219742485,ensemble,True,False,pass
+Which NDCs or GPIs are included in this PA?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9893602226335171,0.360213268775677,0.9859806518633375,ensemble,True,False,pass
+PA drug list.,pa_drug_coverage,PriorAuth,False,override_domain,claim_history_search,False,0.5426671165031632,0.1961914791916352,0.1982837960829988,ensemble,False,False,disagreement
+What medications fall under this authorization?,pa_drug_coverage,pa_drug_coverage,True,override_domain,override_domain,True,0.9917442822911682,0.3837618501817537,0.9899410675832878,ensemble,True,False,pass
+How many claims have referenced this PA?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9923545119921369,0.414836032290051,0.9894995409412018,ensemble,True,False,pass
+PA utilization count.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.8329125613105414,0.23799910242755498,0.7788478062284618,ensemble,False,False,disagreement
+How many times has this PA been used?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9896719004098512,0.374093804851568,0.9852423677138061,ensemble,True,False,pass
+Show the number of claims linked to this PA.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.997852074510373,0.5166526095488659,0.997108309832226,ensemble,True,False,pass
+PA claim count for this member.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9377259301375733,0.29273835733651216,0.8874572340564277,ensemble,True,False,pass
+How heavily has this PA been utilized?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9960129724021642,0.46473236002684065,0.9943692398097178,ensemble,True,False,pass
+What is the usage count on this PA?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9978983026974186,0.4900120532997247,0.9974561329841799,ensemble,True,False,pass
+How many fills have used this prior authorization?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9976938057270174,0.5056135382978063,0.9973122473329213,ensemble,True,False,pass
+Number of claims processed against this PA.,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9938876901666124,0.4200980438470286,0.9928022714718355,ensemble,True,False,pass
+Is this PA close to its utilization limit?,pa_claim_usage,pa_claim_usage,True,override_domain,override_domain,True,0.9288718056486658,0.22652258010655069,0.9028230142951232,ensemble,True,False,pass
+What is the reason code on this PA?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9999287233335478,0.785782997926893,0.9999118462372983,ensemble,True,False,pass
+Show the PA reason code — is it U1 or LC?,pa_reason_code,medicare_part_d,False,override_domain,cap_api,False,0.6244444285374016,0.17928148698616958,0.4628493372422917,ensemble,False,False,disagreement
+What override reason classification is set?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9665243583032788,0.2835074054962764,0.957751178958443,ensemble,True,False,pass
+Reason code for PA JW012726LC.,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9998137125096943,0.6960538449996414,0.999793896487407,ensemble,True,False,pass
+Is this PA coded as OD or OA?,pa_reason_code,prior_auth_info,False,override_domain,cap_api,False,0.5346396210177053,0.10854527233336989,0.45267636989364657,ensemble,False,False,disagreement
+Show the reason code on this prior authorization.,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9995741808348432,0.6530980247307221,0.9994751109876947,ensemble,True,False,pass
+What type of override reason applies — US or U3?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9707194882848874,0.2720208635303255,0.9623109059620908,ensemble,True,False,pass
+PA reason code?,pa_reason_code,prior_auth_info,False,override_domain,cap_api,False,0.530729295650657,0.13193997218237521,0.47341622815456147,ensemble,False,False,disagreement
+Which reason code category does this PA fall into?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.9994638836062911,0.5906075847275858,0.9994014300636829,ensemble,True,False,pass
+What is the override reason on this authorization?,pa_reason_code,pa_reason_code,True,override_domain,override_domain,True,0.751071757710264,0.2076926080098209,0.6055928822394508,ensemble,True,False,pass
+When does this PA take effect?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9986255837400875,0.5321416554794949,0.998346530357101,ensemble,True,False,pass
+Show the begin and end dates for this PA.,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9998239960249546,0.7284642891169233,0.9997933021784885,ensemble,True,False,pass
+Is this PA currently active or expired?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9916420626639793,0.37982935693237424,0.9894740390465123,ensemble,True,False,pass
+Effective period for PA JW012726LC.,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9981273504343575,0.5239589660793448,0.9974728469136727,ensemble,True,False,pass
+What are the start and end dates on this authorization?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9713444214564543,0.30437992939169384,0.9566300796613344,ensemble,True,False,pass
+When does this PA expire?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.999811492598859,0.7020456861803058,0.9997871201743143,ensemble,True,False,pass
+PA effective dates?,pa_effective_dates,PriorAuth,False,override_domain,claim_history_search,False,0.5280378720492301,0.16364699080143452,0.36850784106193074,ensemble,False,False,disagreement
+Is this PA still within its active period?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9918121293319279,0.4059984351859843,0.9893442548131582,ensemble,True,False,pass
+Show dateBegin and dateEnd for this PA.,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9991498572547298,0.5726953674679934,0.9989954186178118,ensemble,True,False,pass
+When was this PA activated and when does it end?,pa_effective_dates,pa_effective_dates,True,override_domain,override_domain,True,0.9928040580837377,0.42388705422370754,0.9904464857882281,ensemble,True,False,pass
+What is the agent code on this PA?,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.9999409992422152,0.7802865191575687,0.9999295221252157,ensemble,True,False,pass
+Who created this PA — agent code A or C?,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.9992633758563861,0.5620775524024337,0.9992038293141693,ensemble,True,False,pass
+Show the agent source code on this authorization.,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.9928753147575343,0.4131340205795566,0.9888391577664694,ensemble,True,False,pass
+Was this PA created by the system or a human agent?,pa_agent_code,prior_auth_info,False,override_domain,cap_api,False,0.550897389742821,0.14310003873872712,0.28784081936739453,ensemble,False,False,disagreement
+Agent code for PA JW012726LC.,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.999276482057445,0.5602591605557353,0.999187455647197,ensemble,True,False,pass
+Is the agent code set to H or 3?,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.9981288924694194,0.48163550948304,0.9979002648006721,ensemble,True,False,pass
+Who entered this PA?,pa_agent_code,prior_auth_info,False,override_domain,cap_api,False,0.6698779750740176,0.17321911518122352,0.5960288389524161,ensemble,False,True,disagreement
+Show the source of this prior authorization.,pa_agent_code,prior_auth_info,False,override_domain,cap_api,False,0.5393064677467153,0.16542774509102298,0.3526271634242212,ensemble,False,True,disagreement
+PA agent code?,pa_agent_code,prior_auth_info,False,override_domain,cap_api,False,0.530729295650657,0.13193997218237521,0.47341622815456147,ensemble,False,False,disagreement
+What agent or system created this PA record?,pa_agent_code,pa_agent_code,True,override_domain,override_domain,True,0.9881559409575079,0.35002083636802583,0.9828845706329963,ensemble,True,False,pass
+What is the ignore status on this PA?,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.999671452976465,0.6518465612059126,0.999630239864886,ensemble,True,False,pass
+Is the ignore code set to Y or P?,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.9964479314798758,0.41806475204462734,0.9960033936689701,ensemble,True,False,pass
+Show the processing bypass indicator on this PA.,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.3685970002314194,0.07830996433112,0.1893292140612502,ensemble,False,False,disagreement
+Ignore status for this authorization.,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.9880830346008296,0.3999137558849196,0.9805518476803525,ensemble,True,False,pass
+Is this PA being ignored during processing?,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.8576327424764857,0.22694971599175162,0.8263423236049608,ensemble,False,False,disagreement
+What is the ignore code — Y P or 3?,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.9104388960631099,0.3625139334382738,0.9069573669253889,ensemble,False,False,disagreement
+PA ignore status?,pa_ignore_status,prior_auth_info,False,override_domain,cap_api,False,0.8942439728782365,0.29584253150232354,0.8873574827648018,ensemble,False,False,disagreement
+Is the ignore indicator active on this PA?,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.996006553949285,0.4209740271963559,0.9951471110265311,ensemble,True,False,pass
+Show the bypass status code on this PA.,pa_ignore_status,pa_ignore_status,True,override_domain,override_domain,True,0.8794877667484601,0.2369816539948972,0.8621107748069582,ensemble,False,False,disagreement
+Should this PA be skipped during claim processing?,pa_ignore_status,prior_auth_info,False,override_domain,cap_api,False,0.8496387544988717,0.2068953013228313,0.8301059975387368,ensemble,False,False,disagreement
+Does this PA override the specialty Rx reject?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9991729766985391,0.5833085468696432,0.9990606647949631,ensemble,True,False,pass
+Show the specialty prescription override indicator.,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9995705787460423,0.6520912734328201,0.999416196768131,ensemble,True,False,pass
+Is the specialty Rx bypass enabled on this PA?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9957219594635413,0.3863005743591274,0.9953429244997879,ensemble,True,False,pass
+Specialty override for this PA.,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9984333498427291,0.5080493816360648,0.9982537949270986,ensemble,True,False,pass
+Can this PA bypass the specialty drug rejection?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.993462169978671,0.40082015315039593,0.9922550620226214,ensemble,True,False,pass
+Is the specialtyRxOverride set to yes?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9976565079664579,0.46586174449210715,0.9972483342230104,ensemble,True,False,pass
+Does this authorization handle specialty pharmacy rejects?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9706874483071909,0.30572494947198103,0.9536581263364132,ensemble,True,False,pass
+Specialty Rx override?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.999217977204246,0.5747097907203539,0.9990827091439892,ensemble,True,False,pass
+Show the specialty prescription bypass on this PA.,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9930651301829813,0.363802809072167,0.9921781754972893,ensemble,True,False,pass
+Will this PA override a specialty drug rejection at POS?,pa_specialty_rx_override,pa_specialty_rx_override,True,override_domain,override_domain,True,0.9863008625884672,0.3496430568583372,0.9831615305068003,ensemble,True,False,pass
+What is the clinical administration code on this PA?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9999185125850123,0.7748604184209925,0.9999015316488863,ensemble,True,False,pass
+Show the clinical admin code — A or C?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.998804731740434,0.5240721742793959,0.9986408398491986,ensemble,True,False,pass
+Is the clinical admin code populated on this PA?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9995716134986141,0.6126445760373846,0.9995367238166586,ensemble,True,False,pass
+Clinical administration code for this authorization.,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9991402881075282,0.5527036173218269,0.9990295642922359,ensemble,True,False,pass
+What clinical admin designation does this PA have?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.99046981304333,0.3331803484331504,0.9882786141070685,ensemble,True,False,pass
+PA clinical code?,pa_clinical_admin_code,prior_auth_info,False,override_domain,cap_api,False,0.530729295650657,0.13193997218237521,0.47341622815456147,ensemble,False,False,disagreement
+Show whether the clinical admin code is set.,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9987422900641806,0.508859290662687,0.9986387889802228,ensemble,True,False,pass
+What is the clinical code classification on this PA?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.7334969819579747,0.21259189220732788,0.5815128733601944,ensemble,False,False,disagreement
+Is the clinical admin code A C or blank?,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9992667669945331,0.5668241208046203,0.999199163032537,ensemble,True,False,pass
+Show the clinical administration setting on this PA.,pa_clinical_admin_code,pa_clinical_admin_code,True,override_domain,override_domain,True,0.9869191928555245,0.31278143022953697,0.9852224379446954,ensemble,True,False,pass
+What is the transform care type on this PA?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9999351994177822,0.78312318889087,0.9999247805708801,ensemble,True,False,pass
+Show the care transformation program for this PA.,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9955026115637273,0.3826530424324561,0.9950770591347721,ensemble,True,False,pass
+Is there a transform care designation on this authorization?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9924766568809226,0.3496825238196328,0.991640539472646,ensemble,True,False,pass
+Transform care type for PA JW012726LC.,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9991572232080217,0.5645247915265501,0.9990600275457179,ensemble,True,False,pass
+What care transformation program does this PA belong to?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9947365226515076,0.3652253978355294,0.994404174367455,ensemble,True,False,pass
+PA transform care?,pa_transform_care,prior_auth_info,False,override_domain,cap_api,False,0.7708923101188931,0.21041502524743838,0.7582277786274056,ensemble,False,False,disagreement
+Show the transform care indicator on this PA.,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.996402300992412,0.401987136457826,0.9959169055890928,ensemble,True,False,pass
+Is a care transformation program assigned to this PA?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9929489434608608,0.34148893281858617,0.9922001387161301,ensemble,True,False,pass
+What type of care transformation applies?,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.9956028418445978,0.3939907181240876,0.9952699832442812,ensemble,True,False,pass
+Show the transformCareType field on this authorization.,pa_transform_care,pa_transform_care,True,override_domain,override_domain,True,0.994710416106705,0.39199567501230725,0.993538756289126,ensemble,True,False,pass
+Is follow me logic enabled on this PA?,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9999788843773403,0.8424477668571567,0.9999758582844791,ensemble,True,False,pass
+Does this PA follow the member across plan changes?,pa_follow_me_logic,prior_auth_info,False,override_domain,cap_api,False,0.5646585765869476,0.15831998896011812,0.3519108335169686,ensemble,False,False,disagreement
+Show the follow me indicator for this PA.,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9991379402647329,0.5506531015537743,0.9990440224784083,ensemble,True,False,pass
+Follow me logic status for PA JW012726LC.,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9968050291507035,0.43643608675053114,0.9963070020996091,ensemble,True,False,pass
+Will this PA stay with the member if they change plans?,pa_follow_me_logic,pa_copay_pricing,False,override_domain,override_domain,True,0.6229023808703446,0.11813902749825743,0.49757601688618086,ensemble,False,False,disagreement
+PA follow me?,pa_follow_me_logic,prior_auth_info,False,override_domain,cap_api,False,0.5982936517058058,0.18120097115660896,0.4260736787113397,ensemble,False,True,disagreement
+Is the followMeLogicIndicator set to true?,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9993563217999438,0.5750699707021198,0.999270095031475,ensemble,True,False,pass
+Does this authorization transfer with the member?,pa_follow_me_logic,prior_auth_info,False,override_domain,cap_api,False,0.5739418345089735,0.11003846555827107,0.5002246608308996,ensemble,False,True,disagreement
+Show whether follow me logic is active on this PA.,pa_follow_me_logic,pa_follow_me_logic,True,override_domain,override_domain,True,0.9999353569983984,0.7678757169825797,0.999929619741496,ensemble,True,False,pass
+Does the PA persist across plan transitions?,pa_follow_me_logic,member_transition_status,False,override_domain,member_domain,False,0.771948654579788,0.2318934790608263,0.6513791525324254,ensemble,False,False,disagreement
+What is the authorized drug type on this PA — GPI or NDC?,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9981613198332958,0.5641639032731318,0.9973309724399336,ensemble,True,False,pass
+Show the drug type indicator for this PA.,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9999034181135835,0.7683437898816567,0.9998733927714044,ensemble,True,False,pass
+Is this PA using GPI-based or NDC-based matching?,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9721344199292581,0.26695403748941526,0.965584798678444,ensemble,True,False,pass
+Drug type indicator for PA JW012726LC.,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9940527590914765,0.4694745972707209,0.9898852835924057,ensemble,True,False,pass
+Is the authorized drug type set to G or N?,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.998627999834579,0.5145418820104919,0.9983975084608981,ensemble,True,False,pass
+PA drug type?,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9941110511762821,0.4274599522839911,0.9931527699049616,ensemble,True,False,pass
+Show the drug matching method on this PA.,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9917950976245615,0.3476421138107074,0.9901528608663769,ensemble,True,False,pass
+Does this PA match drugs by GPI or by NDC?,pa_drug_type_indicator,drug_info,False,override_domain,claim_history_search,False,0.4816883015951872,0.1833802325169858,0.09743041500331638,ensemble,False,False,disagreement
+What drug type code is configured on this authorization?,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9985593065866,0.5287739300635325,0.9982883916532749,ensemble,True,False,pass
+Show the authorizedDrugType setting on this PA.,pa_drug_type_indicator,pa_drug_type_indicator,True,override_domain,override_domain,True,0.9974897841141324,0.4904800576073791,0.9967105547990196,ensemble,True,False,pass
+When was this PA last modified?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9999584043923333,0.8218077443403755,0.99995217103782,ensemble,True,False,pass
+Show the modification timestamp for PA JW012726LC.,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9994504323057744,0.6070726481657642,0.9993673116632784,ensemble,True,False,pass
+What is the modifyDateTime on this PA?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9991758324320082,0.6090618091340962,0.9988799395926798,ensemble,True,False,pass
+When was the last update to this authorization?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.801390039116212,0.21621474364185253,0.7145402065178175,ensemble,False,False,disagreement
+PA last modified date?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9921381293499394,0.3920754105027452,0.9903576988318161,ensemble,True,False,pass
+Which PA was most recently updated for this member?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9945763931884903,0.38979701210177475,0.9938232152173959,ensemble,True,False,pass
+Show the last modification date and time.,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9960191048440675,0.4188582094342281,0.9950140768678565,ensemble,True,False,pass
+How recently was this PA changed?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.999792974437273,0.7278809923585542,0.999743538481489,ensemble,True,False,pass
+When was this PA record last touched?,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9854444715544927,0.37131039029696156,0.9764612141740334,ensemble,True,False,pass
+Show the update timestamp on this authorization.,pa_modification_history,pa_modification_history,True,override_domain,override_domain,True,0.9651041077354009,0.2933688817668066,0.9432584762474487,ensemble,True,False,pass
+Hello!,greeting,greeting,True,general,general,True,0.8999680792297812,0.8280149932675378,0.8999540588897043,ensemble,True,True,pass
+Hey there.,greeting,greeting,True,general,general,True,0.8999864227532082,0.8680239506018879,0.8999825433523908,ensemble,True,True,pass
+Good afternoon!,greeting,greeting,True,general,general,True,0.8999778342272287,0.8388798699169795,0.8999748475798551,ensemble,True,True,pass
+Morning!,greeting,greeting,True,general,general,True,0.8999372233713921,0.8102463113988511,0.8999059715413757,ensemble,True,True,pass
+Hi — I need some help with a claim.,greeting,help,False,general,general,True,0.6443418069149834,0.15340922420473824,0.389363588064776,ensemble,True,False,pass
+Howdy.,greeting,greeting,True,general,general,True,0.8999403875268049,0.770463705809212,0.8999307963890733,ensemble,True,True,pass
+"Hey, quick question.",greeting,greeting,True,general,general,True,0.6290853249304239,0.15879087293852892,0.41274802235679964,ensemble,False,False,disagreement
+Good evening.,greeting,greeting,True,general,general,True,0.8999618709375689,0.838905003997857,0.8999416895409352,ensemble,True,True,pass
+Greetings!,greeting,greeting,True,general,general,True,0.8999129777242793,0.7761764734980108,0.8998726456911059,ensemble,True,True,pass
+Hiya.,greeting,greeting,True,general,general,True,0.8998687911839777,0.765173300490957,0.8997913474484046,ensemble,True,True,pass
+What kind of questions can I ask this system?,help,out_of_scope,False,general,general,True,0.334283110568238,0.0730468760666581,0.2560642993546559,ensemble,False,False,disagreement
+How do I use this tool to look up claims?,help,ClaimNum,False,general,claim_history_search,False,0.5888385712667069,0.15281622180674378,0.2779036338506959,ensemble,True,False,pass
+What can you help me with?,help,help,True,general,general,True,0.8424584758456871,0.2084940370114077,0.8154452158092436,ensemble,False,False,disagreement
+I need guidance on how to query member information.,help,member_demographics,False,general,member_domain,False,0.9455040625903091,0.21852433019508763,0.93341833743753,ensemble,True,False,pass
+Can you walk me through the claim lookup process?,help,ClaimNum,False,general,claim_history_search,False,0.5502025978107137,0.18864307940673888,0.40754457326686777,ensemble,False,False,disagreement
+What types of queries does this system support?,help,Plan,False,general,claim_history_search,False,0.3603354976261576,0.07811356188703106,0.2630819067524297,ensemble,False,False,disagreement
+How does this tool work?,help,claim_status,False,general,cap_api,False,0.268556216825479,0.09665458402467611,0.09427431336114857,ensemble,False,False,disagreement
+What are the available commands or categories?,help,drug_info,False,general,claim_history_search,False,0.7165845532821826,0.15789629153245854,0.6846902414036279,ensemble,False,False,disagreement
+Help me understand what I can do here.,help,greeting,False,general,general,True,0.4600394427824127,0.12237673573066682,0.2702881642875831,ensemble,False,False,disagreement
+I am new to this system — where do I start?,help,help,True,general,general,True,0.8348082906352462,0.22052403829299005,0.7990445965317723,ensemble,False,False,disagreement
+What is the capital of France?,out_of_scope,out_of_scope,True,general,general,True,0.8999638873342437,0.8276936138136748,0.8999566471341015,ensemble,True,True,pass
+Can you help me book a flight?,out_of_scope,out_of_scope,True,general,general,True,0.8949390823952471,0.4083449565442103,0.8938492359775568,ensemble,True,True,pass
+Tell me a joke.,out_of_scope,out_of_scope,True,general,general,True,0.8998412480401768,0.7556765206655971,0.8997560008808483,ensemble,True,True,pass
+What are the side effects of ibuprofen?,out_of_scope,out_of_scope,True,general,general,True,0.8622475466007369,0.24681316125209068,0.843300958347673,ensemble,False,False,disagreement
+How do I reset my email password?,out_of_scope,out_of_scope,True,general,general,True,0.7126305941646182,0.18630176957562355,0.5682494347853846,ensemble,False,False,disagreement
+Calculate 15% tip on a $42 bill.,out_of_scope,pricing_info,False,general,cap_api,False,0.5472807862711051,0.16314120453182557,0.3638478949343932,ensemble,False,False,disagreement
+What is the score of the game?,out_of_scope,out_of_scope,True,general,general,True,0.9927000440207591,0.3636073154628263,0.9916055704503393,ensemble,True,False,pass
+asdfghjkl qwerty,out_of_scope,out_of_scope,True,general,general,True,0.8997941890131175,0.6954405745579293,0.89974566064561,ensemble,True,True,pass
+Who won the Super Bowl last year?,out_of_scope,out_of_scope,True,general,general,True,0.9989438196715346,0.5504668231286742,0.9986919431401013,ensemble,True,False,pass
+Recommend a good restaurant nearby.,out_of_scope,out_of_scope,True,general,general,True,0.8988182675113348,0.5566093277973246,0.898406586305842,ensemble,True,True,pass
