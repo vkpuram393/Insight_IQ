@@ -22,15 +22,25 @@ import json
 import time
 import pickle
 import logging
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional
 
+#  These are mapping in reverse dirn i.e from intent to domain, and intent to description.
 from multidomain_intent_detection.config import INTENT_TO_DOMAIN, INTENT_DESCRIPTIONS
+
+# strips claim/sequence numbers so embeddings focus on intent semantics, not numeric IDs.
 from multidomain_intent_detection.normalizer import normalize_query
+
+# get_embedder : Return the singleton VertexEmbeddings instance (thread-safe). Basically give text-embedding005 for query
 from multidomain_intent_detection.embeddings import get_embedder
+
+
 from multidomain_intent_detection.pipeline import IntentPipeline
+
 from multidomain_intent_detection.llm_fallback import llm_classify
+
 from multidomain_intent_detection.augmented_examples import AUGMENTED_EXAMPLES
 
 logger = logging.getLogger(__name__)
@@ -46,16 +56,18 @@ MODEL_PKL = os.path.join(ARTIFACTS, "v3_pipeline.pkl")
 os.makedirs(ARTIFACTS, exist_ok=True)
 os.makedirs(OUTPUTS, exist_ok=True)
 
+def _timestamp() -> str:
+    """Return a filename-safe timestamp string like '20260501_143025'."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Load base embeddings
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_embeddings() -> Dict[str, list]:
-    """Load or generate base intent embeddings from VamsiSir.CVS_INTENT_EXAMPLES."""
-    # Import the intent examples registry
-    sys.path.insert(0, _IDS_DIR)
-    from VamsiSir import embeddingVars
+    """Load or generate base intent embeddings from Intents_mapping.CVS_INTENT_EXAMPLES."""
+    from multidomain_intent_detection.Intents_mapping import embeddingVars
     examples = embeddingVars.CVS_INTENT_EXAMPLES
 
     if os.path.exists(EMBEDDINGS_PATH):
@@ -77,8 +89,14 @@ def load_embeddings() -> Dict[str, list]:
     cached = {}
     for intent, sentences in examples.items():
         cached[intent] = [list(v) for v in emb.embed_batch(sentences)]
+    ts = _timestamp()
+    emb_path = os.path.join(ARTIFACTS, f"intent_embeddings_{ts}.json")
+    with open(emb_path, "w") as f:
+        json.dump(cached, f)
+    # Also write to the standard path so future runs find the cache
     with open(EMBEDDINGS_PATH, "w") as f:
         json.dump(cached, f)
+    logger.info(f"Embeddings saved → {emb_path}")
     return cached
 
 
@@ -134,7 +152,11 @@ def augment_embeddings(embeddings: Dict) -> Dict:
         with open(tmp_path, "w") as f:
             json.dump(aug_cached, f)
         os.replace(tmp_path, aug_cache_path)
-        logger.info(f"Augmented embeddings saved → {aug_cache_path}")
+        # Also save a timestamped copy
+        ts_aug_path = os.path.join(ARTIFACTS, f"augmented_embeddings_v3_{_timestamp()}.json")
+        with open(ts_aug_path, "w") as f:
+            json.dump(aug_cached, f)
+        logger.info(f"Augmented embeddings saved → {aug_cache_path} (copy: {ts_aug_path})")
 
     # Merge (skip _hash_ metadata keys)
     merged = {k: list(v) for k, v in embeddings.items()}
@@ -277,7 +299,8 @@ def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin
 
     df = pd.DataFrame(results)
     mode = "hybrid" if use_llm else "ensemble_only"
-    df.to_csv(os.path.join(OUTPUTS, f"results_{mode}.csv"), index=False)
+    ts = _timestamp()
+    df.to_csv(os.path.join(OUTPUTS, f"results_{mode}_{ts}.csv"), index=False)
 
     ia = df["intent_match"].mean() * 100
     da = df["domain_match"].mean() * 100
@@ -337,6 +360,8 @@ def train_and_evaluate():
     for candidate in [
         os.path.join(_IDS_DIR, "Testdata_corrected.csv"),
         os.path.join(_IDS_DIR, "Testdata.csv"),
+        os.path.join(BASE_DIR, "Testdata_corrected.csv"),
+        os.path.join(BASE_DIR, "Testdata.csv"),
     ]:
         if os.path.exists(candidate):
             TESTDATA = candidate
@@ -365,9 +390,15 @@ def train_and_evaluate():
     print(f"\nStep 4 — Training final ensemble (PCA-{best_dim})...")
     pipe = IntentPipeline(n_pca=best_dim)
     pipe.fit(X, y, labels)
+    ts = _timestamp()
+    model_path = os.path.join(ARTIFACTS, f"v3_pipeline_{ts}.pkl")
+    with open(model_path, "wb") as f:
+        pickle.dump(pipe, f)
+    # Also save to the standard path for downstream use
     with open(MODEL_PKL, "wb") as f:
         pickle.dump(pipe, f)
-    print(f"  Saved → {MODEL_PKL}")
+    print(f"  Saved → {model_path}")
+    print(f"  Saved → {MODEL_PKL} (latest)")
 
     print("\nStep 5 — Evaluation (ensemble only)...")
     embedder = get_embedder()

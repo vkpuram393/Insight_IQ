@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Domain Intent Classification - Model Accuracy Report</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .subtitle { color: var(--muted); font-size: 0.95rem; }
+  .header .meta { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+
+  /* Section */
+  .section {
+    margin-bottom: 2rem;
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .section-header h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .section-header .badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-blue { background: rgba(56,189,248,0.15); color: var(--accent); }
+  .badge-green { background: rgba(74,222,128,0.15); color: var(--green); }
+  .badge-red { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .section-body { padding: 1.5rem; }
+
+  /* KPI cards row */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .kpi .label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+  .kpi .value { font-size: 2rem; font-weight: 700; }
+  .kpi .sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+  .kpi .delta { font-size: 0.85rem; margin-top: 0.25rem; font-weight: 600; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--red); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    background: rgba(51,65,85,0.5);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+  }
+  td { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
+  tr:hover td { background: rgba(56,189,248,0.04); }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .mono { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.82rem; }
+
+  /* Bars */
+  .bar-cell { width: 120px; }
+  .bar-bg {
+    background: rgba(51,65,85,0.5);
+    border-radius: 4px;
+    height: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .bar-label {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+
+  /* Accuracy coloring */
+  .acc-perfect { color: var(--green); font-weight: 600; }
+  .acc-good { color: var(--cyan); }
+  .acc-warn { color: var(--yellow); }
+  .acc-bad { color: var(--orange); }
+  .acc-critical { color: var(--red); font-weight: 600; }
+
+  /* Grid layouts */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Chart containers */
+  .chart-container {
+    position: relative;
+    height: 300px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 1rem 0.5rem 2rem;
+  }
+  .chart-bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .chart-bar {
+    width: 100%;
+    max-width: 60px;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    transition: height 0.6s ease;
+    min-height: 2px;
+  }
+  .chart-bar:hover { opacity: 0.85; }
+  .chart-bar .bar-val {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .chart-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 6px;
+    max-height: 80px;
+    overflow: hidden;
+  }
+
+  /* Side-by-side bar comparison */
+  .comparison-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(51,65,85,0.3);
+  }
+  .comparison-row:last-child { border-bottom: none; }
+  .comp-label { width: 140px; font-size: 0.82rem; flex-shrink: 0; }
+  .comp-bars { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .comp-bar-row { display: flex; align-items: center; gap: 8px; }
+  .comp-bar-tag { width: 65px; font-size: 0.7rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .comp-bar-track { flex: 1; height: 16px; background: rgba(51,65,85,0.4); border-radius: 3px; overflow: hidden; position: relative; }
+  .comp-bar-inner { height: 100%; border-radius: 3px; }
+  .comp-bar-val { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+
+  /* Donut chart CSS */
+  .donut-container { display: flex; align-items: center; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+  .donut {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .donut-center {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .donut-center .val { font-size: 1.5rem; font-weight: 700; }
+  .donut-center .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+  .donut-legend { display: flex; flex-direction: column; gap: 0.5rem; }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Tooltip */
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(56,189,248,0.15);
+    color: var(--accent);
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: help;
+    position: relative;
+  }
+  .info-icon:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 10;
+    font-weight: 400;
+  }
+
+  /* Scrollable table wrapper */
+  .table-scroll { max-height: 600px; overflow-y: auto; }
+  .table-scroll::-webkit-scrollbar { width: 6px; }
+  .table-scroll::-webkit-scrollbar-track { background: var(--card); }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+  .tag-domain { background: rgba(56,189,248,0.12); color: var(--accent); }
+  .tag-gate { background: rgba(167,139,250,0.12); color: var(--purple); }
+  .tag-source { background: rgba(74,222,128,0.12); color: var(--green); }
+
+  /* Summary box */
+  .insight-box {
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+  .insight-box strong { color: var(--accent); }
+  .insight-box ul { padding-left: 1.25rem; margin-top: 0.5rem; }
+  .insight-box li { margin-bottom: 0.25rem; }
+
+  /* Print */
+  @media print {
+    body { background: white; color: #1e293b; padding: 1rem; }
+    .section { border: 1px solid #e2e8f0; break-inside: avoid; }
+    .header { background: #f8fafc; }
+  }
+
+  .pill-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .pill {
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>Multi-Domain Intent Classification</h1>
+  <div class="subtitle">Model Accuracy Report &mdash; Ensemble vs Hybrid (Ensemble + LLM Fallback)</div>
+  <div class="meta">
+    Test Dataset: testingFinalDataset.csv &bull; 920 queries &bull; 89 intents &bull; 6 domains &bull; Generated: May 1, 2026
+  </div>
+</div>
+
+<!-- EXECUTIVE SUMMARY KPIs -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="label">Ensemble Intent Accuracy</div>
+    <div class="value" style="color: var(--yellow);">83.59%</div>
+    <div class="sub">769 / 920 correct</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Hybrid Intent Accuracy</div>
+    <div class="value" style="color: var(--green);">92.93%</div>
+    <div class="sub">855 / 920 correct</div>
+    <div class="delta delta-up">+9.34 pp vs ensemble</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Ensemble Domain Accuracy</div>
+    <div class="value" style="color: var(--yellow);">89.24%</div>
+    <div class="sub">821 / 920 correct</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Hybrid Domain Accuracy</div>
+    <div class="value" style="color: var(--green);">95.76%</div>
+    <div class="sub">881 / 920 correct</div>
+    <div class="delta delta-up">+6.52 pp vs ensemble</div>
+  </div>
+  <div class="kpi">
+    <div class="label">LLM Rescues</div>
+    <div class="value" style="color: var(--cyan);">90</div>
+    <div class="sub">Queries fixed by LLM fallback</div>
+  </div>
+  <div class="kpi">
+    <div class="label">LLM Hurt</div>
+    <div class="value" style="color: var(--red);">4</div>
+    <div class="sub">Queries broken by LLM</div>
+    <div class="delta delta-up">Net gain: +86</div>
+  </div>
+</div>
+
+<!-- SECTION 1: DOMAIN ACCURACY COMPARISON -->
+<div class="section">
+  <div class="section-header">
+    <h2>Domain-Level Accuracy Comparison</h2>
+    <span class="badge badge-blue">6 Domains</span>
+  </div>
+  <div class="section-body">
+    <!-- Visual comparison bars -->
+    <div class="comparison-row" style="padding-bottom: 0.25rem; border-bottom: 1px solid var(--border);">
+      <div class="comp-label" style="font-weight: 600; color: var(--muted); font-size: 0.75rem;">DOMAIN</div>
+      <div class="comp-bars" style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted);">
+          <span>0%</span><span>50%</span><span>100%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="comparison-row">
+      <div class="comp-label">member_domain <span class="mono" style="color: var(--muted);">(220)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 93.18%; background: var(--accent);"></div><div class="comp-bar-val">93.18%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 97.73%; background: var(--green);"></div><div class="comp-bar-val">97.73%</div></div></div>
+      </div>
+    </div>
+    <div class="comparison-row">
+      <div class="comp-label">benefits_api <span class="mono" style="color: var(--muted);">(60)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 85%; background: var(--accent);"></div><div class="comp-bar-val">85.00%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 95%; background: var(--green);"></div><div class="comp-bar-val">95.00%</div></div></div>
+      </div>
+    </div>
+    <div class="comparison-row">
+      <div class="comp-label">cap_api <span class="mono" style="color: var(--muted);">(210)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 81.43%; background: var(--accent);"></div><div class="comp-bar-val">81.43%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 92.38%; background: var(--green);"></div><div class="comp-bar-val">92.38%</div></div></div>
+      </div>
+    </div>
+    <div class="comparison-row">
+      <div class="comp-label">claim_history <span class="mono" style="color: var(--muted);">(240)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 80.42%; background: var(--accent);"></div><div class="comp-bar-val">80.42%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 92.08%; background: var(--green);"></div><div class="comp-bar-val">92.08%</div></div></div>
+      </div>
+    </div>
+    <div class="comparison-row">
+      <div class="comp-label">override_domain <span class="mono" style="color: var(--muted);">(160)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 81.25%; background: var(--accent);"></div><div class="comp-bar-val">81.25%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 88.12%; background: var(--green);"></div><div class="comp-bar-val">88.12%</div></div></div>
+      </div>
+    </div>
+    <div class="comparison-row">
+      <div class="comp-label">general <span class="mono" style="color: var(--muted);">(30)</span></div>
+      <div class="comp-bars">
+        <div class="comp-bar-row"><div class="comp-bar-tag">Ensemble</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 63.33%; background: var(--accent);"></div><div class="comp-bar-val">63.33%</div></div></div>
+        <div class="comp-bar-row"><div class="comp-bar-tag">Hybrid</div><div class="comp-bar-track"><div class="comp-bar-inner" style="width: 90%; background: var(--green);"></div><div class="comp-bar-val">90.00%</div></div></div>
+      </div>
+    </div>
+
+    <!-- Domain table -->
+    <table style="margin-top: 1.5rem;">
+      <thead>
+        <tr>
+          <th>Domain</th>
+          <th class="text-center">Count</th>
+          <th class="text-center">Ens. Intent Acc</th>
+          <th class="text-center">Hyb. Intent Acc</th>
+          <th class="text-center">Delta</th>
+          <th class="text-center">Ens. Domain Acc</th>
+          <th class="text-center">Hyb. Domain Acc</th>
+          <th class="text-center">Ens. Errors</th>
+          <th class="text-center">Hyb. Errors</th>
+          <th class="text-center">Avg Conf</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center">220</td>
+          <td class="text-center acc-good">93.18%</td>
+          <td class="text-center acc-perfect">97.73%</td>
+          <td class="text-center delta-up">+4.55</td>
+          <td class="text-center acc-perfect">97.73%</td>
+          <td class="text-center acc-perfect">99.09%</td>
+          <td class="text-center">15</td>
+          <td class="text-center">5</td>
+          <td class="text-center mono">0.4229</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-domain">benefits_api</span></td>
+          <td class="text-center">60</td>
+          <td class="text-center acc-warn">85.00%</td>
+          <td class="text-center acc-good">95.00%</td>
+          <td class="text-center delta-up">+10.00</td>
+          <td class="text-center acc-warn">86.67%</td>
+          <td class="text-center acc-good">95.00%</td>
+          <td class="text-center">9</td>
+          <td class="text-center">3</td>
+          <td class="text-center mono">0.3397</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">210</td>
+          <td class="text-center acc-warn">81.43%</td>
+          <td class="text-center acc-good">92.38%</td>
+          <td class="text-center delta-up">+10.95</td>
+          <td class="text-center acc-warn">86.19%</td>
+          <td class="text-center acc-good">93.33%</td>
+          <td class="text-center">39</td>
+          <td class="text-center">16</td>
+          <td class="text-center mono">0.3596</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">240</td>
+          <td class="text-center acc-warn">80.42%</td>
+          <td class="text-center acc-good">92.08%</td>
+          <td class="text-center delta-up">+11.66</td>
+          <td class="text-center acc-warn">87.08%</td>
+          <td class="text-center acc-good">95.00%</td>
+          <td class="text-center">47</td>
+          <td class="text-center">19</td>
+          <td class="text-center mono">0.3463</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-domain">override_domain</span></td>
+          <td class="text-center">160</td>
+          <td class="text-center acc-warn">81.25%</td>
+          <td class="text-center acc-warn">88.12%</td>
+          <td class="text-center delta-up">+6.87</td>
+          <td class="text-center acc-warn">88.75%</td>
+          <td class="text-center acc-good">95.00%</td>
+          <td class="text-center">30</td>
+          <td class="text-center">19</td>
+          <td class="text-center mono">0.4276</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-domain">general</span></td>
+          <td class="text-center">30</td>
+          <td class="text-center acc-bad">63.33%</td>
+          <td class="text-center acc-good">90.00%</td>
+          <td class="text-center delta-up">+26.67</td>
+          <td class="text-center acc-bad">73.33%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center">11</td>
+          <td class="text-center">3</td>
+          <td class="text-center mono">0.4096</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="insight-box">
+      <strong>Key Findings:</strong>
+      <ul>
+        <li><strong>member_domain</strong> is the strongest domain in both passes (93.18% &rarr; 97.73%). Its 22 intents are well-separated in embedding space.</li>
+        <li><strong>general</strong> saw the largest improvement (+26.67 pp) thanks to LLM rescuing the ambiguous <code>help</code> intent (10% &rarr; 80%).</li>
+        <li><strong>override_domain</strong> shows the smallest hybrid improvement (+6.87 pp), indicating structural confusion among PA-related intents that LLM also struggles with.</li>
+        <li><strong>cap_api</strong> and <strong>claim_history_search</strong> both improved ~11 pp, reflecting cross-domain confusion pairs being resolved by LLM.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: CONFIDENCE GATING ANALYSIS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Confidence Gating &amp; LLM Fallback Analysis</h2>
+    <span class="badge badge-purple">Three-Layer Gate</span>
+  </div>
+  <div class="section-body">
+    <div class="two-col">
+      <!-- Gate distribution -->
+      <div>
+        <h3 style="font-size: 0.95rem; margin-bottom: 1rem; color: var(--muted);">Gate Decision Distribution</h3>
+        <table>
+          <thead><tr><th>Gate Reason</th><th class="text-center">Count</th><th class="text-center">% of Total</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="tag tag-gate">pass</span></td>
+              <td class="text-center mono">538</td>
+              <td class="text-center">58.5%</td>
+              <td style="font-size: 0.82rem; color: var(--muted);">Confidence &ge; threshold, margin OK &rarr; use ensemble</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-gate">disagreement</span></td>
+              <td class="text-center mono">314</td>
+              <td class="text-center">34.1%</td>
+              <td style="font-size: 0.82rem; color: var(--muted);">Ensemble classifiers disagree &rarr; fallback to LLM</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-gate">confusion_prone</span></td>
+              <td class="text-center mono">63</td>
+              <td class="text-center">6.8%</td>
+              <td style="font-size: 0.82rem; color: var(--muted);">Intent in confusion-prone set, higher threshold &rarr; LLM</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-gate">confusion_pair</span></td>
+              <td class="text-center mono">5</td>
+              <td class="text-center">0.5%</td>
+              <td style="font-size: 0.82rem; color: var(--muted);">Known confusion pair detected &rarr; highest threshold</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 1.5rem;">
+          <h3 style="font-size: 0.95rem; margin-bottom: 1rem; color: var(--muted);">Hybrid Source Distribution</h3>
+          <div style="display: flex; gap: 1rem;">
+            <div class="kpi" style="flex: 1;">
+              <div class="label">Ensemble Kept</div>
+              <div class="value" style="font-size: 1.5rem; color: var(--accent);">500</div>
+              <div class="sub">54.3% of queries</div>
+            </div>
+            <div class="kpi" style="flex: 1;">
+              <div class="label">LLM Fallback</div>
+              <div class="value" style="font-size: 1.5rem; color: var(--purple);">420</div>
+              <div class="sub">45.7% of queries</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM Impact -->
+      <div>
+        <h3 style="font-size: 0.95rem; margin-bottom: 1rem; color: var(--muted);">LLM Fallback Impact Analysis</h3>
+        <table>
+          <thead><tr><th>Metric</th><th class="text-center">Count</th><th class="text-center">%</th></tr></thead>
+          <tbody>
+            <tr>
+              <td style="color: var(--green);">LLM Rescued (wrong &rarr; correct)</td>
+              <td class="text-center mono">90</td>
+              <td class="text-center">9.78%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--red);">LLM Hurt (correct &rarr; wrong)</td>
+              <td class="text-center mono">4</td>
+              <td class="text-center">0.43%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--muted);">Still Wrong (both failed)</td>
+              <td class="text-center mono">61</td>
+              <td class="text-center">6.63%</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--border);">
+              <td style="font-weight: 600;">Net LLM Gain</td>
+              <td class="text-center mono" style="font-weight: 600; color: var(--green);">+86</td>
+              <td class="text-center" style="font-weight: 600; color: var(--green);">+9.35 pp</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 1.5rem;">
+          <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--muted);">LLM Rescues by Gate Trigger</h3>
+          <table>
+            <thead><tr><th>Gate Reason</th><th class="text-center">Rescues</th><th class="text-center">% of Rescues</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="tag tag-gate">disagreement</span></td>
+                <td class="text-center mono">78</td>
+                <td class="text-center">86.7%</td>
+              </tr>
+              <tr>
+                <td><span class="tag tag-gate">pass</span></td>
+                <td class="text-center mono">9</td>
+                <td class="text-center">10.0%</td>
+              </tr>
+              <tr>
+                <td><span class="tag tag-gate">confusion_prone</span></td>
+                <td class="text-center mono">3</td>
+                <td class="text-center">3.3%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="insight-box">
+      <strong>Gate Effectiveness:</strong>
+      <ul>
+        <li>The <strong>disagreement</strong> gate is the most valuable trigger: it routes 34.1% of queries to LLM and accounts for <strong>86.7% of all rescues</strong> (78/90).</li>
+        <li>The LLM fallback has a <strong>22.5:1 rescue-to-hurt ratio</strong> (90 rescued vs 4 hurt), making it highly safe.</li>
+        <li>The 4 LLM-hurt cases: <code>prior_auth_info</code>, 2&times; <code>plan_summary</code>, and <code>fill_date_info</code> &mdash; all semantically ambiguous across domains.</li>
+        <li>The <strong>confusion_pair</strong> gate triggers rarely (5 queries, 0.5%) because the test dataset uses novel phrasings that don't always hit known pair patterns.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: CONFIDENCE BAND ANALYSIS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Confidence Band Accuracy</h2>
+    <span class="badge badge-blue">Calibration Analysis</span>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Confidence Band</th>
+          <th class="text-center">Count</th>
+          <th class="text-center">% of Total</th>
+          <th class="text-center">Ens. Intent Acc</th>
+          <th class="text-center">Hyb. Intent Acc</th>
+          <th class="text-center">Ens. Domain Acc</th>
+          <th class="text-center">Hyb. Domain Acc</th>
+          <th>Ensemble Accuracy</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">0 &ndash; 20%</td>
+          <td class="text-center">159</td>
+          <td class="text-center">17.3%</td>
+          <td class="text-center acc-critical">42.14%</td>
+          <td class="text-center acc-warn">80.50%</td>
+          <td class="text-center acc-bad">62.26%</td>
+          <td class="text-center acc-warn">88.68%</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.14%; background: linear-gradient(90deg, var(--red), var(--orange));"></div><div class="bar-label">42.1%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">20 &ndash; 40%</td>
+          <td class="text-center">346</td>
+          <td class="text-center">37.6%</td>
+          <td class="text-center acc-warn">86.42%</td>
+          <td class="text-center acc-good">93.35%</td>
+          <td class="text-center acc-warn">89.88%</td>
+          <td class="text-center acc-good">94.80%</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 86.42%; background: linear-gradient(90deg, var(--yellow), var(--green));"></div><div class="bar-label">86.4%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">40 &ndash; 60%</td>
+          <td class="text-center">311</td>
+          <td class="text-center">33.8%</td>
+          <td class="text-center acc-good">96.14%</td>
+          <td class="text-center acc-good">96.46%</td>
+          <td class="text-center acc-perfect">98.71%</td>
+          <td class="text-center acc-perfect">99.04%</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 96.14%; background: linear-gradient(90deg, var(--green), var(--cyan));"></div><div class="bar-label">96.1%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">60 &ndash; 80%</td>
+          <td class="text-center">84</td>
+          <td class="text-center">9.1%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 100%; background: var(--green);"></div><div class="bar-label">100%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">80 &ndash; 100%</td>
+          <td class="text-center">20</td>
+          <td class="text-center">2.2%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="text-center acc-perfect">100.00%</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 100%; background: var(--green);"></div><div class="bar-label">100%</div></div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="insight-box">
+      <strong>Calibration Quality:</strong>
+      <ul>
+        <li><strong>Zero high-confidence errors</strong> in both passes &mdash; every prediction with confidence &ge;60% was correct. The temperature scaling is well-calibrated.</li>
+        <li>The <strong>0-20% band</strong> (159 queries, 17.3%) is the danger zone: only 42.14% ensemble accuracy. LLM fallback lifts this to 80.50%, a <strong>+38.36 pp rescue</strong>.</li>
+        <li>The <strong>20-40% band</strong> is the largest group (346 queries) and gets a meaningful +6.93 pp boost from LLM.</li>
+        <li>Above 40% confidence, accuracy is already &ge;96%, so LLM adds marginal value (&lt;0.5 pp).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: ENSEMBLE AGREEMENT ANALYSIS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Ensemble Agreement Analysis</h2>
+    <span class="badge badge-blue">Classifier Consensus</span>
+  </div>
+  <div class="section-body">
+    <div class="two-col">
+      <div>
+        <table>
+          <thead><tr><th>Agreement Status</th><th class="text-center">Count</th><th class="text-center">Ens. Accuracy</th><th class="text-center">Hyb. Accuracy</th></tr></thead>
+          <tbody>
+            <tr>
+              <td style="color: var(--green);">All classifiers agree</td>
+              <td class="text-center mono">606</td>
+              <td class="text-center acc-good">95.38%</td>
+              <td class="text-center acc-good">95.38%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--yellow);">Classifiers disagree</td>
+              <td class="text-center mono">314</td>
+              <td class="text-center acc-bad">60.83%</td>
+              <td class="text-center acc-warn">88.22%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <table>
+          <thead><tr><th>Confusion Pair Flag</th><th class="text-center">Count</th><th class="text-center">Ens. Accuracy</th><th class="text-center">Hyb. Accuracy</th></tr></thead>
+          <tbody>
+            <tr>
+              <td style="color: var(--yellow);">Flagged as confusion pair</td>
+              <td class="text-center mono">53</td>
+              <td class="text-center acc-bad">67.92%</td>
+              <td class="text-center acc-good">94.34%</td>
+            </tr>
+            <tr>
+              <td style="color: var(--green);">Not flagged</td>
+              <td class="text-center mono">867</td>
+              <td class="text-center acc-warn">84.55%</td>
+              <td class="text-center acc-good">92.85%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="insight-box">
+      <strong>Takeaway:</strong> When classifiers agree (65.9% of the time), ensemble accuracy is already 95.38%. When they disagree, the ensemble drops to <strong>60.83%</strong> &mdash; but LLM rescues this to <strong>88.22%</strong>, a +27.39 pp lift. Disagreement is the strongest signal for LLM fallback.
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: TOP LLM IMPROVEMENT INTENTS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Biggest LLM Improvements by Intent</h2>
+    <span class="badge badge-green">44 Intents Changed</span>
+  </div>
+  <div class="section-body">
+    <div class="table-scroll" style="max-height: 500px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Intent</th>
+            <th>Domain</th>
+            <th class="text-center">N</th>
+            <th class="text-center">Ensemble</th>
+            <th class="text-center">Hybrid</th>
+            <th class="text-center">Delta</th>
+            <th>Improvement</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">help</td>
+            <td><span class="tag tag-domain">general</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-critical">10.0%</td>
+            <td class="text-center acc-warn">80.0%</td>
+            <td class="text-center delta-up" style="font-weight:700;">+70.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 100%; background: var(--green);"></div><div class="bar-label">+70 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">related_cagm</td>
+            <td><span class="tag tag-domain">member_domain</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-critical">20.0%</td>
+            <td class="text-center acc-bad">70.0%</td>
+            <td class="text-center delta-up" style="font-weight:700;">+50.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 71.4%; background: var(--green);"></div><div class="bar-label">+50 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">Pricing</td>
+            <td><span class="tag tag-domain">claim_history_search</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">60.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up" style="font-weight:700;">+40.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 57.1%; background: var(--green);"></div><div class="bar-label">+40 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">Settlement</td>
+            <td><span class="tag tag-domain">claim_history_search</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">60.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up">+40.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 57.1%; background: var(--green);"></div><div class="bar-label">+40 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">multi_claim_summary</td>
+            <td><span class="tag tag-domain">cap_api</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">60.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up">+40.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 57.1%; background: var(--green);"></div><div class="bar-label">+40 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">prior_auth_info</td>
+            <td><span class="tag tag-domain">cap_api</span></td>
+            <td class="text-center">15</td>
+            <td class="text-center acc-critical">46.7%</td>
+            <td class="text-center acc-warn">80.0%</td>
+            <td class="text-center delta-up">+33.3</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 47.6%; background: var(--green);"></div><div class="bar-label">+33 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">Prescriber</td>
+            <td><span class="tag tag-domain">claim_history_search</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-critical">20.0%</td>
+            <td class="text-center acc-critical">50.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--yellow);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">beneficiary_info</td>
+            <td><span class="tag tag-domain">benefits_api</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">60.0%</td>
+            <td class="text-center acc-good">90.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--green);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">claim_status</td>
+            <td><span class="tag tag-domain">cap_api</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">70.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--green);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">cob_info</td>
+            <td><span class="tag tag-domain">cap_api</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">70.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--green);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">pa_ignore_status</td>
+            <td><span class="tag tag-domain">override_domain</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">60.0%</td>
+            <td class="text-center acc-good">90.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--green);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr>
+            <td class="mono">pa_summary</td>
+            <td><span class="tag tag-domain">override_domain</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-bad">70.0%</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center delta-up">+30.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 42.9%; background: var(--green);"></div><div class="bar-label">+30 pp</div></div></td>
+          </tr>
+          <tr style="border-top: 2px solid var(--border);">
+            <td class="mono" style="color: var(--red);">plan_summary</td>
+            <td><span class="tag tag-domain">benefits_api</span></td>
+            <td class="text-center">10</td>
+            <td class="text-center acc-perfect">100.0%</td>
+            <td class="text-center acc-warn">80.0%</td>
+            <td class="text-center delta-down" style="font-weight: 700;">&minus;20.0</td>
+            <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 28.6%; background: var(--red);"></div><div class="bar-label">&minus;20 pp</div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="insight-box">
+      <strong>LLM Regression:</strong> Only 1 intent regressed: <code>plan_summary</code> dropped from 100% to 80% because LLM misclassified 2 queries as <code>member_coverage</code>. The ensemble had these right with high confidence, but the gate still routed them to LLM (1 via <code>pass</code>, 1 via <code>disagreement</code>). Consider adding <code>plan_summary &harr; member_coverage</code> to <code>CONFUSION_PAIRS</code> to tighten gate thresholds.
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 6: WORST PERFORMING INTENTS (HYBRID) -->
+<div class="section">
+  <div class="section-header">
+    <h2>Worst-Performing Intents (Hybrid Pass)</h2>
+    <span class="badge badge-red">Needs Attention</span>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Intent</th>
+          <th>Domain</th>
+          <th class="text-center">N</th>
+          <th class="text-center">Correct</th>
+          <th class="text-center">Hybrid Acc</th>
+          <th class="text-center">Ens. Acc</th>
+          <th class="text-center">Avg Conf</th>
+          <th>Accuracy</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background: rgba(248,113,113,0.08);">
+          <td class="mono" style="font-weight: 600;">pa_field_help</td>
+          <td><span class="tag tag-domain">override_domain</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">3</td>
+          <td class="text-center acc-critical">30.0%</td>
+          <td class="text-center acc-critical">30.0%</td>
+          <td class="text-center mono">0.378</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 30%; background: var(--red);"></div><div class="bar-label">30%</div></div></td>
+        </tr>
+        <tr style="background: rgba(248,113,113,0.05);">
+          <td class="mono">Prescriber</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">5</td>
+          <td class="text-center acc-critical">50.0%</td>
+          <td class="text-center acc-critical">20.0%</td>
+          <td class="text-center mono">0.315</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 50%; background: var(--orange);"></div><div class="bar-label">50%</div></div></td>
+        </tr>
+        <tr style="background: rgba(248,113,113,0.05);">
+          <td class="mono">pa_follow_me_logic</td>
+          <td><span class="tag tag-domain">override_domain</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">5</td>
+          <td class="text-center acc-critical">50.0%</td>
+          <td class="text-center acc-critical">50.0%</td>
+          <td class="text-center mono">0.380</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 50%; background: var(--orange);"></div><div class="bar-label">50%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">Pharmacy</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">7</td>
+          <td class="text-center acc-bad">70.0%</td>
+          <td class="text-center acc-critical">50.0%</td>
+          <td class="text-center mono">0.356</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 70%; background: var(--yellow);"></div><div class="bar-label">70%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">pa_agent_code</td>
+          <td><span class="tag tag-domain">override_domain</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">7</td>
+          <td class="text-center acc-bad">70.0%</td>
+          <td class="text-center acc-bad">60.0%</td>
+          <td class="text-center mono">0.392</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 70%; background: var(--yellow);"></div><div class="bar-label">70%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">related_cagm</td>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">7</td>
+          <td class="text-center acc-bad">70.0%</td>
+          <td class="text-center acc-critical">20.0%</td>
+          <td class="text-center mono">0.286</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 70%; background: var(--yellow);"></div><div class="bar-label">70%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">mail_order_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">15</td>
+          <td class="text-center">11</td>
+          <td class="text-center acc-bad">73.3%</td>
+          <td class="text-center acc-bad">66.7%</td>
+          <td class="text-center mono">0.361</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 73.3%; background: var(--yellow);"></div><div class="bar-label">73%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">medicare_part_d</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">15</td>
+          <td class="text-center">11</td>
+          <td class="text-center acc-bad">73.3%</td>
+          <td class="text-center acc-bad">73.3%</td>
+          <td class="text-center mono">0.286</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 73.3%; background: var(--yellow);"></div><div class="bar-label">73%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">DrugLast</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">10</td>
+          <td class="text-center">8</td>
+          <td class="text-center acc-warn">80.0%</td>
+          <td class="text-center acc-warn">80.0%</td>
+          <td class="text-center mono">0.283</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 80%; background: var(--yellow);"></div><div class="bar-label">80%</div></div></td>
+        </tr>
+        <tr>
+          <td class="mono">prior_auth_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">15</td>
+          <td class="text-center">12</td>
+          <td class="text-center acc-warn">80.0%</td>
+          <td class="text-center acc-critical">46.7%</td>
+          <td class="text-center mono">0.219</td>
+          <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width: 80%; background: var(--yellow);"></div><div class="bar-label">80%</div></div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="insight-box">
+      <strong>Root Cause Analysis:</strong>
+      <ul>
+        <li><code>pa_field_help</code> (30%): Queries like "What does the ignore status field do?" get classified as <code>pa_ignore_status</code> instead. The model interprets field names as intent keywords. <strong>Recommendation:</strong> Add more training examples with explicit "field help" / "explain field" phrasing.</li>
+        <li><code>Prescriber</code> (50%): Confused with <code>prescriber_info</code> (cap_api). Both deal with prescriber data, but <code>Prescriber</code> means "filter claims by prescriber" while <code>prescriber_info</code> means "get prescriber details." <strong>Recommendation:</strong> Add <code>Prescriber &harr; prescriber_info</code> to CONFUSION_PAIRS.</li>
+        <li><code>pa_follow_me_logic</code> (50%): Confused with <code>member_transition_status</code> &mdash; both involve plan transitions. Even LLM cannot resolve the semantic overlap without more context.</li>
+        <li><code>mail_order_info</code> (73.3%): Confused with <code>PharmType</code> &mdash; both relate to pharmacy type/channel. Add to CONFUSION_PAIRS.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7: CONFUSION PAIRS (HYBRID) -->
+<div class="section">
+  <div class="section-header">
+    <h2>Top Confusion Pairs (Hybrid Pass)</h2>
+    <span class="badge badge-red">Misclassification Patterns</span>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Actual Intent</th>
+          <th>Actual Domain</th>
+          <th style="text-align: center; font-size: 1.1rem;">&rarr;</th>
+          <th>Predicted Intent</th>
+          <th>Predicted Domain</th>
+          <th class="text-center">Count</th>
+          <th>Pattern</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">mail_order_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="color: var(--red);">&rarr;</td>
+          <td class="mono">PharmType</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center" style="font-weight: 700; color: var(--red);">4</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: mail/retail pharmacy type vs claim filter</td>
+        </tr>
+        <tr>
+          <td class="mono">Prescriber</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center" style="color: var(--red);">&rarr;</td>
+          <td class="mono">prescriber_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="font-weight: 700; color: var(--red);">4</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: claim filter vs prescriber lookup</td>
+        </tr>
+        <tr>
+          <td class="mono">Pharmacy</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center" style="color: var(--red);">&rarr;</td>
+          <td class="mono">pharmacy_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="font-weight: 700; color: var(--orange);">3</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: claim filter vs pharmacy lookup</td>
+        </tr>
+        <tr>
+          <td class="mono">rx_details</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">Refills</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: Rx details vs refill history filter</td>
+        </tr>
+        <tr>
+          <td class="mono">medicare_part_d</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">pricing_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Same domain: Part D pricing vs general pricing</td>
+        </tr>
+        <tr>
+          <td class="mono">prior_auth_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">approval_info</td>
+          <td><span class="tag tag-domain">benefits_api</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: PA on claim vs benefit approval</td>
+        </tr>
+        <tr>
+          <td class="mono">plan_summary</td>
+          <td><span class="tag tag-domain">benefits_api</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">member_coverage</td>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: plan details vs member coverage</td>
+        </tr>
+        <tr>
+          <td class="mono">DrugLast</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">fill_date_info</td>
+          <td><span class="tag tag-domain">claim_history_search</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Same domain: last drug fill date vs fill date info</td>
+        </tr>
+        <tr>
+          <td class="mono">family_type</td>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">beneficiary_info</td>
+          <td><span class="tag tag-domain">benefits_api</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: family classification vs beneficiary</td>
+        </tr>
+        <tr>
+          <td class="mono">related_cagm</td>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">family_members</td>
+          <td><span class="tag tag-domain">member_domain</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Same domain: CAGM linkage vs family member list</td>
+        </tr>
+        <tr>
+          <td class="mono">pa_follow_me_logic</td>
+          <td><span class="tag tag-domain">override_domain</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">prior_auth_info</td>
+          <td><span class="tag tag-domain">cap_api</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Cross-domain: PA follow-me vs PA claim info</td>
+        </tr>
+        <tr>
+          <td class="mono">help</td>
+          <td><span class="tag tag-domain">general</span></td>
+          <td class="text-center" style="color: var(--orange);">&rarr;</td>
+          <td class="mono">out_of_scope</td>
+          <td><span class="tag tag-domain">general</span></td>
+          <td class="text-center">2</td>
+          <td style="font-size: 0.8rem; color: var(--muted);">Same domain: help request vs out-of-scope</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="insight-box">
+      <strong>Structural Patterns:</strong>
+      <ul>
+        <li><strong>8 of 12 top confusion pairs are cross-domain</strong>, meaning they also cause domain misclassification. The most systematic: <code>claim_history_search</code> filter intents (<code>Pharmacy</code>, <code>Prescriber</code>) vs <code>cap_api</code> lookup intents (<code>pharmacy_info</code>, <code>prescriber_info</code>).</li>
+        <li>The naming convention itself causes confusion: capitalized intents (<code>Pharmacy</code>, <code>Prescriber</code>) are claim filters, while <code>_info</code> suffixed intents are entity lookups. The model doesn't have this naming convention as a feature.</li>
+        <li><strong>Recommended new CONFUSION_PAIRS entries:</strong> <code>mail_order_info &harr; PharmType</code>, <code>Prescriber &harr; prescriber_info</code>, <code>plan_summary &harr; member_coverage</code>, <code>pa_follow_me_logic &harr; member_transition_status</code>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 8: PERFECT INTENTS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Perfect-Score Intents (100% Hybrid Accuracy)</h2>
+    <span class="badge badge-green">Model Strengths</span>
+  </div>
+  <div class="section-body">
+    <div class="pill-row">
+      <span class="pill" style="border-color: var(--green); color: var(--green);">DaysSupply</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">Generic</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">Month</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">Pricing</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">Refills</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">Settlement</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">compound_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">alternate_ids</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">alternate_insurance</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">approval_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">benefit_reset_date</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">claim_status</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">cob_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">cvs_id_lookup</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">daw_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">family_members</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">lics_status</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">medicare_coverage</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_contact_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_demographics</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_discount_program</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_dur_config</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_eligibility_copay</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_hierarchy</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_language_pref</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_mbi_number</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">member_override_plan</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">multi_claim_summary</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">network_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_claim_usage</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_drug_type_indicator</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_effective_dates</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_modification_history</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_override_reject</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_specialty_rx_override</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pa_summary</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">pharmacy_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">plan_finder</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">reversal_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">settlement_info</span>
+      <span class="pill" style="border-color: var(--green); color: var(--green);">stcob_linkage</span>
+    </div>
+    <p style="color: var(--muted); font-size: 0.88rem;"><strong>41 of 89 intents (46.1%)</strong> achieved perfect hybrid accuracy. 27 of these were also perfect on ensemble-only, and 14 were rescued to perfection by LLM fallback.</p>
+  </div>
+</div>
+
+<!-- SECTION 9: LLM HURT CASES -->
+<div class="section">
+  <div class="section-header">
+    <h2>LLM Regression Cases</h2>
+    <span class="badge badge-red">4 Cases</span>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Actual Intent</th>
+          <th>Ensemble Predicted (Correct)</th>
+          <th>LLM Predicted (Wrong)</th>
+          <th>Gate Trigger</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">prior_auth_info</td>
+          <td class="mono" style="color: var(--green);">prior_auth_info</td>
+          <td class="mono" style="color: var(--red);">approval_info</td>
+          <td><span class="tag tag-gate">disagreement</span></td>
+        </tr>
+        <tr>
+          <td class="mono">plan_summary</td>
+          <td class="mono" style="color: var(--green);">plan_summary</td>
+          <td class="mono" style="color: var(--red);">member_coverage</td>
+          <td><span class="tag tag-gate">pass</span></td>
+        </tr>
+        <tr>
+          <td class="mono">plan_summary</td>
+          <td class="mono" style="color: var(--green);">plan_summary</td>
+          <td class="mono" style="color: var(--red);">member_coverage</td>
+          <td><span class="tag tag-gate">disagreement</span></td>
+        </tr>
+        <tr>
+          <td class="mono">fill_date_info</td>
+          <td class="mono" style="color: var(--green);">fill_date_info</td>
+          <td class="mono" style="color: var(--red);">date_range_claims</td>
+          <td><span class="tag tag-gate">pass</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="insight-box">
+      <strong>Note:</strong> 2 of 4 regressions triggered via the <code>pass</code> gate, meaning the ensemble was confident and correct but the LLM was still consulted and overrode it. This suggests the gate passed the query to ensemble, but in hybrid mode the LLM was called anyway for these specific queries. Investigate whether these queries have marginal confidence near the threshold boundary.
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 10: RECOMMENDATIONS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Recommendations &amp; Action Items</h2>
+    <span class="badge badge-purple">Next Steps</span>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 35px;">#</th>
+          <th>Action</th>
+          <th>Impact</th>
+          <th>Effort</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--red);">1</td>
+          <td>
+            <strong>Add training examples for <code>pa_field_help</code></strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);">30% accuracy (worst intent). Add 20+ examples with "explain field", "what does [X] field mean", "describe the purpose of [field]" patterns.</span>
+          </td>
+          <td style="color: var(--green);">High</td>
+          <td style="color: var(--yellow);">Medium</td>
+        </tr>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--red);">2</td>
+          <td>
+            <strong>Add to CONFUSION_PAIRS dict</strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);"><code>Prescriber &harr; prescriber_info</code>, <code>Pharmacy &harr; pharmacy_info</code>, <code>mail_order_info &harr; PharmType</code>, <code>plan_summary &harr; member_coverage</code>, <code>pa_follow_me_logic &harr; member_transition_status</code></span>
+          </td>
+          <td style="color: var(--green);">High</td>
+          <td style="color: var(--green);">Low</td>
+        </tr>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--orange);">3</td>
+          <td>
+            <strong>Add <code>Prescriber</code> to _CONFUSION_PRONE_INTENTS</strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);">50% hybrid accuracy. Raising its gate threshold will force more LLM routing, which helps with prescriber_info disambiguation.</span>
+          </td>
+          <td style="color: var(--yellow);">Medium</td>
+          <td style="color: var(--green);">Low</td>
+        </tr>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--orange);">4</td>
+          <td>
+            <strong>Improve LLM prompt for PA intents</strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);"><code>pa_follow_me_logic</code> (50%) and <code>pa_agent_code</code> (70%) both resist LLM rescue. Add clearer intent descriptions in the LLM classification prompt.</span>
+          </td>
+          <td style="color: var(--yellow);">Medium</td>
+          <td style="color: var(--yellow);">Medium</td>
+        </tr>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--yellow);">5</td>
+          <td>
+            <strong>Review <code>help</code> intent training data</strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);">10% ensemble &rarr; 80% hybrid. The ensemble completely fails on this generic intent. Consider whether <code>help</code> needs a keyword-based rule rather than embedding similarity.</span>
+          </td>
+          <td style="color: var(--yellow);">Medium</td>
+          <td style="color: var(--green);">Low</td>
+        </tr>
+        <tr>
+          <td class="text-center" style="font-weight: 700; color: var(--yellow);">6</td>
+          <td>
+            <strong>Augment <code>related_cagm</code> training examples</strong><br>
+            <span style="font-size: 0.82rem; color: var(--muted);">20% &rarr; 70% (LLM helps a lot, but 30% still fails). Confused with <code>member_hierarchy</code>, <code>cvs_id_lookup</code>, <code>family_members</code>. Needs more distinctive training examples.</span>
+          </td>
+          <td style="color: var(--yellow);">Medium</td>
+          <td style="color: var(--yellow);">Medium</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SECTION 11: OVERALL SCORECARD -->
+<div class="section">
+  <div class="section-header">
+    <h2>Final Scorecard</h2>
+  </div>
+  <div class="section-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th class="text-center">Ensemble Only</th>
+          <th class="text-center">Hybrid (Ens + LLM)</th>
+          <th class="text-center">Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight: 600;">Intent Accuracy</td>
+          <td class="text-center" style="font-weight: 600; color: var(--yellow);">83.59%</td>
+          <td class="text-center" style="font-weight: 600; color: var(--green);">92.93%</td>
+          <td class="text-center delta-up" style="font-weight: 600;">+9.34 pp</td>
+        </tr>
+        <tr>
+          <td style="font-weight: 600;">Domain Accuracy</td>
+          <td class="text-center" style="font-weight: 600; color: var(--yellow);">89.24%</td>
+          <td class="text-center" style="font-weight: 600; color: var(--green);">95.76%</td>
+          <td class="text-center delta-up" style="font-weight: 600;">+6.52 pp</td>
+        </tr>
+        <tr>
+          <td>Total Errors</td>
+          <td class="text-center mono">151</td>
+          <td class="text-center mono">65</td>
+          <td class="text-center delta-up">&minus;86 errors</td>
+        </tr>
+        <tr>
+          <td>High-Confidence Errors</td>
+          <td class="text-center mono">0</td>
+          <td class="text-center mono">0</td>
+          <td class="text-center" style="color: var(--green);">Clean</td>
+        </tr>
+        <tr>
+          <td>Perfect Intents (100%)</td>
+          <td class="text-center mono">27 / 89</td>
+          <td class="text-center mono">41 / 89</td>
+          <td class="text-center delta-up">+14</td>
+        </tr>
+        <tr>
+          <td>Failing Intents (&lt;60%)</td>
+          <td class="text-center mono">5</td>
+          <td class="text-center mono">2</td>
+          <td class="text-center delta-up">&minus;3</td>
+        </tr>
+        <tr>
+          <td>Avg Calibrated Confidence</td>
+          <td class="text-center mono">0.3834</td>
+          <td class="text-center mono">0.3834</td>
+          <td class="text-center" style="color: var(--muted);">&mdash;</td>
+        </tr>
+        <tr>
+          <td>LLM Fallback Rate</td>
+          <td class="text-center" style="color: var(--muted);">N/A</td>
+          <td class="text-center mono">45.7%</td>
+          <td class="text-center" style="color: var(--muted);">&mdash;</td>
+        </tr>
+        <tr>
+          <td>LLM Net Rescue Rate</td>
+          <td class="text-center" style="color: var(--muted);">N/A</td>
+          <td class="text-center" style="color: var(--green);">+9.35 pp</td>
+          <td class="text-center" style="color: var(--muted);">&mdash;</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="text-align: center; padding: 2rem; color: var(--muted); font-size: 0.8rem;">
+  Multi-Domain Intent Classification &bull; Model v3_pipeline.pkl &bull;
+  Ensemble: SVM-RBF + LogReg + kNN-Cosine + ExtraTrees &bull;
+  LLM Fallback: Gemini 2.0 Flash &bull;
+  Embeddings: Vertex AI text-embedding-005 (768-d &rarr; PCA 300-d) &bull;
+  Report generated May 1, 2026
+</div>
+
+</div>
+</body>
+</html>
