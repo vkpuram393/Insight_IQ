@@ -864,6 +864,22 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Display the memberOverridePlan from the eligibility record.",
         "What override plan is assigned to this member's eligibility?",
     ],
+    # ── family_type (80%): confused with beneficiary_info ──────────────
+    # Key: plan CLASSIFICATION (individual vs family), NOT benefit accumulations
+    "family_type": [
+        "Is this member on a family or individual plan?",
+        "Show the coverage tier designation for this member.",
+        "What is the family coverage classification for this member?",
+        "Employee-only or employee-plus-spouse?",
+        "Coverage tier for this member.",
+        "Is this an individual or family enrollment?",
+        "What plan tier is this member enrolled in?",
+        "Show the family status indicator for this member.",
+        "Is this member's plan single or family coverage?",
+        "Family or individual designation for this enrollment.",
+        "What type of coverage tier does this member have?",
+        "Is this an individual, family, or employee-plus coverage?",
+    ],
 
     # ══════════════════════════════════════════════════════════════════════
     # 6. OVERRIDE_DOMAIN ANCHORS (PA configuration and management)

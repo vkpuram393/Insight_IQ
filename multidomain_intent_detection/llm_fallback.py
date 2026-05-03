@@ -190,6 +190,9 @@ SINGLE-CLAIM vs SEARCH confusion pairs:
 - pricing_info = pricing for ONE claim | Pricing = cost of a DRUG across MANY claims  
 - pharmacy_info = which pharmacy filled ONE claim | Pharmacy = SEARCH claims FROM a pharmacy
 - prescriber_info = who prescribed ONE claim | Prescriber = SEARCH claims BY prescriber
+- mail_order_info = was THIS specific claim filled via mail order | PharmType = FILTER claims by pharmacy TYPE (retail, mail-order, specialty)
+- rx_details = RX number, fill number, quantity for ONE claim | Refills = SEARCH claims by refill count across history
+- fill_date_info = date a specific claim was filled | DrugLast = when was a DRUG LAST dispensed for a member
 
 BENEFITS vs CAP confusion:
 - approval_info = WHY was claim APPROVED (overrides, TF, BPG) — approval LOGIC
@@ -203,6 +206,19 @@ PRICING confusion:
 - medicare_part_d = MEDD pricing, PDE, Part D specific pricing
 - compound_info = COMPOUND drug ingredients, MIC breakdown
 - cob_info = coordination pricing, dual coverage pricing
+
+MEMBER confusion:
+- member_coverage = coverage ELIGIBILITY windows, active status, enrollment dates (member_domain)
+- plan_summary = benefit PLAN overview, what the plan covers, formulary (benefits_api)
+- beneficiary_info = benefit PHASE, ACCUMULATIONS, deductible progress for a claim (benefits_api)
+- family_type = INDIVIDUAL vs FAMILY plan classification, coverage tier TYPE (member_domain)
+- family_members = LIST of dependents/subscribers on the plan (member_domain)
+
+PA (OVERRIDE) confusion:
+- pa_field_help = EXPLAIN what a PA field MEANS or DOES — field documentation
+- pa_ignore_status = WHAT IS the ignore status VALUE on this PA
+- pa_follow_me_logic = does this PA FOLLOW the member across PLAN CHANGES — PA configuration
+- member_transition_status = the MEMBER's transition fill status from ELIGIBILITY — member record
 
 GREETING vs OUT_OF_SCOPE:
 - greeting = hello, hi, welcome, good morning — SALUTATION

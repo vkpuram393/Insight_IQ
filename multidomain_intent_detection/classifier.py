@@ -66,7 +66,19 @@ def _load_gate_config() -> Dict:
             pass
     return {}
 
+def _load_prod_config() -> Dict:
+    """Load production config from tuning_config.json."""
+    if os.path.exists(_CONFIG_PATH):
+        try:
+            with open(_CONFIG_PATH) as f:
+                cfg = json.load(f)
+            return cfg.get("production", {})
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
 _GATE_CFG = _load_gate_config()
+_PROD_CFG = _load_prod_config()
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -240,7 +252,7 @@ class MultidomainIntentClassifier:
         confident = (
             pred["confidence"] >= self.confidence_threshold
             and pred["margin"] >= self.margin_threshold
-            and pred["agreement"]  # ALL 3 sub-classifiers must agree
+            and pred["agreement"]  # ALL 4 sub-classifiers must agree
         )
 
         # For known confusion-prone intents, apply stricter thresholds
@@ -287,7 +299,7 @@ class MultidomainIntentClassifier:
             "agreement": pred["agreement"],
             "top_5": pred["top_5"],
             "entities": entities,
-            "needs_clarification": pred["confidence"] < 0.4,
+            "needs_clarification": pred["confidence"] < _PROD_CFG.get("needs_clarification_threshold", 0.4),
             "latency_ms": round(elapsed_ms, 1),
         }
 

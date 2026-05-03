@@ -240,9 +240,29 @@ def search_pca(X, y, labels) -> int:
 # Evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin_t=0.05):
+def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=None, margin_t=None):
     """Evaluate pipeline with confusion-aware gating.  Returns {intent_accuracy, domain_accuracy, gate_stats}."""
     from multidomain_intent_detection.pipeline import CONFUSION_PRONE_INTENTS
+
+    # Load gating thresholds from tuning_config.json
+    _gate_cfg = {}
+    _cfg_path = os.path.join(BASE_DIR, "tuning_config.json")
+    if os.path.exists(_cfg_path):
+        try:
+            with open(_cfg_path) as _f:
+                _gate_cfg = json.load(_f).get("gating", {})
+        except (json.JSONDecodeError, IOError):
+            pass
+    cp_conf = _gate_cfg.get("confusion_prone_confidence", 0.55)
+    cp_margin = _gate_cfg.get("confusion_prone_margin", 0.20)
+    cpair_conf = _gate_cfg.get("confusion_pair_confidence", 0.60)
+    cpair_margin = _gate_cfg.get("confusion_pair_margin", 0.25)
+
+    # Use config defaults for base thresholds if not explicitly passed
+    if conf_t is None:
+        conf_t = _gate_cfg.get("confidence_threshold", 0.30)
+    if margin_t is None:
+        margin_t = _gate_cfg.get("margin_threshold", 0.05)
 
     results, llm_n = [], 0
     gate_stats = {
@@ -267,11 +287,11 @@ def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=0.30, margin
             confident = False
             gate_reason = "disagreement"
         elif confident and pred["intent"] in CONFUSION_PRONE_INTENTS:
-            if not (pred["confidence"] >= 0.55 and pred["margin"] >= 0.20):
+            if not (pred["confidence"] >= cp_conf and pred["margin"] >= cp_margin):
                 confident = False
                 gate_reason = "confusion_prone"
         if confident and pred.get("is_confusion_pair", False):
-            if not (pred["confidence"] >= 0.60 and pred["margin"] >= 0.25):
+            if not (pred["confidence"] >= cpair_conf and pred["margin"] >= cpair_margin):
                 confident = False
                 gate_reason = "confusion_pair"
 

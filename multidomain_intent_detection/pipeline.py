@@ -82,6 +82,9 @@ CONFUSION_PAIRS: Dict[str, set] = {
     "related_cagm":        {"cvs_id_lookup", "family_members"},
     "Pharmacy":            {"pharmacy_info", "PharmType"},
     "pharmacy_info":       {"Pharmacy"},
+    "family_type":         {"beneficiary_info", "family_members"},
+    "rx_details":          {"Refills", "fill_date_info"},
+    "Refills":             {"rx_details"},
 }
 
 CONFUSION_PRONE_INTENTS = set(CONFUSION_PAIRS.keys())
@@ -168,7 +171,9 @@ class IntentPipeline:
             class_weight="balanced", random_state=42, n_jobs=-1,
         ).fit(X_s, y)
 
-        logger.info("Classifiers: SVM-RBF(C=15), LogReg(C=5), kNN(k=%d), ExtraTrees(200)" % self.knn_k)
+        logger.info("Classifiers: SVM-RBF(C=%s), LogReg(C=%s), kNN(k=%d), ExtraTrees(%s)"
+                    % (svm_cfg.get('C', 10), lr_cfg.get('C', 10), self.knn_k,
+                       et_cfg.get('n_estimators', 300)))
 
         # ── Learn optimal ensemble weights ───────────────────────────
         self.weights = self._learn_weights(X_s, y)
@@ -293,15 +298,22 @@ class IntentPipeline:
             X_tr, X_val = X_scaled[train_idx], X_scaled[val_idx]
             y_tr, y_val = y[train_idx], y[val_idx]
 
-            # Fit all 4 classifiers on this fold
+            # Fit all 4 classifiers on this fold (using config params)
             fold_clfs = {
-                "svm": SVC(kernel="rbf", C=10, gamma="scale", probability=True,
+                "svm": SVC(kernel=svm_cfg.get("kernel", "rbf"),
+                           C=svm_cfg.get("C", 10), gamma=svm_cfg.get("gamma", "scale"),
+                           probability=True,
                            class_weight="balanced", random_state=42).fit(X_tr, y_tr),
-                "logreg": LogisticRegression(C=10, max_iter=3000, solver="lbfgs",
+                "logreg": LogisticRegression(C=lr_cfg.get("C", 10),
+                                             max_iter=lr_cfg.get("max_iter", 3000),
+                                             solver=lr_cfg.get("solver", "lbfgs"),
                                              class_weight="balanced", random_state=42).fit(X_tr, y_tr),
                 "knn": KNeighborsClassifier(n_neighbors=min(self.knn_k, X_tr.shape[0]-1),
-                                            weights="distance", metric="cosine").fit(X_tr, y_tr),
-                "et": ExtraTreesClassifier(n_estimators=300, max_depth=30, min_samples_leaf=2,
+                                            weights=knn_cfg.get("weights", "distance"),
+                                            metric=knn_cfg.get("metric", "cosine")).fit(X_tr, y_tr),
+                "et": ExtraTreesClassifier(n_estimators=et_cfg.get("n_estimators", 300),
+                                           max_depth=et_cfg.get("max_depth", 30),
+                                           min_samples_leaf=et_cfg.get("min_samples_leaf", 2),
                                            class_weight="balanced", random_state=42,
                                            n_jobs=-1).fit(X_tr, y_tr),
             }
