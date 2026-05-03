@@ -194,13 +194,33 @@ def build_Xy(embeddings: Dict, filter_intents=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def search_pca(X, y, labels) -> int:
+    # Read search range from tuning_config.json
+    import json
+    cfg_path = os.path.join(BASE_DIR, "tuning_config.json")
+    pca_range = [50, 75, 100, 150, 200, 250, 300, 400, 500]
+    fixed_dims = None
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+            pipe_cfg = cfg.get("pipeline", {})
+            if not pipe_cfg.get("pca_search_enabled", True):
+                fixed_dims = pipe_cfg.get("pca_dims")
+            pca_range = pipe_cfg.get("pca_search_range", pca_range)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    if fixed_dims:
+        print(f"\n  PCA dims fixed at {fixed_dims} (pca_search_enabled=false)")
+        return fixed_dims
+
     print(f"\n{'=' * 60}")
     print(f"  PCA DIMENSION SEARCH (5-fold CV)")
     print(f"{'=' * 60}")
     print(f"  {'Dims':>8} {'CV Acc':>10} {'Std':>8}")
     print(f"  {'-' * 28}")
     best_d, best_a = 50, 0.0
-    for d in [20, 30, 40, 50, 75, 100, 150, 200, 250, 300]:
+    for d in pca_range:
         if d >= X.shape[0]:
             continue
         p = IntentPipeline(n_pca=d)

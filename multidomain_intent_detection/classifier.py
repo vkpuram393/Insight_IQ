@@ -31,6 +31,7 @@ Architecture:
 import os
 import sys
 import time
+import json
 import pickle
 import asyncio
 import logging
@@ -46,23 +47,26 @@ from multidomain_intent_detection.config import (
 from multidomain_intent_detection.normalizer import normalize_query, extract_entities
 from multidomain_intent_detection.embeddings import get_embedder
 from multidomain_intent_detection.llm_fallback import llm_classify
+# Import the canonical set from pipeline (auto-derived from CONFUSION_PAIRS)
+from multidomain_intent_detection.pipeline import CONFUSION_PRONE_INTENTS as _CONFUSION_PRONE_INTENTS
 
 logger = logging.getLogger(__name__)
 
-# ── Intents prone to high-confidence misclassification ───────────────────────
-# These intents have overlapping vocabulary with neighbors and benefit from
-# stricter confidence gating (higher threshold + force LLM on disagreement).
-_CONFUSION_PRONE_INTENTS = {
-    "approval_info",      # confused with prior_auth_info, claim_status
-    "prior_auth_info",    # confused with approval_info, pa_summary
-    "rejection_reasons",  # confused with help, claim_status
-    "pricing_info",       # confused with compound_info, medicare_part_d, cob_info
-    "claim_status",       # confused with approval_info, rejection_reasons
-    "help",               # confused with rejection_reasons
-    "compound_info",      # confused with pricing_info
-    "generic_availability", # confused with Generic, daw_info
-    "fill_date_info",     # confused with rx_details, audit_info
-}
+# ── Load tuning config for gating thresholds ─────────────────────────────────
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tuning_config.json")
+
+def _load_gate_config() -> Dict:
+    """Load gating thresholds from tuning_config.json."""
+    if os.path.exists(_CONFIG_PATH):
+        try:
+            with open(_CONFIG_PATH) as f:
+                cfg = json.load(f)
+            return cfg.get("gating", {})
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+_GATE_CFG = _load_gate_config()
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -114,12 +118,14 @@ class MultidomainIntentClassifier:
     def __init__(
         self,
         model_path: str = MODEL_PKL,
-        confidence_threshold: float = 0.30,
-        margin_threshold: float = 0.05,
+        confidence_threshold: float = None,
+        margin_threshold: float = None,
         use_llm_fallback: bool = True,
     ):
-        self.confidence_threshold = confidence_threshold
-        self.margin_threshold = margin_threshold
+        # Read defaults from config, allow overrides
+        gate_cfg = _GATE_CFG
+        self.confidence_threshold = confidence_threshold if confidence_threshold is not None else gate_cfg.get("confidence_threshold", 0.30)
+        self.margin_threshold = margin_threshold if margin_threshold is not None else gate_cfg.get("margin_threshold", 0.05)
         self.use_llm_fallback = use_llm_fallback
         self._pipeline = None
         self._model_path = model_path
@@ -239,12 +245,16 @@ class MultidomainIntentClassifier:
 
         # For known confusion-prone intents, apply stricter thresholds
         # even when the gate above passed (catches high-conf wrong answers)
+        cp_conf = _GATE_CFG.get("confusion_prone_confidence", 0.55)
+        cp_margin = _GATE_CFG.get("confusion_prone_margin", 0.20)
         if confident and pred["intent"] in _CONFUSION_PRONE_INTENTS:
-            confident = pred["confidence"] >= 0.55 and pred["margin"] >= 0.20
+            confident = pred["confidence"] >= cp_conf and pred["margin"] >= cp_margin
 
         # If pipeline flagged this as a confusion pair, require extra clearance
+        cpair_conf = _GATE_CFG.get("confusion_pair_confidence", 0.60)
+        cpair_margin = _GATE_CFG.get("confusion_pair_margin", 0.25)
         if confident and pred.get("is_confusion_pair", False):
-            confident = pred["confidence"] >= 0.60 and pred["margin"] >= 0.25
+            confident = pred["confidence"] >= cpair_conf and pred["margin"] >= cpair_margin
 
         if confident or not self.use_llm_fallback:
             final_intent = pred["intent"]
@@ -335,14 +345,16 @@ _classifier_lock = threading.Lock()
 
 
 def get_classifier(
-    confidence_threshold: float = 0.30,
-    margin_threshold: float = 0.05,
+    confidence_threshold: float = None,
+    margin_threshold: float = None,
     use_llm_fallback: bool = True,
 ) -> MultidomainIntentClassifier:
     """Get the singleton MultidomainIntentClassifier instance (thread-safe).
 
     First call creates the classifier (lazy—pipeline loaded on first classify()).
     Subsequent calls return the same instance.
+
+    Thresholds default to values from tuning_config.json if not specified.
     """
     global _classifier_instance
     if _classifier_instance is None:
