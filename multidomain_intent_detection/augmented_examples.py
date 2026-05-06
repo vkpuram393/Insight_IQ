@@ -127,6 +127,16 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "What is the member's benefit phase and accumulation for this claim?",
         "Show deductible and coverage gap progress for this claim's member.",
         "Accumulator totals for this beneficiary on this specific claim.",
+        # ── From failure analysis: coverage gap / YTD spend / catastrophic ─
+        "How close is this member to reaching the coverage gap?",
+        "Was the catastrophic coverage phase reached on this claim?",
+        "What is the total year-to-date spend for this member?",
+        "What are the year-to-date accumulations for this beneficiary?",
+        "Coverage tier and eligibility details for this beneficiary.",
+        "Has this member reached the coverage gap threshold?",
+        "Show the deductible and TrOOP accumulation progress for this member.",
+        "Current benefit phase based on this member's accumulations.",
+        "What Phase of the Part D benefit is this member currently in?",
     ],
 
     # ── greeting: confused with out_of_scope ───────────────────────────
@@ -300,6 +310,11 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is this a home delivery fill for this specific claim?",
         "Mail versus retail: how was this particular claim fulfilled?",
         "Was this specific fill delivered to the patient's home?",
+        # ── From failure: fulfillment channel / 90-day mail order ───────
+        "What is the fulfillment channel — retail or mail?",
+        "Is this a 90-day mail order fill?",
+        "Was this a 90-day mail order prescription?",
+        "Is this home delivery or a retail pickup for this specific claim?",
     ],
 
     # ── medicare_part_d (73%): needs more diverse phrasing ─────────────
@@ -319,6 +334,12 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Was catastrophic coverage reached on this fill?",
         "Show Medicare Part D cost sharing for this specific claim.",
         "PDE segment data and MEDD pricing for this fill.",
+        # ── From failure: catastrophic phase / LICS on claim pricing ────
+        "Was the catastrophic coverage phase reached on this claim?",
+        "Is there a low income subsidy applied to the pricing on this claim?",
+        "What LICS subsidy reduction was applied to the Part D cost on this claim?",
+        "Show the catastrophic phase cost-sharing breakdown for this claim.",
+        "What low income cost sharing was applied to this Part D claim?",
     ],
 
     # ── DrugLast (80%): needs "when was X LAST filled" phrasing ────────
@@ -373,6 +394,15 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Tips for successful claim processing.",
         "What should I do if I don't know how to file this claim?",
         "General guidance on claim filing procedures.",
+        # ── From failure analysis: guidance/how-to vs actual queries ───
+        "I need guidance on how to query member information.",
+        "How do I look up member eligibility information in this system?",
+        "Can you guide me on how to find plan details?",
+        "I need help understanding how to navigate this system.",
+        "How do I search for a specific claim?",
+        "I need some help with a claim.",
+        "Help me understand how to use this tool.",
+        "What can this system do for me?",
     ],
 
     # ══════════════════════════════════════════════════════════════════════
@@ -406,6 +436,12 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Ordering provider information for claim 230624075311000 sequence 002.",
         "Tell me the doctor's information for this specific prescription claim.",
         "Show prescriber details for this one claim.",
+        # ── From failure: "script" = prescription in PBM context ────────
+        "Who wrote this script?",
+        "Who wrote the script for this claim?",
+        "Which doctor wrote this script?",
+        "Who is the prescriber of this script?",
+        "Script writer information for this claim.",
     ],
     "audit_info": [
         "When was claim 132435151040074 sequence 001 first created?",
@@ -518,6 +554,11 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Other payer information on this fill.",
         "COB breakdown for this claim.",
         "Is this member dual-covered for this claim?",
+        # ── From failure: "other insurance payment" on THIS claim ───────
+        "What was the other insurance payment on this prescription?",
+        "How much did the other insurer pay on this specific claim?",
+        "Secondary payer payment amount on this claim.",
+        "What did the primary insurance pay before this plan on this fill?",
     ],
     "rx_details": [
         "What is the prescription number on this claim?",
@@ -528,6 +569,12 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Drug strength and dosage form on this claim.",
         "Quantity dispensed and days supply for this prescription.",
         "Tell me the prescription specifics — RX number and quantity.",
+        # ── From failure: fill number / original vs refill for ONE claim ─
+        "What fill number is this — is it original or a refill?",
+        "Is this a new fill or a continuation?",
+        "Is this an original fill or a subsequent refill on this claim?",
+        "What is the fill sequence number on this specific claim?",
+        "Is this the first dispense or a refill on this prescription?",
     ],
 
     # ══════════════════════════════════════════════════════════════════════
@@ -821,6 +868,12 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is this member currently in a transition period?",
         "Display the memberTransition status for this member.",
         "When did the transition period start for this member?",
+        # ── From failure: TF status on member eligibility (not claim TF) ─
+        "What is the TF status on this member's eligibility record?",
+        "Is the member flagged as a transition fill member on their eligibility?",
+        "Show the TF status and start date from the member eligibility.",
+        "What is the member's transition fill eligibility status?",
+        "Is this member currently in a transition fill eligibility window?",
     ],
     "member_dur_config": [
         "What is the DUR configuration key for this member?",
@@ -891,6 +944,12 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Show the most important fields on this PA.",
         "Display a high-level overview of this prior authorization.",
         "Provide the PA summary including effective dates and drug coverage.",
+        # ── From failure: PA overview with PA number → pa_summary ───────
+        "PA overview for this prior authorization.",
+        "Give me an overview of PA JW012726LC.",
+        "PA overview for PA JW012726LC.",
+        "High-level PA overview for this PA record.",
+        "Overview of this prior authorization record.",
     ],
     "pa_override_reject": [
         "Will this PA override a reject 75 PA required?",
@@ -982,6 +1041,11 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Does this PA use follow me logic?",
         "Which PAs have the follow me indicator set to true?",
         "Display the followMeLogicIndicator for this PA.",
+        # ── From failure: short "PA follow me?" query ────────────────────
+        "PA follow me?",
+        "Follow me logic?",
+        "PA follow me logic?",
+        "Does this PA follow me?",
     ],
     "pa_drug_type_indicator": [
         "What is the authorized drug type on this PA?",
@@ -1008,6 +1072,15 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "What does this member's benefit plan cover?",
         "Display the current plan summary.",
         "Summarize the active benefit plan for this member.",
+        # ── From failure: plan name/effective date and formulary queries ──
+        "What is the plan name and effective date for this member?",
+        "What formulary is associated with this member's current plan?",
+        "Give me the benefit plan name for this member.",
+        "What plan is this member currently enrolled in?",
+        "Show the formulary tier structure for this member's plan.",
+        "What is the member's active benefit plan name?",
+        "Which plans offer mail-order benefits in this group?",
+        "Find plans with mail-order benefits for this member's group.",
     ],
     "plan_history": [
         "Show the change log of this member's benefit plan.",

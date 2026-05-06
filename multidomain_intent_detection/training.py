@@ -260,7 +260,7 @@ def evaluate(test_data, pipeline, embedder, *, use_llm=True, conf_t=None, margin
 
     # Use config defaults for base thresholds if not explicitly passed
     if conf_t is None:
-        conf_t = _gate_cfg.get("confidence_threshold", 0.30)
+        conf_t = _gate_cfg.get("confidence_threshold", 0.70)
     if margin_t is None:
         margin_t = _gate_cfg.get("margin_threshold", 0.05)
 

@@ -46,7 +46,7 @@
   },
 
   "gating": {
-    "confidence_threshold": 0.30,
+    "confidence_threshold": 0.70,
     "margin_threshold": 0.05,
     "confusion_prone_confidence": 0.55,
     "confusion_prone_margin": 0.20,

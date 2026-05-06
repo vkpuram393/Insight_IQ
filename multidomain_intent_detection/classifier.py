@@ -136,7 +136,7 @@ class MultidomainIntentClassifier:
     ):
         # Read defaults from config, allow overrides
         gate_cfg = _GATE_CFG
-        self.confidence_threshold = confidence_threshold if confidence_threshold is not None else gate_cfg.get("confidence_threshold", 0.30)
+        self.confidence_threshold = confidence_threshold if confidence_threshold is not None else gate_cfg.get("confidence_threshold", 0.70)
         self.margin_threshold = margin_threshold if margin_threshold is not None else gate_cfg.get("margin_threshold", 0.05)
         self.use_llm_fallback = use_llm_fallback
         self._pipeline = None

@@ -51,6 +51,13 @@ audit/change history, and member benefit phases. These intents often overlap wit
   - "Was claim approved or denied?" with focus on APPROVAL → approval_info
   - "Why was claim denied?" → rejection_reasons
   - KEY: Focus on APPROVAL side → approval_info. Focus on REJECTION side → rejection_reasons.
+**DISAMBIGUATION from member_transition_status (member_domain):**
+  - approval_info TF = was a transition fill used to ADJUDICATE THIS SPECIFIC CLAIM (claim-level)
+  - member_transition_status = the MEMBER's own TF eligibility status on their eligibility record
+  - "TF status on this member's eligibility record" → member_transition_status (NOT approval_info)
+  - "Was a transition fill applied to adjudicate claim X?" → approval_info
+  - "Is this member currently in transition fill status?" → member_transition_status
+  - KEY: "member's eligibility record" or "member's TF status" → member_transition_status
 
 ### audit_info
 **What it is:** Audit TRAIL, change HISTORY, modification records, timestamps.
@@ -85,11 +92,12 @@ audit/change history, and member benefit phases. These intents often overlap wit
   - Audit = about HISTORY/TIMESTAMPS. Status = about CURRENT STATE.
 
 ### beneficiary_info
-**What it is:** Member's benefit PHASE, coverage TIER, eligibility status, accumulations.
-  What benefit phase the member is in, accumulator status, LOE linkage.
+**What it is:** Member's benefit PHASE, coverage TIER, accumulations, YTD spend, deductible progress.
+  What benefit phase the member is in, accumulator status, LOE linkage, coverage gap progress.
 **Trigger phrases:** "benefit phase", "coverage tier", "accumulation status", "benefit type",
-  "eligibility", "LOE", "accumulations", "member benefit", "coverage details",
-  "accumulation overrides"
+  "LOE", "accumulations", "member benefit", "coverage details", "accumulation overrides",
+  "coverage gap", "year-to-date spend", "YTD spend", "catastrophic threshold", "deductible progress",
+  "TrOOP", "eligibility details for this beneficiary"
 **Examples:**
   - "Generate the current benefit phase for this claim."
   - "What are the accumulation overrides on approved claim 240063508485000?"
@@ -97,25 +105,56 @@ audit/change history, and member benefit phases. These intents often overlap wit
   - "Display the accumulation status for the member on this claim."
   - "What benefit phase is the member in for this claim?"
   - "Show the member's plan details for this claim."
+  - "How close is this member to reaching the coverage gap?"
+  - "What is the total year-to-date spend for this member?"
+  - "Coverage tier and eligibility details for this beneficiary."
 **DISAMBIGUATION from member_coverage (member_domain):**
-  - beneficiary_info = benefit PHASE and ACCUMULATIONS tied to a CLAIM (benefits_api)
+  - beneficiary_info = benefit PHASE, ACCUMULATIONS, YTD spend tied to a CLAIM (benefits_api)
   - member_coverage = coverage ELIGIBILITY WINDOWS, enrollment dates for a MEMBER (member_domain)
   - "Benefit phase for this claim" → beneficiary_info
   - "When is the member eligible for coverage?" → member_coverage
   - "Accumulation overrides" → beneficiary_info
   - "Coverage eligibility dates" → member_coverage
+  - "How close to coverage gap?" → beneficiary_info (accumulation tracking)
+  - "Year-to-date spend" → beneficiary_info (accumulation total)
+**DISAMBIGUATION from medicare_part_d (cap_api):**
+  - beneficiary_info = accumulations, coverage gap progress, YTD spend totals (benefits_api)
+  - medicare_part_d = Part D PRICING fields on ONE SPECIFIC CLAIM (MEDD, PDE, LIS amounts) (cap_api)
+  - "Coverage gap progress" or "YTD accumulations" → beneficiary_info
+  - "Part D pricing on this claim" or "MEDD breakdown" → medicare_part_d
+  - "Was catastrophic coverage phase reached?" → medicare_part_d (Part D phase on claim pricing)
 **DISAMBIGUATION from approval_info (benefits_api):**
   - "Accumulation overrides on approved claim" → beneficiary_info (focus is on accumulators)
   - "Plan overrides that led to approval" → approval_info (focus is on approval logic)
 
 ### plan_summary
-**What it is:** Benefit plan OVERVIEW, current coverage snapshot, what the plan covers.
+**What it is:** Benefit plan OVERVIEW, current coverage snapshot, plan name, formulary, what the plan covers.
 **Trigger phrases:** "plan overview", "benefit plan summary", "current plan", "coverage summary",
-  "what does the plan cover", "active plan snapshot"
+  "what does the plan cover", "active plan snapshot", "plan name", "formulary", "what formulary",
+  "plan effective date", "which plans offer", "plans with mail-order"
 **Examples:**
   - "Show the current benefit plan overview for this member."
   - "What does this member's benefit plan cover?"
   - "Display the current plan summary."
+  - "What is the plan name and effective date for this member?"
+  - "What formulary is associated with this member's current plan?"
+  - "Which plans offer mail-order benefits in this group?"
+**DISAMBIGUATION from member_coverage (member_domain):**
+  - plan_summary = what the PLAN COVERS, plan name, formulary, plan configuration (benefits_api)
+  - member_coverage = when is the MEMBER ELIGIBLE, enrollment dates (member_domain)
+  - "What does the plan cover?" → plan_summary
+  - "When is the member covered?" → member_coverage
+  - "What formulary is on this plan?" → plan_summary
+  - "Coverage eligibility dates" → member_coverage
+**DISAMBIGUATION from drug_info (claim_history_search):**
+  - plan_summary = the PLAN's formulary list (what drugs are covered under the plan) (benefits_api)
+  - drug_info = a specific DRUG's formulary status or tier (claim_history_search)
+  - "What formulary is associated with this member's plan?" → plan_summary
+  - "What formulary tier is this drug on?" → drug_info
+**DISAMBIGUATION from plan_finder (benefits_api):**
+  - plan_summary = DETAILS of the member's CURRENT/SPECIFIC plan (benefits_api)
+  - plan_finder = SEARCH for available plans in a group/catalog (benefits_api)
+  - "Which plans offer mail-order benefits in this group?" → plan_summary (describing plan features)
 
 ### plan_history
 **What it is:** Plan CHANGE LOG, revision history, amendment timeline, past plan updates.
@@ -141,12 +180,14 @@ audit/change history, and member benefit phases. These intents often overlap wit
   - "Find a matching benefits plan."
 
 ## DECISION TREE
-1. Query mentions OVERRIDES / TF / TRANSITION FILL / BPG / APPROVAL LOGIC → approval_info
+1. Query mentions OVERRIDES / TF on a CLAIM / BPG / APPROVAL LOGIC → approval_info
+   EXCEPTION: "TF status on member's eligibility record" → member_transition_status (member_domain)
 2. Query mentions AUDIT / CHANGE LOG / WHEN CREATED / ADD DATE / WHO MODIFIED → audit_info
-3. Query mentions BENEFIT PHASE / ACCUMULATIONS / COVERAGE TIER / LOE → beneficiary_info
-4. Query asks for PLAN OVERVIEW / PLAN SUMMARY / WHAT PLAN COVERS → plan_summary
+3. Query mentions BENEFIT PHASE / ACCUMULATIONS / COVERAGE TIER / LOE / COVERAGE GAP / YTD SPEND → beneficiary_info
+   EXCEPTION: "catastrophic coverage phase reached" or Part D pricing → medicare_part_d (cap_api)
+4. Query asks for PLAN NAME / PLAN OVERVIEW / PLAN SUMMARY / FORMULARY / WHAT PLAN COVERS → plan_summary
 5. Query asks for PLAN CHANGES / PLAN REVISIONS / PLAN HISTORY → plan_history
-6. Query asks to FIND / SEARCH / MATCH plans → plan_finder
+6. Query asks to FIND / SEARCH / MATCH available plans in a catalog → plan_finder
 
 ## COMMON CONFUSION PAIRS
 
