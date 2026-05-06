@@ -16,10 +16,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-<<<<<<< HEAD
-=======
       actions: read
->>>>>>> origin/MVP-2-April23-release
     with:
       PYTHON_VERSION: "3.12"
       PYTHON_TEST_COMMAND: "python -c 'import sys; import main; from fastapi.testclient import TestClient; client = TestClient(main.app, raise_server_exceptions=False); health = client.get(\"/health\"); root = client.get(\"/\"); assert health.status_code == 200, f\"Health endpoint failed: {health.status_code}\"; assert root.status_code == 200, f\"Root endpoint failed: {root.status_code}\"; print(\"✅ main.py verified - Health and root endpoints working\")' && pytest tests/ -v --tb=short || echo '⚠️ Tests failed but main.py imports work'"
