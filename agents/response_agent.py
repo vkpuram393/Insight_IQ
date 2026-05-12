@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 # BLOCKED RECOMMENDATION ACTIONS
 # ============================================================================
 # Actions that must NEVER appear in recommendation chips.
-# claim_list is blocked because:
+# claim_list is blocked because::
 # 1. The chatbot reuses older entities from history instead of asking for new ones
 # 2. There is no member-level API to search for other claims for a member
 # 3. Leads to confusing UX when entities from previous claims are reused
