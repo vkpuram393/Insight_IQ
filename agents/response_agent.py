@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 # BLOCKED RECOMMENDATION ACTIONS
 # ============================================================================
 # Actions that must NEVER appear in recommendation chips.
-# claim_list is blocked because:
+# claim_list is blocked because::
 # 1. The chatbot reuses older entities from history instead of asking for new ones
 # 2. There is no member-level API to search for other claims for a member
 # 3. Leads to confusing UX when entities from previous claims are reused
@@ -1460,11 +1460,12 @@ MASTER ACRONYM LIST (always match case-insensitively):
 - EDW = Enterprise Data Warehouse
 - EGWP = Employer Group Waiver Plan
 - ELIG = Eligibility
-- EOB = Explanation Of Benefits
+- EOB = Explanation Of Benefits / End Of Business
 - EPH = Enterprise Person Hub
 - FAB = Formulary and Benefit
 - FCI = Flexible Copay Incentive
 - FDA = Food and Drug Administration
+- FEP = Federal Employee Program
 - FI = Fully Insured
 - FML = Follow Me Logic
 - FRM = Formulary
@@ -1600,7 +1601,7 @@ If the acronym does NOT match any entry in the MASTER ACRONYM LIST, respond ONLY
 Do NOT add any other claim information (no summary, no rejection details, no financial data) alongside this question. ONLY the clarification question. Once the user clarifies, THEN answer using claim data.
 
 HANDLING MULTIPLE MEANINGS:
-If an acronym has multiple meanings listed (e.g., GF = Grandfather / Guaranteed Fee; NPP = Network Pricing Profile / Non-Covered Plan Paid), ask the user which meaning they intend:
+If an acronym has multiple meanings listed (e.g., GF = Grandfather / Guaranteed Fee; NPP = Network Pricing Profile / Non-Covered Plan Paid; EOB = Explanation Of Benefits / End Of Business), ask the user which meaning they intend:
 "The acronym '[X]' can refer to [meaning 1] or [meaning 2] in pharmacy claims. Which one are you asking about?"
 
 CRITICAL PROHIBITIONS (VIOLATION IS A CRITICAL FAILURE):
@@ -2277,6 +2278,19 @@ CRITICAL DISTINCTION: These source-level X-masked patterns are fundamentally DIF
   - "Submitted amounts" ≠ "approved amounts" (pharmacy billed vs. adjudicated)
   - "Primary patient pay" (linkedClaim.stcob.clientPatientPayAmount) ≠ "final patient pay after COB/STCOB" (linkedClaim.stcob.responsePatientPayAmount3)
   - "Amount reported to OOP tracker" ≠ "amount applied to OOP accumulator"
+
+**Rule 4 — NO Tables (STRICT):**
+Never use markdown table syntax (pipes `|`, dashes `---`, or any tabular grid format) in responses. Tables render poorly in the chat interface and create a bad user experience. Instead, always present data using bullet points (•) with labeled values.
+
+For multi-column comparisons, list each field as a single bullet with inline labels separated by commas:
+• [Field Name]: [Category1] [value], [Category2] [value], [Category3] [value]
+
+For before/after or category-based data, use nested bullets:
+• [Category]:
+  - [Sub-label 1]: [value]
+  - [Sub-label 2]: [value]
+
+This rule applies to ALL response types including pricing breakdowns, accumulations, coordination of benefits, and any other structured data. No exceptions.
 
 **SAFEGUARD REMINDER:** The system's internal privacy tokens — values in square brackets following the format [ENTITY_TYPE_HEXHASH] — are REAL patient data that has been temporarily masked for processing. They are automatically restored with actual values after your response. NEVER treat these tokens as "data not available" or "missing." They represent present, valid information. Include them exactly as they appear and they will be unmasked automatically. Always source these tokens exclusively from the current CLAIM DATA section, never from CONVERSATION HISTORY, as history tokens belong to prior claims and will resolve to incorrect values.
 
