@@ -1,7 +1,9 @@
 FROM langchain/langgraph-api:3.11
 
 # # Ensure CA certificates available (Debian-based assumption; remove if already present)
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 # # CVS Health Root CA certificate for Zscaler proxy
