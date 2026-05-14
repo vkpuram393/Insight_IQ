@@ -15,7 +15,7 @@ jobs:
     uses: cvs-health-source-code/gha_workflow_actions/.github/workflows/python_docker.yaml@latest
     permissions:
       id-token: write
-      contents: read
+      contents: write
       actions: read
     with:
       PYTHON_VERSION: "3.12"
