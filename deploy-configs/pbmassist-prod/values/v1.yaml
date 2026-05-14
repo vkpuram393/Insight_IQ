@@ -25,17 +25,17 @@ appData:
 hpaSettings: 
   minAvailable: 3
   minReplicas: 3
-  maxReplicas: 3
+  maxReplicas: 4
   averageUtilization: 80
 
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
   limits:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
 
 # environment variables for app - secret values come from vault
 envVars: |
