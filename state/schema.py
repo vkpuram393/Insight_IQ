@@ -61,7 +61,8 @@ class AgentState(TypedDict):
 
     # === INPUT (from user) ===
     text: str                                    # User's message
-    session_id: str                              # Conversation ID
+    session_id: str                              # Conversation ID (per chatbot open — ephemeral)
+    user_session: Optional[str]                  # UI-provided stable session ID for persistent history (per MyClaims login)
     user_info: Dict[str, Any]                    # User metadata
     uuid: Optional[str]                          # Request UUID from orchestrator
     domain: Optional[str]                        # Domain (e.g., "claims", "prescriptions")
@@ -147,7 +148,8 @@ class AgentState(TypedDict):
 def create_initial_state(
     text: str,
     session_id: str,
-    user_info: Dict[str, Any] = None
+    user_info: Dict[str, Any] = None,
+    user_session: Optional[str] = None        # UI-provided stable session ID; None until UI provides it
 ) -> AgentState:
     """
     Create starting state for new request
@@ -158,6 +160,7 @@ def create_initial_state(
     return AgentState(
         text=text,
         session_id=session_id,
+        user_session=user_session,            # Flows through graph untouched; used only by update_memory_node for MongoDB
         user_info=user_info or {},
         uuid=None,
         domain=None,

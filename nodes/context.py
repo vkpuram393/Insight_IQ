@@ -228,6 +228,8 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         logger.info(f"💾 Node: Update Memory ({memory_store_type}/{memory_store_name} + persistent)")
 
         session_id = state["session_id"]
+        user_session = state.get("user_session")        # Stable per-login session ID for MongoDB _id key
+        response_id = state.get("response_id")          # UUID linking assistant message to Response_Feedback
         user_id = log_ctx.get("user_id") or (state.get("user_info", {}) or {}).get("user_id")
         
         # Fix: Provide default user_id if none provided (database requires NOT NULL)
@@ -295,9 +297,11 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
         
         logger.info(f"   💾 Saving to conversation_history table:")
         logger.info(f"      Session: {session_id}")
+        logger.info(f"      User session: {user_session}")
         logger.info(f"      User: {user_id}")
         logger.info(f"      Intent: {intent}")
         logger.info(f"      Tools: {tools_used}")
+        logger.info(f"      Response ID: {response_id}")
         logger.info(f"      Duration: {duration_ms}ms" if duration_ms else "      Duration: N/A")
         
         conversation_saved = False
@@ -310,7 +314,9 @@ async def update_memory_node(state: AgentState) -> Dict[str, Any]:
                 intent=intent,
                 tools_used=tools_used,
                 metadata=metadata,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                user_session=user_session,      # Stable per-login session ID (MongoDB document _id)
+                response_id=response_id         # Links assistant message to Response_Feedback
             )
             logger.info("   ✅ Saved to conversation_history table")
             print("   ✅ SAVE SUCCESSFUL!")

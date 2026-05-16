@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 class ChatRequest(BaseModel):
     text: str
     session_id: Optional[str] = None
+    session_uuid: Optional[str] = None      # UI-provided stable session ID for persistent history (per MyClaims login)
     user_info: Optional[Dict[str, Any]] = None
     claim_id: Optional[str] = None          # UI claim context (first query of session only)
     claim_sequence: Optional[str] = None    # UI sequence context (first query of session only)
@@ -45,6 +46,7 @@ class RecommendationChip(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    session_uuid: Optional[str] = None      # Echoed back: UI-provided stable session ID (user_session)
     response_id: Optional[str] = None  # ✅ UUID for feedback tracking
     intent: Optional[str] = None
     confidence: Optional[float] = None
@@ -63,12 +65,13 @@ async def chat(request: ChatRequest, http_request: Request):
     📍 BREAKPOINT: Set here (line 33) to debug incoming requests
     """
     session_id = request.session_id or str(uuid.uuid4())
+    user_session = request.session_uuid          # UI stable session ID for persistent history; None if not provided
     user_id = request.user_info.get("user_id") if request.user_info else None
-    
+
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
-    
+
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
@@ -94,7 +97,8 @@ async def chat(request: ChatRequest, http_request: Request):
             final_state = await run_graph(
                 text=request.text,
                 session_id=session_id,
-                user_info=user_info
+                user_info=user_info,
+                user_session=user_session
             )
 
         if not isinstance(final_state, dict):
@@ -135,6 +139,7 @@ async def chat(request: ChatRequest, http_request: Request):
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
+            session_uuid=final_state.get("user_session"),  # Echo back stable session ID
             response_id=final_state.get("response_id"),  # ✅ Include response_id for feedback
             intent=intent,
             confidence=confidence,
@@ -209,12 +214,13 @@ async def chat_stream(request: ChatRequest, http_request: Request):
         StreamingResponse with text/event-stream content type
     """
     session_id = request.session_id or str(uuid.uuid4())
+    user_session = request.session_uuid          # UI stable session ID for persistent history; None if not provided
     user_id = request.user_info.get("user_id") if request.user_info else None
-    
+
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
-    
+
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
@@ -237,19 +243,20 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     async def event_generator() -> AsyncIterator[str]:
         """
         Generate SSE events from graph execution
-        
+
         SSE Format:
             event: <event_type>\n
             data: <json_data>\n\n
         """
         try:
             start_time = datetime.now(timezone.utc)
-            
+
             # Stream events from graph execution
             async for event in run_graph_stream(
                 text=request.text,
                 session_id=session_id,
-                user_info=user_info
+                user_info=user_info,
+                user_session=user_session
             ):
                 event_type = event.get("type")
                 event_data = event.get("data")

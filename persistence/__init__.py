@@ -151,18 +151,47 @@ class PersistenceStore(ABC):
         intent: Optional[str] = None,
         tools_used: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        duration_ms: Optional[float] = None
+        duration_ms: Optional[float] = None,
+        user_session: Optional[str] = None,       # UI-provided stable session identifier (MyClaims login session)
+        response_id: Optional[str] = None         # Links assistant message to Response_Feedback for feedback retention
     ) -> str:
-        """Save a conversation turn (unmasked data)"""
+        """Save a conversation turn (unmasked data).
+
+        When user_session is provided, used as document _id (cross-session history retention).
+        When None, falls back to session_id as document _id (1 doc per chatbot open).
+        response_id links the assistant's message to the Response_Feedback collection.
+        """
         pass
 
     @abstractmethod
     async def get_conversation_history(
         self,
         session_id: str,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """Get conversation history for a session (default: 100 messages = 50 turns)"""
+        limit: int = 100,
+        user_session: Optional[str] = None        # Primary lookup key when provided (_id = user_session)
+    ) -> Optional[Dict[str, Any]]:               # Changed from List[Dict] — now returns single document or None
+        """Get conversation history document.
+
+        When user_session is provided, queries by _id = user_session (O(1) primary index).
+        When None, queries by session_id field (secondary index).
+        Returns a single document dict or None if not found.
+
+        Note: `limit` parameter kept for interface compatibility; array slicing is handled
+        by the caller (e.g., History API endpoint) using limit/offset query params.
+        """
+        pass
+
+    @abstractmethod
+    async def get_feedback_for_responses(
+        self,
+        response_ids: List[str]
+    ) -> Dict[str, str]:
+        """Batch fetch feedback for a list of assistant response_ids.
+
+        Returns a dict mapping response_id -> feedback_type ('THUMBSUP' or 'THUMBSDOWN').
+        Only includes response_ids that have feedback — missing keys mean no feedback submitted.
+        SQLite implementations return {} (no Response_Feedback table in dev mode).
+        """
         pass
 
     @abstractmethod
@@ -185,9 +214,13 @@ class PersistenceStore(ABC):
     @abstractmethod
     async def delete_session_conversations(
         self,
-        session_id: str
+        user_session: str          # Renamed: was session_id — new schema keys documents by user_session (_id)
     ) -> bool:
-        """Delete all conversations for a session"""
+        """Delete the conversation history document for a user session.
+
+        Deletes by _id = user_session (O(1) primary index lookup).
+        Returns True if a document was deleted, False if none found.
+        """
         pass
 
     @abstractmethod
