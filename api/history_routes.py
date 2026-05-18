@@ -2,7 +2,7 @@
 History API Routes - Conversation history endpoints
 
 Endpoints:
-  GET /{session_uuid} - Full history with pagination, feedback enrichment, and existence check
+  GET /session/{session_uuid} - Full history with pagination, feedback enrichment, and existence check
                         Always returns HTTP 200. Use the 'found' field to determine if
                         history exists (found: false = no history for this user_session).
 """
@@ -92,7 +92,7 @@ def _validate_session_uuid(session_uuid: str) -> Optional[JSONResponse]:
 # ---------------------------------------------------------------------------
 
 @router.get(
-    "/{session_uuid}",
+    "/session/{session_uuid}",
     response_model=ConversationHistoryResponse,
     summary="Get conversation history for a user session",
     description=(
