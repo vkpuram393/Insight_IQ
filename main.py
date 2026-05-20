@@ -255,7 +255,7 @@ app.include_router(api_router, prefix="/pss/pbmassist/v1")
 # History API router (conversation history endpoints)
 try:
     from api.history_routes import router as history_router
-    app.include_router(history_router, prefix="/pss/pbmassist/conversation/history/v1")
+    app.include_router(history_router, prefix="/pss/pbmassist/v1/conversation/history")
     print("[BOOT] History API routes loaded")
 except Exception as e:
     print(f"[BOOT] Could not load history routes (non-fatal): {e}")
