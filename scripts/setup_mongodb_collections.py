@@ -118,8 +118,14 @@ async def setup_collections():
             },
             {
                 "name": "conversation_history",
-                "description": "Conversation history",
-                "indexes": ["session_id", "user_id", "timestamp"]
+                "description": "Conversation history (nested per user_session)",
+                "indexes": ["session_id", "user_id", "updated_at"]
+                # user_session sparse index created separately below
+            },
+            {
+                "name": "Response_Feedback",
+                "description": "User feedback on assistant responses",
+                "indexes": ["response_id", "user_id", "created_at"]
             }
         ]
         
@@ -151,6 +157,18 @@ async def setup_collections():
                         print(f"      ⚠️  Could not create index '{index_field}': {e}")
             print()
         
+        # Sparse index for conversation_history.user_session (must be sparse — field absent when user_session=None)
+        print("   Creating sparse index on conversation_history.user_session...")
+        try:
+            await db.conversation_history.create_index("user_session", sparse=True)
+            print("      ✅ Sparse index created: user_session")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print("      ⚠️  Sparse index 'user_session' already exists")
+            else:
+                print(f"      ⚠️  Could not create sparse index 'user_session': {e}")
+        print()
+
         # Step 3: Insert test documents
         print("4. Inserting test documents...")
         print()
@@ -232,23 +250,45 @@ async def setup_collections():
         print("      ✅ Test document inserted in 'requests'")
         print()
         
-        # Test document for conversation_history
+        # Test document for conversation_history — new nested schema keyed by user_session
         print("   📝 Inserting test document in 'conversation_history'...")
         conversation_doc = {
-            "_id": str(uuid.uuid4()),
-            "session_id": test_session_id,
-            "user_id": test_user_id,
-            "user_message": "Test user message",
-            "agent_response": "Test agent response",
-            "intent": "test_intent",
-            "tools_used": ["test_tool"],
-            "metadata": {"test": True},
-            "duration_ms": 150.5,
-            "timestamp": now,
-            "created_at": now
+            "_id": "test-user-session-001",
+            "user_session": "test-user-session-001",
+            "session_id": "session-test-setup-check",
+            "user_id": "setup_test_user",
+            "created_at": now,
+            "updated_at": now,
+            "conversation_history": [
+                {
+                    "role": "user",
+                    "content": "Test message from setup script",
+                    "timestamp": now.isoformat()
+                },
+                {
+                    "role": "assistant",
+                    "content": "Test response from setup script",
+                    "timestamp": now.isoformat(),
+                    "response_id": None
+                }
+            ]
         }
         await db.conversation_history.insert_one(conversation_doc)
         print("      ✅ Test document inserted in 'conversation_history'")
+        print()
+
+        # Test document for Response_Feedback
+        print("   📝 Inserting test document in 'Response_Feedback'...")
+        response_feedback_doc = {
+            "_id": str(uuid.uuid4()),
+            "response_id": str(uuid.uuid4()),
+            "user_id": test_user_id,
+            "session_id": test_session_id,
+            "feedback_type": "THUMBSUP",
+            "created_at": now
+        }
+        await db.Response_Feedback.insert_one(response_feedback_doc)
+        print("      ✅ Test document inserted in 'Response_Feedback'")
         print()
         
         # Step 4: Verify all collections have data
@@ -281,6 +321,7 @@ async def setup_collections():
         print()
         print("Note: Test documents were inserted with session_id:")
         print(f"   {test_session_id}")
+        print("   conversation_history keyed by _id='test-user-session-001' (new nested schema)")
         print("   You can query/delete these test documents if needed.")
         print()
         

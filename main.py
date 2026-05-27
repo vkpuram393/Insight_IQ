@@ -252,6 +252,14 @@ async def shutdown_event():
 # Routes --------------------------------------------------------------------
 app.include_router(api_router, prefix="/pss/pbmassist/v1")
 
+# History API router (conversation history endpoints)
+try:
+    from api.history_routes import router as history_router
+    app.include_router(history_router, prefix="/pss/pbmassist/v1/conversation/history")
+    print("[BOOT] History API routes loaded")
+except Exception as e:
+    print(f"[BOOT] Could not load history routes (non-fatal): {e}")
+
 # Test/Utils endpoints for individual component testing
 try:
     from utils.test_endpoints import router as utils_router

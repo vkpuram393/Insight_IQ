@@ -243,10 +243,11 @@ class MongoDBPersistenceStore(PersistenceStore):
             await db.exceptions.create_index("node_name")
             await db.exceptions.create_index("timestamp")
 
-            # Conversation history indexes
-            await db.conversation_history.create_index("session_id")
-            await db.conversation_history.create_index("user_id")
-            await db.conversation_history.create_index("timestamp")
+            # Conversation history indexes (new schema: 1 doc per user_session)
+            await db.conversation_history.create_index("user_session", sparse=True)  # Primary lookup; sparse skips None values
+            await db.conversation_history.create_index("session_id")                  # Fallback lookup + analytics
+            await db.conversation_history.create_index("user_id")                     # User-based queries
+            await db.conversation_history.create_index("updated_at")                  # Chronological sorting
 
             logger.info("✅ MongoDB indexes created")
         except Exception as e:
@@ -619,62 +620,102 @@ class MongoDBPersistenceStore(PersistenceStore):
         intent: Optional[str] = None,
         tools_used: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        duration_ms: Optional[float] = None
+        duration_ms: Optional[float] = None,
+        user_session: Optional[str] = None,       # UI-provided stable session identifier
+        response_id: Optional[str] = None         # Links assistant message to Response_Feedback
     ) -> str:
-        """Save a conversation turn"""
-        db = await self._get_connection()
+        """Save a conversation turn using MongoDB upsert pattern.
 
-        conversation_id = str(uuid.uuid4())
+        Design: 1 document per user_session (or session_id fallback), growing conversation_history array.
+        Uses $setOnInsert for creation-only fields and $push/$each for atomic array append.
+        """
+        db = await self._get_connection()
         now = datetime.utcnow()
 
-        document = {
-            "_id": conversation_id,
-            "session_id": session_id,
-            "user_id": user_id,
-            "timestamp": now,
-            "user_message": user_message,
-            "agent_response": agent_response,
-            "intent": intent,
-            "tools_used": tools_used or [],
-            "metadata_json": json.dumps(metadata) if metadata else None,
-            "metadata": metadata,  # Also store as dict for easier querying
-            "duration_ms": duration_ms,
-            "created_at": now
+        # Document key: user_session takes priority (cross-session history retention).
+        # Fallback to session_id gives 1-doc-per-chatbot-open (better than 1-per-turn).
+        doc_key = user_session if user_session else session_id
+
+        # Only role, content, timestamp, response_id stored — no intent/tools/metadata/duration
+        # (those are analytics fields stored in the `logs` collection, not conversation display)
+        user_entry = {
+            "role": "user",
+            "content": user_message,
+            "timestamp": now.isoformat()
+        }
+        assistant_entry = {
+            "role": "assistant",
+            "content": agent_response,
+            "timestamp": now.isoformat(),
+            "response_id": response_id     # None until response_id is provided; links to Response_Feedback
         }
 
-        await db.conversation_history.insert_one(document)
-        logger.debug(f"💾 Conversation saved (unmasked): session={session_id}, id={conversation_id}")
-        return conversation_id
+        # Atomic upsert:
+        #   $setOnInsert — runs ONLY on first create (captures _id, user_session, user_id, created_at)
+        #   $push/$each  — atomically appends both user + assistant messages together
+        #   $set         — runs on EVERY upsert: updates session_id (latest) and updated_at
+        await db.conversation_history.update_one(
+            filter={"_id": doc_key},
+            update={
+                "$setOnInsert": {
+                    "_id": doc_key,
+                    "user_session": user_session,   # None in backward compat mode
+                    "user_id": user_id,
+                    "created_at": now,
+                },
+                "$push": {
+                    "conversation_history": {
+                        "$each": [user_entry, assistant_entry]
+                    }
+                },
+                "$set": {
+                    "session_id": session_id,       # Always update to latest chatbot session_id
+                    "updated_at": now,
+                }
+            },
+            upsert=True
+        )
+
+        logger.debug(
+            f"💾 Conversation upserted: user_session={user_session}, "
+            f"session={session_id}, doc_key={doc_key}"
+        )
+        return doc_key
 
     async def get_conversation_history(
         self,
         session_id: str,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """Get conversation history for a session (default: 100 messages = 50 turns)"""
+        limit: int = 100,
+        user_session: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Get conversation history document.
+
+        Queries by user_session (primary, O(1) _id lookup) or session_id (fallback).
+        Returns the full document dict or None if not found.
+
+        Note: `limit` parameter kept for interface compatibility.
+        Array slicing (pagination) is handled by the caller using limit/offset.
+        """
         db = await self._get_connection()
 
-        cursor = db.conversation_history.find(
-            {"session_id": session_id}
-        ).sort("timestamp", 1).limit(limit)  # Sort ascending for chronological order
+        # user_session -> primary index (_id) — O(1); session_id -> secondary index
+        query_filter = {"_id": user_session} if user_session else {"session_id": session_id}
+        doc = await db.conversation_history.find_one(query_filter)
 
-        conversations = []
-        async for doc in cursor:
-            conv = {
-                "id": str(doc["_id"]),
-                "session_id": doc["session_id"],
-                "user_id": doc["user_id"],
-                "timestamp": doc["timestamp"].isoformat() if isinstance(doc["timestamp"], datetime) else doc["timestamp"],
-                "user_message": doc["user_message"],
-                "agent_response": doc["agent_response"],
-                "intent": doc.get("intent"),
-                "tools_used": doc.get("tools_used", []),
-                "metadata": doc.get("metadata", {}),
-                "duration_ms": doc.get("duration_ms")
-            }
-            conversations.append(conv)
+        if not doc:
+            return None
 
-        return conversations
+        def _to_iso(val):
+            return val.isoformat() if isinstance(val, datetime) else val
+
+        return {
+            "user_session": doc.get("user_session"),
+            "session_id": doc.get("session_id"),
+            "user_id": doc.get("user_id"),
+            "created_at": _to_iso(doc.get("created_at")),
+            "updated_at": _to_iso(doc.get("updated_at")),
+            "conversation_history": doc.get("conversation_history", [])
+        }
 
     async def get_session_stats(
         self,
@@ -698,25 +739,17 @@ class MongoDBPersistenceStore(PersistenceStore):
         first_request = await db.requests.find_one(match_filter, sort=[("timestamp", 1)])
         last_request = await db.requests.find_one(match_filter, sort=[("timestamp", -1)])
 
-        # Count conversation history messages
-        total_messages = await db.conversation_history.count_documents(match_filter)
-
-        # Average duration from conversation history
-        duration_pipeline = [
-            {"$match": match_filter},
-            {"$group": {"_id": None, "avg_duration": {"$avg": "$duration_ms"}}}
-        ]
-        avg_duration_ms = 0.0
-        async for doc in db.conversation_history.aggregate(duration_pipeline):
-            avg_duration_ms = doc.get("avg_duration", 0.0)
+        # Count conversation history messages (new schema: count entries in the array, not documents)
+        conv_doc = await db.conversation_history.find_one(match_filter)
+        total_messages = len(conv_doc.get("conversation_history", [])) if conv_doc else 0
 
         return {
             "session_id": session_id,
             "total_requests": total_requests,
             "total_events": total_events,
             "total_exceptions": total_exceptions,
-            "total_messages": total_messages,
-            "avg_duration_ms": round(avg_duration_ms, 2) if avg_duration_ms else 0.0,
+            "total_messages": total_messages,      # Now counts array entries (messages), not documents
+            "avg_duration_ms": 0.0,               # Deprecated field — kept for API response compatibility
             "first_request_at": first_request["timestamp"].isoformat() if first_request and first_request.get("timestamp") else None,
             "last_request_at": last_request["timestamp"].isoformat() if last_request and last_request.get("timestamp") else None
         }
@@ -726,24 +759,25 @@ class MongoDBPersistenceStore(PersistenceStore):
         user_id: str,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
-        """Get all conversations for a user"""
+        """Get all conversations for a user (one per user_session)."""
         db = await self._get_connection()
 
         cursor = db.conversation_history.find(
             {"user_id": user_id}
-        ).sort("timestamp", -1).limit(limit)
+        ).sort("updated_at", -1).limit(limit)
 
         conversations = []
         async for doc in cursor:
+            def _to_iso(val):
+                return val.isoformat() if isinstance(val, datetime) else val
             conv = {
-                "id": str(doc["_id"]),
-                "session_id": doc["session_id"],
-                "user_id": doc["user_id"],
-                "timestamp": doc["timestamp"].isoformat() if isinstance(doc["timestamp"], datetime) else doc["timestamp"],
-                "user_message": doc["user_message"],
-                "agent_response": doc["agent_response"],
-                "intent": doc.get("intent"),
-                "tools_used": doc.get("tools_used", [])
+                "user_session": doc.get("user_session"),
+                "session_id": doc.get("session_id"),
+                "user_id": doc.get("user_id"),
+                "created_at": _to_iso(doc.get("created_at")),
+                "updated_at": _to_iso(doc.get("updated_at")),
+                "message_count": len(doc.get("conversation_history", [])),
+                "conversation_history": doc.get("conversation_history", [])
             }
             conversations.append(conv)
 
@@ -751,15 +785,28 @@ class MongoDBPersistenceStore(PersistenceStore):
 
     async def delete_session_conversations(
         self,
-        session_id: str
+        user_session: str          # Now deletes by _id = user_session (O(1) primary index)
     ) -> bool:
-        """Delete all conversations for a session"""
+        """Delete the conversation history document for a user session."""
         db = await self._get_connection()
 
-        result = await db.conversation_history.delete_many({"session_id": session_id})
-        deleted_count = result.deleted_count
-        logger.info(f"🗑️  Deleted {deleted_count} conversations for session {session_id}")
-        return deleted_count > 0
+        result = await db.conversation_history.delete_one({"_id": user_session})
+        logger.info(f"🗑️  Deleted conversation history for user_session={user_session} (found={result.deleted_count > 0})")
+        return result.deleted_count > 0
+
+    async def get_feedback_for_responses(self, response_ids: List[str]) -> Dict[str, str]:
+        """Batch fetch feedback for assistant messages. Returns {response_id: feedback_type}.
+
+        Queries only response_id and feedback_type — excludes other fields not needed for enrichment.
+        One DB round-trip regardless of conversation length.
+        """
+        db = await self._get_connection()
+        cursor = db.Response_Feedback.find(
+            {"response_id": {"$in": response_ids}},
+            {"response_id": 1, "feedback_type": 1, "_id": 0}   # project only needed fields
+        )
+        feedback_docs = await cursor.to_list(None)
+        return {doc["response_id"]: doc["feedback_type"] for doc in feedback_docs}
 
     # ============================================================================
     # RESPONSE FEEDBACK METHODS
