@@ -5,7 +5,7 @@ on:
     branches:
       - 'release/*'
       - 'MVP-1'
-      - 'MVP-2-April23-release'
+      - 'MVP-2-May28-release'
       - 'kunwar-history-api'
     paths:
       - '**/deploy-configs/pbmassist-prod/values/v1.yaml'
