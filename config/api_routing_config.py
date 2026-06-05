@@ -494,6 +494,44 @@ INTENT_API_ROUTING = {
 }
 
 
+# ============================================================================
+# CLAIM HISTORY SEARCH (member-level, multi-claim) intents
+# ============================================================================
+# These intents map to the multidomain_intent_detection "claim_history_search"
+# domain.  They share a single search endpoint that returns ALL claims for the
+# member identified by the supplied claim_number.  The response is filtered
+# in-process (Claims_search_api/search.py) and summarized by the response
+# agent using the claim-history specific prompt branch.
+#
+# Required entity is just `claim_number` (NOT sequence) because the upstream
+# /claims/search endpoint accepts a claim_id and returns all sibling claims
+# for the same member.
+# ============================================================================
+
+CLAIM_HISTORY_SEARCH_ENDPOINT = "/myclaims/claims/exp/v1/claims/search"
+
+_CLAIM_HISTORY_SEARCH_BASE = {
+    "api_endpoint": CLAIM_HISTORY_SEARCH_ENDPOINT,
+    "method": "POST",
+    "required_entities": ["claim_number"],
+    "optional_entities": [],
+    "response_fields": [],          # Trimmed/filtered in Claims_search_api
+    "fallback_api": None,
+    "domain": "claim_history_search",
+    "description": "Member-level claim history search (multi-claim filter)",
+}
+
+_CLAIM_HISTORY_INTENTS = [
+    "NDC", "Manufacturer", "Generic", "Brand", "Refills", "DaysSupply",
+    "PriorAuth", "Diagnosis", "Settlement", "PharmType", "Plan",
+    "Pharmacy", "Prescriber", "Pricing", "Status", "RejectCode",
+    "DrugLast", "Month", "ClaimNum",
+]
+
+for _ch_intent in _CLAIM_HISTORY_INTENTS:
+    INTENT_API_ROUTING.setdefault(_ch_intent, dict(_CLAIM_HISTORY_SEARCH_BASE))
+
+
 # Required Headers for CVS API
 REQUIRED_HEADERS = {
     "x-correlation-id": "W3C Trace Context identifier",
@@ -509,6 +547,23 @@ def get_api_config(intent: str):
         "api_endpoint": None,
         "requires_llm": True
     })
+
+
+def get_domain_for_intent(intent: str) -> str:
+    """
+    Return the high-level domain for an intent.
+
+    Currently only used to detect 'claim_history_search' intents so the
+    LangGraph router can dispatch them to the member-history search node
+    instead of the standard single-claim tool node.
+    """
+    cfg = INTENT_API_ROUTING.get(intent) or {}
+    return cfg.get("domain", "")
+
+
+def is_claim_history_search_intent(intent: str) -> bool:
+    """True if the intent should be routed to the claims-search pipeline."""
+    return get_domain_for_intent(intent) == "claim_history_search"
 
 
 def requires_api(intent: str) -> bool:

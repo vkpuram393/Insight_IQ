@@ -43,6 +43,16 @@ class RecommendationChip(BaseModel):
     text: str                         # Display text for the chip
     action: Optional[str] = None      # Intent/action to trigger when clicked
 
+class IntentStageResult(BaseModel):
+    intent: Optional[str] = None
+    confidence: Optional[float] = None
+    raw_confidence: Optional[float] = None
+
+class IntentResolutionTrail(BaseModel):
+    ensemble: Optional[IntentStageResult] = None      # always populated when multidomain classifier ran
+    llm_fallback: Optional[IntentStageResult] = None  # populated only when internal LLM fallback was invoked
+    clarification: Optional[IntentStageResult] = None # populated only when clarification node was triggered
+
 class ChatResponse(BaseModel):
     response: str
     session_id: str
@@ -54,6 +64,7 @@ class ChatResponse(BaseModel):
     recommendations: Optional[List[RecommendationChip]] = None  # ✅ Recommendation chips
     needs_clarification: bool = False
     clarifying_question: Optional[str] = None  # DEPRECATED: Use 'response' field instead. Kept for backward compatibility and internal tracing only.
+    intent_resolution_trail: Optional[IntentResolutionTrail] = None  # per-stage classification trail
     metadata: Optional[Dict[str, Any]] = None
     timestamp: str
 
@@ -145,6 +156,42 @@ async def chat(request: ChatRequest, http_request: Request):
                 ) for rec in raw_recommendations if rec.get("text")
             ]
 
+        # Build intent resolution trail — one entry per classifier stage, null for stages not reached
+        _ensemble_intent = final_state.get("ensemble_intent")
+        _ensemble_confidence = final_state.get("ensemble_confidence")
+        _ensemble_stage = (
+            IntentStageResult(
+                intent=_ensemble_intent,
+                confidence=_ensemble_confidence,
+                raw_confidence=None,
+            )
+            if (_ensemble_intent is not None or _ensemble_confidence is not None)
+            else None
+        )
+        _llm_fb_confidence = final_state.get("llm_fallback_confidence")
+        _llm_fallback_stage = (
+            IntentStageResult(
+                intent=final_state.get("llm_fallback_intent"),
+                confidence=_llm_fb_confidence,
+                raw_confidence=None,
+            )
+            if _llm_fb_confidence is not None  # presence signals LLM fallback was called
+            else None
+        )
+        _clarification_stage = None
+        if final_state.get("needs_clarification"):
+            _ctx = final_state.get("clarification_context") or {}
+            _clarification_stage = IntentStageResult(
+                intent=_ctx.get("intent"),
+                confidence=_ctx.get("confidence"),
+                raw_confidence=None,
+            )
+        _trail = IntentResolutionTrail(
+            ensemble=_ensemble_stage,
+            llm_fallback=_llm_fallback_stage,
+            clarification=_clarification_stage,
+        )
+
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
@@ -156,6 +203,7 @@ async def chat(request: ChatRequest, http_request: Request):
             recommendations=recommendations,  # ✅ Include recommendation chips
             needs_clarification=final_state.get("needs_clarification", False),  # ✅ If True, 'response' contains a question
             clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
+            intent_resolution_trail=_trail,
             metadata=metadata,
             timestamp=datetime.now(timezone.utc).isoformat()
         )

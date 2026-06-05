@@ -75,6 +75,10 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
                 "source": md_result.get("source"),
                 "entities_from_query": md_result.get("entities") or {},
                 "llm_fallback_confidence": md_result.get("llm_fallback_confidence"),
+                # Diagnostic fields for IntentResolutionTrail and state observability
+                "ensemble_intent": md_result.get("ensemble_intent"),
+                "ensemble_confidence": md_result.get("ensemble_confidence"),
+                "llm_fallback_intent": md_result.get("llm_fallback_intent"),
             }
             return result
         except Exception as e:
