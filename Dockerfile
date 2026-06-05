@@ -20,7 +20,7 @@ COPY . .
 # -------------------------
 # Stage 2: Runtime (DISTROLESS)
 # -------------------------
-FROM cvsh.jfrog.io/cvsdigital-docker/devsecops/distroless/python-3.12-distroless:latest
+FROM cvsh.jfrog.io/docker/library/python:3.12-slim AS builder
 
 WORKDIR /app
 
