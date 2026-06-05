@@ -73,25 +73,70 @@ async def startup_event():
     try:
         await init_graph()
         print("[STARTUP] init_graph done")
-        
+
         # Pre-initialize embedding classifier to ensure MongoDB has embeddings
         # (Embedding generation takes ~3 minutes, must happen before queries arrive)
         # This also loads embeddings into memory once (singleton pattern prevents reloads)
-        if settings.use_embedding_classifier:
+        #
+        # PRIORITY ORDER:
+        #   1. Multidomain classifier (PCA + Ensemble + LLM fallback, uses v3_pipeline.pkl)
+        #      → Provides `domain` field used to route claim_history_search queries
+        #      → Run `python -m multidomain_intent_detection.training` to generate the pickle
+        #   2. Embedding classifier (cosine similarity, uses MongoDB / pkl cache)
+        #      → Fallback when v3_pipeline.pkl is missing
+        #
+        if settings.use_multidomain_classifier:
+            print("[STARTUP] Pre-initializing Multidomain Intent Classifier (PCA + Ensemble)...")
+            try:
+                import concurrent.futures
+                from multidomain_intent_detection import get_classifier as get_md_classifier
+
+                def init_md_classifier():
+                    clf = get_md_classifier()
+                    # Force eager load of the pickle (default is lazy on first classify())
+                    clf._ensure_loaded()
+                    return clf
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(init_md_classifier)
+                    future.result()
+
+                print("[STARTUP] ✅ Multidomain classifier ready (pickle loaded)")
+                from multidomain_intent_detection.classifier import _gcs_download_path
+                if _gcs_download_path:
+                    print(f"[STARTUP]    Model source : GCS (downloaded)")
+                    print(f"[STARTUP]    Temp path    : {_gcs_download_path}")
+                    import os
+                    size_mb = os.path.getsize(_gcs_download_path) / (1024 * 1024)
+                    print(f"[STARTUP]    File size    : {size_mb:.1f} MB")
+                else:
+                    from multidomain_intent_detection.classifier import MODEL_PKL
+                    print(f"[STARTUP]    Model source : LOCAL DISK")
+                    print(f"[STARTUP]    Path         : {MODEL_PKL}")
+            except Exception as e:
+                import traceback
+                print(f"[STARTUP] ❌ Multidomain classifier init failed: {e}")
+                traceback.print_exc()
+                print("[STARTUP]    use_multidomain_classifier=True — NOT falling back.")
+                print("[STARTUP]    Fix the error above and redeploy.")
+                raise  # Fail fast: pod must not serve traffic without the correct classifier
+
+        # Fallback: Embedding classifier (or primary if multidomain is disabled)
+        if not settings.use_multidomain_classifier and settings.use_embedding_classifier:
             print("[STARTUP] Pre-initializing embedding classifier...")
             import concurrent.futures
             from classifiers.embedded_classifier import get_embedded_classifier
-            
+
             def init_classifier():
                 # Use singleton to ensure embeddings are loaded once
                 return get_embedded_classifier()  # This triggers MongoDB setup and loads embeddings
-            
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(init_classifier)
                 future.result()  # No timeout - let it complete (fails naturally if broken)
-            
+
             print("[STARTUP] Embedding classifier ready (MongoDB populated, embeddings loaded)")
-        
+
         # Pre-initialize PII protection service to catch errors early
         # This ensures spacy model is available and Presidio is properly initialized
         # If initialization fails, pod won't start (fail fast)
@@ -105,15 +150,15 @@ async def startup_event():
             print(f"[STARTUP] ❌ PII Protection Service initialization failed: {e}")
             traceback.print_exc()
             raise  # Fail fast - don't start if PII service can't initialize
-        
+
         # Start background tasks for memory management
         asyncio.create_task(_periodic_cleanup_task())
         print("[STARTUP] Background cleanup tasks started")
-        
+
         # Mark startup as complete
         _startup_complete = True
         print("[STARTUP] ✅ Startup complete - application ready")
-        
+
     except Exception as e:
         import traceback
         _startup_error = str(e)
@@ -140,20 +185,20 @@ async def _periodic_cleanup_task():
     import os
     from datetime import datetime
     from core.logger import get_logger
-    
+
     logger = get_logger(__name__)
-    
+
     # Track last cleanup time for adaptive frequency
     last_cleanup = datetime.now()
     base_interval = 3600  # 1 hour base interval
-    
+
     while True:
         try:
             # Check memory pressure and adjust interval
             try:
                 process = psutil.Process(os.getpid())
                 memory_percent = process.memory_percent()
-                
+
                 if memory_percent > 90:
                     interval = 300  # 5 minutes for critical
                     logger.warning(f"⚠️ High memory usage ({memory_percent:.1f}%) - increasing cleanup frequency")
@@ -164,11 +209,11 @@ async def _periodic_cleanup_task():
                     interval = base_interval  # 1 hour for normal
             except Exception:
                 interval = base_interval  # Fallback to base interval
-            
+
             await asyncio.sleep(interval)
-            
+
             logger.info("🧹 Running periodic memory cleanup...")
-            
+
             # Cleanup old sessions in memory store
             try:
                 from memory import MemoryStoreFactory
@@ -179,7 +224,7 @@ async def _periodic_cleanup_task():
                     logger.info(f"   ✅ Cleaned {cleaned} old sessions")
             except Exception as e:
                 logger.warning(f"   ⚠️ Session cleanup failed: {e}")
-            
+
             # Cleanup old checkpoints
             try:
                 from langgraph_agent import cleanup_old_checkpoints
@@ -187,16 +232,16 @@ async def _periodic_cleanup_task():
                 logger.info(f"   ✅ Cleaned {cleaned} old checkpoints")
             except Exception as e:
                 logger.warning(f"   ⚠️ Checkpoint cleanup failed: {e}")
-            
+
             # Trigger garbage collection
             try:
                 collected = gc.collect()
                 logger.info(f"   ✅ Garbage collection: {collected} objects collected")
             except Exception as e:
                 logger.warning(f"   ⚠️ GC failed: {e}")
-            
+
             logger.info("✅ Periodic cleanup completed")
-            
+
         except asyncio.CancelledError:
             logger.info("🧹 Cleanup task cancelled")
             break
@@ -214,7 +259,7 @@ async def shutdown_event():
         import traceback
         print("[SHUTDOWN] close_graph ERROR:", e)
         traceback.print_exc()
-    
+
     # Close shared HTTP client to prevent memory leaks
     try:
         from tools.claims_api import _close_shared_http_client
@@ -222,7 +267,7 @@ async def shutdown_event():
         print("[SHUTDOWN] HTTP client closed")
     except Exception as e:
         print(f"[SHUTDOWN] HTTP client close ERROR: {e}")
-    
+
     # Close memory store connections
     try:
         from memory import MemoryStoreFactory
@@ -230,7 +275,7 @@ async def shutdown_event():
         print("[SHUTDOWN] Memory store closed")
     except Exception as e:
         print(f"[SHUTDOWN] Memory store close ERROR: {e}")
-    
+
     # Close persistence store connections
     try:
         from persistence import PersistenceStoreFactory
@@ -240,7 +285,8 @@ async def shutdown_event():
         print("[SHUTDOWN] Persistence store closed")
     except Exception as e:
         print(f"[SHUTDOWN] Persistence store close ERROR: {e}")
-    
+
+
     # Close MongoDB embedding store connections
     try:
         from services.mongodb_embedding_store import MongoDBEmbeddingStoreFactory
@@ -300,7 +346,7 @@ async def health():
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 media_type="application/json"
             )
-        
+
         # If startup not complete, return 503 so readiness probe waits
         if not _startup_complete:
             return Response(
@@ -308,7 +354,7 @@ async def health():
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 media_type="application/json"
             )
-        
+
         # Startup complete and no errors - application is ready
         return {"status": "healthy"}
     except Exception as e:
@@ -339,24 +385,24 @@ async def list_redis_sessions():
     try:
         from memory import MemoryStoreFactory
         from config.config import settings
-        
+
         memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
-        
+
         # Check if it's Redis
         if type(memory_store).__name__ != "RedisStore":
             return {
                 "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}",
                 "suggestion": "Set MEMORY_STORE_TYPE=redis in .env file"
             }
-        
+
         # List all sessions
         session_ids = await memory_store.list_all_sessions()
-        
+
         return {
             "total_sessions": len(session_ids),
             "sessions": session_ids
         }
-        
+
     except Exception as e:
         return {
             "status": "❌ FAILED",
@@ -379,43 +425,43 @@ async def get_session_history(session_id: str):
     try:
         from memory import MemoryStoreFactory
         from config.config import settings
-        
+
         memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
-        
+
         # Try both session_id formats (with and without braces)
         session_id_variants = [
             session_id,  # Original format from URL
             session_id.strip("{}"),  # Without braces
             f"{{{session_id}}}" if not session_id.startswith("{") else session_id  # With braces
         ]
-        
+
         history = []
         facts = []
         found_session_id = None
-        
+
         # Try each variant until we find data
         for variant in session_id_variants:
             variant_history = await memory_store.get_session_history(variant)
             variant_facts = await memory_store.get_session_facts(variant)
-            
+
             if variant_history or variant_facts:
                 history = variant_history
                 facts = variant_facts
                 found_session_id = variant
                 break
-        
+
         # If Redis, add diagnostic information and keys
         diagnostics = {}
         redis_keys = {}
-        
+
         if type(memory_store).__name__ == "RedisStore":
             connection_status = await memory_store.get_connection_status()
             diagnostics["redis_connection"] = connection_status
-            
+
             # Get all keys for the found session_id (or try all variants)
             target_session_id = found_session_id or session_id
             keys = await memory_store.get_all_session_keys(target_session_id)
-            
+
             if keys:
                 redis_keys = {
                     "key_count": len(keys),
@@ -429,7 +475,7 @@ async def get_session_history(session_id: str):
                     variant_keys = await memory_store.get_all_session_keys(variant)
                     if variant_keys:
                         all_keys_found[variant] = variant_keys
-                
+
                 if all_keys_found:
                     # Use the first variant that has keys
                     first_variant_with_keys = list(all_keys_found.keys())[0]
@@ -447,7 +493,7 @@ async def get_session_history(session_id: str):
                         diagnostics["total_sessions"] = len(all_sessions)
                     except Exception:
                         pass
-        
+
         result = {
             "session_id": session_id,
             "found_session_id": found_session_id or session_id,
@@ -457,17 +503,17 @@ async def get_session_history(session_id: str):
             "facts": facts,
             "retrieved_at": datetime.now().isoformat()
         }
-        
+
         # Add keys if available
         if redis_keys:
             result["redis_keys"] = redis_keys
-        
+
         # Add diagnostics if available
         if diagnostics:
             result["diagnostics"] = diagnostics
-        
+
         return result
-        
+
     except Exception as e:
         import traceback
         return {
@@ -495,9 +541,9 @@ async def delete_old_sessions(days: int = Query(..., ge=1, le=365, description="
     try:
         from memory import MemoryStoreFactory
         from config.config import settings
-        
+
         memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
-        
+
         # Check if it's Redis
         if type(memory_store).__name__ != "RedisStore":
             return {
@@ -505,10 +551,10 @@ async def delete_old_sessions(days: int = Query(..., ge=1, le=365, description="
                 "error": f"Memory store is not Redis. Current type: {type(memory_store).__name__}",
                 "message": "Session cleanup is only available for Redis store"
             }
-        
+
         # Delete old sessions
         result = await memory_store.delete_sessions_older_than_days(days)
-        
+
         return {
             "status": "✅ SUCCESS",
             "message": f"Deleted sessions older than {days} days",
@@ -518,7 +564,7 @@ async def delete_old_sessions(days: int = Query(..., ge=1, le=365, description="
             "cutoff_date": result.get("cutoff_date"),
             "days": result.get("days", days)
         }
-        
+
     except Exception as e:
         import traceback
         return {
@@ -558,15 +604,15 @@ async def debug_memory_snapshot():
         - Tracemalloc status
     """
     import psutil
-    
+
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
-    
+
     result = {
         "timestamp": datetime.now().isoformat(),
         "endpoint": "quick_snapshot",
         "interference_level": "none",
-        
+
         # Process memory (what Grafana shows)
         "process_memory": {
             "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
@@ -574,7 +620,7 @@ async def debug_memory_snapshot():
             "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
             "percent": round(process.memory_percent(), 2),
         },
-        
+
         # GC stats (read-only, no collection triggered)
         "gc_stats": {
             "enabled": gc.isenabled(),
@@ -594,14 +640,14 @@ async def debug_memory_snapshot():
                 for i, s in enumerate(gc.get_stats())
             ]
         },
-        
+
         # Tracemalloc status
         "tracemalloc": {
             "is_active": tracemalloc.is_tracing(),
             "hint": "Call GET /debug/memory/detailed to enable heap tracking"
         }
     }
-    
+
     # Linux POD metrics from /proc/self/status (graceful fallback for Windows)
     try:
         with open('/proc/self/status', 'r') as f:
@@ -615,7 +661,7 @@ async def debug_memory_snapshot():
         result["linux_proc_status"] = {"note": "Not available (non-Linux environment)"}
     except Exception as e:
         result["linux_proc_status"] = {"error": str(e)}
-    
+
     return result
 
 
@@ -644,28 +690,28 @@ async def debug_memory_detailed(
     """
     global _debug_tracemalloc_active, _debug_baseline_snapshot
     import psutil
-    
+
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
-    
+
     result = {
         "timestamp": datetime.now().isoformat(),
         "endpoint": "detailed_analysis",
         "interference_level": "minimal",
-        
+
         "process_memory": {
             "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
             "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
             "percent": round(process.memory_percent(), 2),
         }
     }
-    
+
     # Initialize or read tracemalloc
     if not _debug_tracemalloc_active:
         tracemalloc.start(25)  # 25 frames of traceback for detailed analysis
         _debug_tracemalloc_active = True
         _debug_baseline_snapshot = tracemalloc.take_snapshot()
-        
+
         result["tracemalloc"] = {
             "status": "just_activated",
             "message": "Tracemalloc started and baseline captured. Call this endpoint again to see memory changes.",
@@ -674,10 +720,10 @@ async def debug_memory_detailed(
     else:
         current_snapshot = tracemalloc.take_snapshot()
         current_size, peak_size = tracemalloc.get_traced_memory()
-        
+
         # Top allocators by current size
         top_stats = current_snapshot.statistics('lineno')[:top_allocators]
-        
+
         result["tracemalloc"] = {
             "status": "active",
             "current_heap_mb": round(current_size / 1024 / 1024, 2),
@@ -691,12 +737,12 @@ async def debug_memory_detailed(
                 for stat in top_stats
             ]
         }
-        
+
         # Growth since baseline
         if _debug_baseline_snapshot:
             diff_stats = current_snapshot.compare_to(_debug_baseline_snapshot, 'lineno')
             growth = [s for s in diff_stats[:top_allocators] if s.size_diff > 0]
-            
+
             result["memory_growth_since_baseline"] = [
                 {
                     "location": str(stat.traceback),
@@ -705,12 +751,12 @@ async def debug_memory_detailed(
                 }
                 for stat in growth
             ]
-        
+
         # Interpretation
         rss_mb = result["process_memory"]["rss_mb"]
         heap_mb = result["tracemalloc"]["current_heap_mb"]
         gap_mb = round(rss_mb - heap_mb, 2)
-        
+
         result["interpretation"] = {
             "rss_vs_heap_gap_mb": gap_mb,
             "diagnosis": (
@@ -723,7 +769,7 @@ async def debug_memory_detailed(
                 "Consider periodic POD restart if memory pressure is a concern."
             )
         }
-    
+
     return result
 
 
@@ -736,13 +782,13 @@ async def debug_memory_reset_baseline():
     Does NOT interfere with normal operations.
     """
     global _debug_baseline_snapshot
-    
+
     if not _debug_tracemalloc_active:
         return {
             "status": "error",
             "message": "Tracemalloc not active. Call GET /debug/memory/detailed first to start tracking."
         }
-    
+
     _debug_baseline_snapshot = tracemalloc.take_snapshot()
     return {
         "status": "success",
@@ -768,42 +814,42 @@ async def debug_memory_force_gc():
         - Interpretation of results
     """
     import psutil
-    
+
     process = psutil.Process(os.getpid())
-    
+
     # Measure before GC
     before = process.memory_info()
     before_rss = before.rss
-    
+
     # Run GC on all generations
     collected_gen0 = gc.collect(generation=0)
     collected_gen1 = gc.collect(generation=1)
     collected_gen2 = gc.collect(generation=2)
     total_collected = collected_gen0 + collected_gen1 + collected_gen2
-    
+
     # Measure after GC
     after = process.memory_info()
     after_rss = after.rss
     freed_bytes = before_rss - after_rss
-    
+
     return {
         "timestamp": datetime.now().isoformat(),
         "action": "garbage_collection_forced",
-        
+
         "objects_collected": {
             "generation_0": collected_gen0,
             "generation_1": collected_gen1,
             "generation_2": collected_gen2,
             "total": total_collected
         },
-        
+
         "memory_impact": {
             "before_rss_mb": round(before_rss / 1024 / 1024, 2),
             "after_rss_mb": round(after_rss / 1024 / 1024, 2),
             "freed_mb": round(freed_bytes / 1024 / 1024, 2),
             "freed_bytes": freed_bytes
         },
-        
+
         "interpretation": {
             "objects_collected_meaning": (
                 "High count indicates circular references were cleaned up"
@@ -817,7 +863,6 @@ async def debug_memory_force_gc():
             )
         }
     }
-
 
 # Entry point ---------------------------------------------------------------
 if __name__ == "__main__":
@@ -833,7 +878,7 @@ if __name__ == "__main__":
     # (checkpoints.db, telemetry.db, or their WAL/SHM files)
     # Default to False for stability - enable via RELOAD=true environment variable if needed
     enable_reload = os.environ.get("RELOAD", "false").lower() == "true"
-    
+
     if enable_reload:
         print("[BOOT] ⚠️  Hot reload is ENABLED")
         print("[BOOT]    Database file writes (checkpoints.db, telemetry.db) may trigger restarts")
@@ -842,7 +887,8 @@ if __name__ == "__main__":
         print("[BOOT] ✅ Hot reload is DISABLED (default for stability)")
         print("[BOOT]    To enable: set RELOAD=true environment variable")
         print("[BOOT]    Note: Manual server restart required for code changes")
-    
+
+
     # Configure reload exclusions to prevent restarts from database file writes
     reload_excludes = [
         "*.db",
@@ -852,7 +898,7 @@ if __name__ == "__main__":
         "checkpoints.db*",
         "telemetry.db*"
     ] if enable_reload else None
-    
+
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
