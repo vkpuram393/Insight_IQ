@@ -1,7 +1,7 @@
 # -------------------------
 # Stage 1: Build
 # -------------------------
-FROM cvsh.jfrog.io/docker/library/python:3.12-slim AS builder
+FROM cvsh.jfrog.io/cvsdigital-docker/dockerhub/python:3.12-slim AS builder
 
 WORKDIR /app
 
