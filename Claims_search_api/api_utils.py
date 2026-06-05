@@ -71,7 +71,8 @@ def _extract_member_id_from_list(list_response):
 
 async def fetch_claim_list(claim_id, bearer_token, x_api_key, x_clientrefid):
     """Step 1: call claim_list_api with claim_id to resolve member_id."""
-    headers = _build_headers(bearer_token, x_api_key, x_clientrefid)
+    effective_key = settings.claims_history_search_x_api_key or x_api_key  # add this
+    headers = _build_headers(bearer_token, effective_key, x_clientrefid)   # use effective_ke
     #body = {"claimsRequest": {"claimId": str(claim_id).strip()}}
     body = {"claimsRequest":{"claimId":str(claim_id).strip()},"additionalRequestInfo":{"claimType":"","environment":""}}
     return await _post(_LIST_URL, body, headers, "claim list claim_id=" + str(claim_id))
