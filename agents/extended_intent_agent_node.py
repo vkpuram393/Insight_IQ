@@ -109,15 +109,31 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         # The router compares required_entities_list against extracted entities
         # and routes to clarification if any are missing.
         # ============================================================
-        
+
+        # Derive per-stage intent/confidence for the intent_resolution_trail in ChatResponse.
+        # source == "ensemble" → LLM fallback was NOT called; ensemble's top pick IS the final intent.
+        # source == "llm"/"validation" → LLM overrode the ensemble; top_n[0] is the ensemble's pre-override pick.
+        _source = intent_result.get("source", "ensemble")
+        _top_n = intent_result.get("top_n", [])
+        if _source in ("llm", "validation"):
+            _top_n_0 = _top_n[0] if _top_n else None
+            _ensemble_intent = (
+                _top_n_0.get("intent") if isinstance(_top_n_0, dict) else _top_n_0[0]
+            ) if _top_n_0 is not None else None
+            _llm_fallback_intent = intent_result.get("intent")  # LLM's final pick
+        else:
+            _ensemble_intent = intent_result.get("intent")  # ensemble's pick = final intent
+            _llm_fallback_intent = None
+        _ensemble_confidence = intent_result.get("confidence")  # always the post-calibration ensemble score
+
         result = {
             "intent": intent,
             "confidence": confidence,
             "domain": intent_result.get("domain"),           # Populated by multidomain classifier; None otherwise
             "llm_fallback_confidence": intent_result.get("llm_fallback_confidence"),  # None when ensemble was used directly
-            "ensemble_intent": intent_result.get("ensemble_intent"),                  # Ensemble's pick pre-LLM-fallback
-            "ensemble_confidence": intent_result.get("ensemble_confidence"),           # Ensemble post-calibration score
-            "llm_fallback_intent": intent_result.get("llm_fallback_intent"),           # LLM fallback's pick; None if not invoked
+            "ensemble_intent": _ensemble_intent,                  # Ensemble's pick pre-LLM-fallback
+            "ensemble_confidence": _ensemble_confidence,           # Ensemble post-calibration score
+            "llm_fallback_intent": _llm_fallback_intent,           # LLM fallback's pick; None if not invoked
             "entities": entities,
             "is_complex": is_complex,  # Complexity detection for LLM routing
             # NOTE: needs_clarification and missing_slots are now determined by

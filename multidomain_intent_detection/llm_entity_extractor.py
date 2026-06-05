@@ -87,7 +87,7 @@ def extract_drug_pharmacy_entities(query: str) -> Dict[str, Optional[str]]:
 
         client = _get_llm_client()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=query,
             config=types.GenerateContentConfig(
                 temperature=0.0,

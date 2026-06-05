@@ -654,7 +654,7 @@ def llm_fallback_classify(
     conversation_history: Optional[List[Dict]] = None,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-2.5-flash",
     temperature: float = 0.0,
     max_output_tokens: int = 2048,
 ) -> Dict[str, Any]:
@@ -755,7 +755,7 @@ async def llm_fallback_classify_async(
     conversation_history: Optional[List[Dict]] = None,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-2.5-flash",
     temperature: float = 0.0,
     max_output_tokens: int = 2048,
 ) -> Dict[str, Any]:

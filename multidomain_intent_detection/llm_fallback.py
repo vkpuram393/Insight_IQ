@@ -278,7 +278,7 @@ claim. In this pattern the claim_history_search intent is correct — assign con
     for attempt in range(_LLM_MAX_RETRIES):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.0,

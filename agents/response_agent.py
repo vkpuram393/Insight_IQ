@@ -27,6 +27,7 @@ from core.logging_context import extract_logging_context, log_state_snapshot
 from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from tools.claims_api import normalize_entities
+from Claims_search_api.llm_query_responder import build_claim_history_prompt
 import uuid
 
 logger = get_logger(__name__)
@@ -4111,16 +4112,34 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Initialize response agent
         logger.info("🔧 Initializing Response Agent with Gemini...")
         agent = ResponseAgent()
-        
+
+        # Detect claim-history mode (always, regardless of clarification).
+        # _slim_claims and _member_summary are populated by claims_search_node_v2
+        # and contain the actual filtered claim records.  They are underscore-prefixed
+        # so _format_tool_results() strips them — reading them here bypasses that.
+        tool_data = (state.get("tool_results") or {}).get("data") or {}
+        is_claim_history = (
+            bool(tool_data.get("is_claim_history_search"))
+            or (state.get("domain") == "claim_history_search")
+        )
+        slim_claims = tool_data.get("_slim_claims") or []
+        member_summary = tool_data.get("_member_summary") or {}
+
         # Get appropriate system prompt based on mode
         if needs_clarification:
             system_prompt = agent._get_followup_system_prompt()
             logger.info("📝 Using follow-up question system prompt")
             recommendations_enabled = False  # Never generate recommendations during clarification
+        elif is_claim_history:
+            # build_claim_history_prompt embeds its own system instructions in the
+            # user prompt, so no separate system prompt is needed here.
+            system_prompt = None
+            logger.info("📝 Claim-history mode: prompt built by build_claim_history_prompt()")
+            recommendations_enabled = settings.enable_recommendations
         else:
             system_prompt = agent._get_system_prompt()
             logger.info("📝 Using standard response system prompt")
-            
+
             # Add recommendation instruction if enabled
             recommendations_enabled = settings.enable_recommendations
             if recommendations_enabled:
@@ -4128,24 +4147,37 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 recommendation_instruction = agent._get_recommendation_instruction(intent)
                 system_prompt += recommendation_instruction
                 logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
-        
-        logger.debug(f"📋 System prompt: {len(system_prompt)} characters")
-        
-        # Build user prompt from state (mode-aware)
-        user_prompt = agent._build_user_prompt(state)
+
+        logger.debug(f"📋 System prompt: {len(system_prompt) if system_prompt else 0} characters")
+
+        # Build user prompt — claim history uses its own dedicated prompt builder
+        # that serialises slim_claims directly; all other paths use _build_user_prompt.
+        if not needs_clarification and is_claim_history and slim_claims:
+            user_query = state.get("text", "")
+            user_prompt = build_claim_history_prompt(user_query, slim_claims, member_summary)
+        else:
+            user_prompt = agent._build_user_prompt(state)
         logger.debug(f"📋 User prompt: {len(user_prompt)} characters")
         logger.debug(f"📋 Intent: {state.get('intent', 'unknown')}")
-        
+
         # Generate response using Gemini
-        if needs_clarification:
-            logger.info("🔮 Generating follow-up question with Gemini...")
+        if not needs_clarification and is_claim_history and not slim_claims:
+            # No matching claims — skip LLM and return a static message immediately.
+            logger.info("📭 Claim history: no claims found, returning static message")
+            response_text = "No claims were found for the provided claim number."
+            llm_metadata = {}
         else:
-            logger.info("🔮 Generating response with Gemini...")
-        
-        # Run in executor to avoid blocking (Gemini client is sync)
-        # Using get_running_loop() - recommended for Python 3.10+ inside async functions
-        loop = asyncio.get_running_loop()
-        response_text, llm_metadata = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+            if not needs_clarification and is_claim_history:
+                logger.info(f"🔮 Generating claim-history response ({len(slim_claims)} claims)...")
+            elif needs_clarification:
+                logger.info("🔮 Generating follow-up question with Gemini...")
+            else:
+                logger.info("🔮 Generating response with Gemini...")
+
+            # Run in executor to avoid blocking (Gemini client is sync)
+            # Using get_running_loop() - recommended for Python 3.10+ inside async functions
+            loop = asyncio.get_running_loop()
+            response_text, llm_metadata = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
         
         # =====================================================================
         # Issue 1: Log truncation warnings for observability
