@@ -71,6 +71,15 @@ async def chat(request: ChatRequest, http_request: Request):
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
+    # Capture additional API headers required by downstream claims-search API
+    user_info["x_api_key"] = (
+        http_request.headers.get("x-api-key")
+        or http_request.headers.get("x_api_key", "")
+    )
+    user_info["x_clientrefid"] = (
+        http_request.headers.get("x-clientrefid")
+        or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
+    )
 
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
@@ -220,6 +229,15 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
     user_info["auth_token"] = http_request.headers.get("Authorization", "")
+    # Capture additional API headers required by downstream claims-search API
+    user_info["x_api_key"] = (
+        http_request.headers.get("x-api-key")
+        or http_request.headers.get("x_api_key", "")
+    )
+    user_info["x_clientrefid"] = (
+        http_request.headers.get("x-clientrefid")
+        or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
+    )
 
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))

@@ -69,7 +69,11 @@ class AgentState(TypedDict):
 
     # === INTENT & ENTITIES (from intent_agent) ===
     intent: Optional[str]                        # What user wants
-    confidence: Optional[float]                  # How sure we are (0-1)
+    confidence: Optional[float]                  # How sure we are (0-1); always the ensemble post-calibration score, never overwritten by llm_fallback_confidence
+    llm_fallback_confidence: Optional[float]     # LLM fallback confidence (0-1); None when ensemble was used directly
+    ensemble_intent: Optional[str]               # Ensemble classifier's pick (pre-LLM-fallback)
+    ensemble_confidence: Optional[float]         # Ensemble post-calibration confidence; always set when multidomain runs, regardless of whether LLM fallback ran
+    llm_fallback_intent: Optional[str]           # LLM fallback's pick; None when ensemble was used directly
     entities: Optional[Dict[str, Any]]           # Extracted info
     slots: Optional[Dict[str, Any]]              # API parameters (from intent classifier)
     required_slots: Optional[List[str]]          # Required slots for this intent (from intent classifier)
@@ -166,6 +170,10 @@ def create_initial_state(
         domain=None,
         intent=None,
         confidence=None,
+        llm_fallback_confidence=None,
+        ensemble_intent=None,
+        ensemble_confidence=None,
+        llm_fallback_intent=None,
         entities=None,
         slots=None,
         required_slots=None,

@@ -44,6 +44,14 @@ faker==21.0.0
 
 # Google Gemini
 google-genai==1.0.0
+google-cloud-storage>=2.14.0  # GCS model artifact download (v3_pipeline.pkl for multidomain classifier)
+
+# ML / Data Science — multidomain intent detection (PCA + Ensemble classifier)
+# Verify scikit-learn/numpy compatibility with Python 3.12 before upgrading
+numpy>=1.26.0,<2.0.0
+pandas>=2.0.0
+scikit-learn>=1.4.0
+scipy>=1.13.0
 
 # System monitoring (for memory diagnostics)
 psutil==5.9.8

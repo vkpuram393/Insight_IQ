@@ -113,6 +113,11 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
         result = {
             "intent": intent,
             "confidence": confidence,
+            "domain": intent_result.get("domain"),           # Populated by multidomain classifier; None otherwise
+            "llm_fallback_confidence": intent_result.get("llm_fallback_confidence"),  # None when ensemble was used directly
+            "ensemble_intent": intent_result.get("ensemble_intent"),                  # Ensemble's pick pre-LLM-fallback
+            "ensemble_confidence": intent_result.get("ensemble_confidence"),           # Ensemble post-calibration score
+            "llm_fallback_intent": intent_result.get("llm_fallback_intent"),           # LLM fallback's pick; None if not invoked
             "entities": entities,
             "is_complex": is_complex,  # Complexity detection for LLM routing
             # NOTE: needs_clarification and missing_slots are now determined by
@@ -126,7 +131,7 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
                 **state.get("metadata", {}),  # Preserve existing metadata
                 "all_scores": intent_result.get('all_scores', {}),  # All intent similarities for debugging
                 "is_complex": is_complex,  # Complex query flag (single source of truth)
-                "classifier_type": "embedding" if settings.use_embedding_classifier else "keyword",  # Which classifier was used
+                "classifier_type": "multidomain" if getattr(settings, "use_multidomain_classifier", False) else ("embedding" if settings.use_embedding_classifier else "keyword"),
                 "intent_classification_metadata": {
                     "top_intent": intent,
                     "top_confidence": confidence,

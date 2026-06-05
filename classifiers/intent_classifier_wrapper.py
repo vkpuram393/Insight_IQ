@@ -23,6 +23,7 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
     Classify intent using configured classifier (ASYNC version - like team's pattern)
     
     Switches between:
+    - Multidomain Classifier (if settings.use_multidomain_classifier=True) - PCA + Ensemble + LLM fallback
     - Embedding Classifier (if settings.use_embedding_classifier=True) - semantic understanding
     - Keyword Classifier (if settings.use_embedding_classifier=False) - fast, rule-based
     
@@ -33,11 +34,60 @@ async def classify_intent_unified(query: str) -> Dict[str, Any]:
         Dict with:
             - intent: str
             - confidence: float
+            - domain: str (optional, populated by multidomain classifier)
             - needs_clarification: bool (optional)
             - all_scores: dict (optional)
             - is_simple: bool (optional)
             - is_complex: bool (optional)
     """
+    # ------------------------------------------------------------------
+    # Option 0: Multidomain classifier (PCA + Ensemble + LLM fallback)
+    # Provides the `domain` field used to dispatch claim_history_search
+    # queries to the member-history search pipeline.
+    # ------------------------------------------------------------------
+    if getattr(settings, "use_multidomain_classifier", False):
+        logger.info("🟪 Using Multidomain Intent Classifier (PCA + Ensemble + LLM)")
+        try:
+            from multidomain_intent_detection import get_classifier
+            md_classifier = get_classifier()
+            # Run synchronous predict_single in an executor
+            import asyncio as _asyncio
+            loop = _asyncio.get_event_loop()
+            md_result = await loop.run_in_executor(None, md_classifier.classify, query)
+
+            # Normalize to the same shape the rest of the system expects
+            result = {
+                "intent": md_result.get("intent"),
+                "confidence": float(md_result.get("confidence") or 0.0),
+                "domain": md_result.get("domain"),
+                "domain_name": md_result.get("domain_name"),
+                "api_endpoint": md_result.get("api_endpoint"),
+                "needs_clarification": md_result.get("needs_clarification", False),
+                "is_complex": False,  # multidomain classifier doesn't compute this; let downstream decide
+                "all_scores": dict(md_result.get("top_5") or []),
+                # Wider top-N list (with intent + score) for response observability.
+                # Each item is (intent_name, confidence_score). Falls back to top_5 if absent.
+                "top_n": md_result.get("top_n") or md_result.get("top_5") or [],
+                # LLM-fallback chain-of-thought (only present when the LLM path was used
+                # AND settings.enable_llm_fallback_thinking=True).
+                "llm_thinking": md_result.get("llm_thinking"),
+                "llm_reasoning": md_result.get("llm_reasoning"),
+                "source": md_result.get("source"),
+                "entities_from_query": md_result.get("entities") or {},
+                "llm_fallback_confidence": md_result.get("llm_fallback_confidence"),
+            }
+            return result
+        except Exception as e:
+            logger.error(
+                "[INTENT-CLASSIFIER] ============================================\n"
+                "[INTENT-CLASSIFIER]  MULTIDOMAIN CLASSIFIER FAILED\n"
+                f"[INTENT-CLASSIFIER]  Error  : {type(e).__name__}: {e}\n"
+                "[INTENT-CLASSIFIER]  Action : raising — no fallback when\n"
+                "[INTENT-CLASSIFIER]           use_multidomain_classifier=True\n"
+                "[INTENT-CLASSIFIER] ============================================"
+            )
+            raise
+
     if settings.use_embedding_classifier:
         # Use Embedding-based Classifier (semantic understanding)
         logger.info("🟣 Using CVS Embedding Intent Classifier (Semantic - Async)")

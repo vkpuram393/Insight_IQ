@@ -53,8 +53,18 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
+    LLM_FALLBACK_CONFIDENCE_THRESHOLD: float = 0.85  # When multidomain LLM fallback confidence < this, route to clarification instead of llm_judge
+
+    # ─── Training-time LLM fallback CSV log (used ONLY by multidomain_intent_detection/training.py) ───
+    TRAINING_LLM_FALLBACK_CSV_PATH: str = "multidomain_intent_detection/outputs/llm_fallback_decisions.csv"
     conversation_history_limit: int = 100  # Number of past messages (50 turns) to include in response generation and entity extraction
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
+    # When True, intent classification uses the multidomain_intent_detection package
+    # (PCA + Ensemble + LLM fallback). Produces a `domain` field used to route
+    # claim_history_search queries to the member-history pipeline under Claims_search_api/.
+    # When False, falls back to use_embedding_classifier.
+    use_multidomain_classifier: bool = True
+    is_normalised: bool = True  # When True, user queries are normalized before embedding at inference time
 
     # Safety
     enable_safety_precheck: bool = True  # Match remote MVP-1
@@ -150,7 +160,14 @@ class Settings(BaseSettings):
     # API Endpoints (can be overridden via environment variables)
     api_endpoint_claim_details: str = "/myclaims/claims/v1/claim/byclaimnumberandseq"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_DETAILS env var
     api_endpoint_claim_list: str = "/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_LIST env var
-    
+    claim_list_api: str = ""  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1
+    # Internal API gateway base URL used by Claims_search_api for both search steps
+    claims_internal_base_url: str = ""  # ⚠️ Overridden by CLAIMS_INTERNAL_BASE_URL env var
+    # Full URL for member-level claims history search (step 2)
+    claims_history_search_url: str = ""  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_URL env var
+    # Server-side API subscription key for claims_history_search_url — overrides client x-api-key when set
+    claims_history_search_x_api_key: str = ""  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_X_API_KEY env var — NEVER hardcode
+
     # API Fallback Configuration (for testing when external APIs are down)
     enable_api_fallback: bool = True  # ⚠️ Overridden by ENABLE_API_FALLBACK env var - Set to False in production to return real errors
     # When True: Uses mock data if API server is down (5xx errors, timeouts) - allows testing to continue
