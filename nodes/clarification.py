@@ -67,9 +67,23 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
         text = state.get("text", "")
         intent = state.get("intent", "unknown")
         confidence = state.get("confidence", 0.0)
-        missing_slots = state.get("missing_slots", [])
+        missing_slots = list(state.get("missing_slots") or [])  # copy, don't mutate state
         entities = state.get("entities", {})
         metadata = state.get("metadata", {})
+
+        # ── CHS safety net: sequence is never a meaningful missing entity for
+        # claim_history_search.  If confidence_checker missed the normalisation
+        # (intent misclassified as cap_api), guard here so the response agent
+        # never asks the user for a sequence number they don't need to provide.
+        _domain = state.get("domain", "")
+        try:
+            from multidomain_intent_detection.config import INTENT_TO_DOMAIN as _I2D
+            _resolved = _I2D.get(intent, _domain)
+        except Exception:
+            _resolved = _domain
+        if _resolved == "claim_history_search" and "sequence" in missing_slots:
+            missing_slots = [s for s in missing_slots if s != "sequence"]
+            logger.info("🔧 Clarification: removed 'sequence' from missing_slots (CHS domain)")
         
         # Load config for clarification templates
         config = _load_config()
@@ -79,21 +93,56 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
         # Check if user provided an invalid format claim ID (potential_claim_id detected)
         claim_id_format_invalid = entities.get("claim_id_format_invalid", False)
         potential_claim_ids = entities.get("potential_claim_ids", [])
-        
+
+        # Detect whether the original query was genuinely vague so we can ask WHAT
+        # the user needs before jumping to "please provide your claim number".
+        #
+        # Two paths arrive here:
+        #   A) Early-exit path  (intent_reclassified=False): the internal multidomain
+        #      LLM fallback already ran but was still uncertain, so the router short-
+        #      circuited straight to clarification.  state["confidence"] is still the
+        #      raw ensemble score — use it directly as the original confidence.
+        #   B) llm_judge path   (intent_reclassified=True): the external LLM judge ran
+        #      and overwrote state["confidence"] with its (possibly higher) score.
+        #      The real original ensemble confidence was saved by llm_judge_node in
+        #      metadata["embedding_classifier_confidence"] — use that instead.
+        intent_reclassified = state.get("intent_reclassified", False)
+        if intent_reclassified:
+            original_confidence = metadata.get("embedding_classifier_confidence")
+        else:
+            # Early-exit path: state["confidence"] is still the ensemble score
+            original_confidence = state.get("confidence", None)
+
+        VAGUE_QUERY_THRESHOLD = config.get("vague_query_confidence_threshold", 0.4)
+        vague_original_query = (
+            original_confidence is not None
+            and original_confidence < VAGUE_QUERY_THRESHOLD
+        )
+
         if missing_slots:
-            reason = "missing_entity"
-            # Enhanced message if user provided invalid format claim ID
-            # Check for any claim-related slot name (claim_ids, claim_number, claim_numbers)
-            claim_related_slots = ['claim_ids', 'claim_number', 'claim_numbers','claim_id','claimId']
+            claim_related_slots = ['claim_ids', 'claim_number', 'claim_numbers', 'claim_id', 'claimId']
             has_missing_claim_slot = any(slot in missing_slots for slot in claim_related_slots)
-            
-            if claim_id_format_invalid and potential_claim_ids and has_missing_claim_slot:
+
+            if vague_original_query:
+                # LLM judge guessed an intent from a vague query — ask WHAT the user
+                # needs before asking for specific identifiers.
+                reason = "ambiguous_intent"
+                reason_detail = (
+                    f"Intent '{intent}' guessed by LLM judge from vague query "
+                    f"(original confidence: {original_confidence:.2f} < {VAGUE_QUERY_THRESHOLD})"
+                )
+                # Clear missing_slots so the response agent does not jump to asking
+                # for claim number/sequence before understanding the user's goal.
+                missing_slots = []
+                logger.info(f"   Vague original query detected (original_confidence={original_confidence:.2f}) — using ambiguous_intent reason")
+            elif claim_id_format_invalid and potential_claim_ids and has_missing_claim_slot:
                 # User tried to provide claim ID but format is wrong
                 reason = "invalid_claim_format"
                 reason_detail = f"Invalid claim ID format: {potential_claim_ids}. Please provide a valid claim number."
                 logger.info(f"   Detected invalid claim ID format: {potential_claim_ids}")
                 logger.info(f"   Missing claim-related slots: {[s for s in missing_slots if s in claim_related_slots]}")
             else:
+                reason = "missing_entity"
                 reason_detail = f"Missing: {', '.join(missing_slots)}"
         elif confidence < confidence_threshold:
             reason = "low_confidence"
@@ -120,6 +169,9 @@ async def clarification_node(state: AgentState) -> Dict[str, Any]:
             # Additional context for invalid claim format
             "claim_id_format_invalid": claim_id_format_invalid,
             "potential_claim_ids": potential_claim_ids,
+            # Diagnostic fields for the response agent
+            "intent_reclassified": intent_reclassified,
+            "original_confidence": original_confidence,
         }
         
         logger.info("   → Will generate intelligent follow-up question using response agent")

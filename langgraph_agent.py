@@ -25,6 +25,10 @@ from nodes import (
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
+from Claims_search_api.claims_search_node_v2 import (
+    call_claims_search_node_v2 as call_claims_search_node,
+)
+from Claims_search_api.intent_router import is_claims_search_query
 from config.config import settings
 from core.logger import get_logger
 
@@ -106,6 +110,21 @@ def route_after_update_memory(state: AgentState) -> str:
 
 # Workflow builder -----------------------------------------------------------
 
+def _route_after_build_context(state: AgentState) -> str:
+    """
+    After build_context, route to the correct claims pipeline.
+
+    CHS (member-history) queries are served by call_claims_search (LLM-driven
+    full-history lookup). All other high-confidence queries with entities go to
+    call_claims_tool (single-claim API).
+    """
+    if is_claims_search_query(state):
+        logger.info("🔀 Routing to call_claims_search (member-history pipeline)")
+        return "call_claims_search"
+    logger.info("🔀 Routing to call_claims_tool (single-claim pipeline)")
+    return "call_claims_tool"
+
+
 def _build_workflow() -> StateGraph:
     """
     Build the complete workflow with unified safety check
@@ -161,6 +180,7 @@ def _build_workflow() -> StateGraph:
     workflow.add_node("response_agent", response_agent_node)
     workflow.add_node("response_safety_pii_postcheck", response_safety_pii_postcheck_node)
     workflow.add_node("call_claims_tool", call_claims_tool_node)
+    workflow.add_node("call_claims_search", call_claims_search_node)
     workflow.add_node("clarification", clarification_node)
     workflow.add_node("update_memory", update_memory_node)
 
@@ -209,11 +229,19 @@ def _build_workflow() -> StateGraph:
     # Clarification → Response Safety PII Precheck → Response Agent (LLM generates follow-up question)
     workflow.add_edge("clarification", "response_safety_pii_precheck")
     
-    # Build Context → Call Claims Tool
-    workflow.add_edge("build_context", "call_claims_tool")
-    
+    # Build Context → Claims routing fork (CHS member-history vs single-claim)
+    workflow.add_conditional_edges(
+        "build_context",
+        _route_after_build_context,
+        {
+            "call_claims_tool": "call_claims_tool",
+            "call_claims_search": "call_claims_search",
+        },
+    )
+
     # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
+    workflow.add_edge("call_claims_search", "response_safety_pii_precheck")
     workflow.add_edge("response_safety_pii_precheck", "response_agent")
     workflow.add_edge("response_agent", "response_safety_pii_postcheck")
     
