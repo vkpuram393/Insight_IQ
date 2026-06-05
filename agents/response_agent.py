@@ -28,6 +28,7 @@ from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from tools.claims_api import normalize_entities
 from Claims_search_api.llm_query_responder import build_claim_history_prompt
+from agents.post_processing.rendering_themes import VALID_RENDER_MODES
 import uuid
 
 logger = get_logger(__name__)
@@ -3583,33 +3584,34 @@ You MUST respond with a valid JSON object containing both your response and exac
 **CRITICAL:** Output ONLY the JSON object. Do NOT wrap in markdown code blocks. Do NOT include any text before or after the JSON."""
 
     def _parse_response_with_recommendations(
-        self, 
-        llm_output: str, 
+        self,
+        llm_output: str,
         intent: str
-    ) -> Tuple[str, List[Dict[str, str]]]:
+    ) -> Tuple[str, List[Dict[str, str]], Optional[str]]:
         """
-        Parse LLM output to extract response text and recommendations.
-        
+        Parse LLM output to extract response text, recommendations, and render_mode.
+
         Handles both structured JSON output (when recommendations enabled) and
         plain text output (fallback or when recommendations disabled).
-        
+
         Uses json.JSONDecoder().raw_decode() as the fallback parser instead of
         greedy regex to correctly handle cases where the LLM prepends plain text
         before the JSON object.
-        
+
         Args:
             llm_output: Raw output from LLM
             intent: Current intent for fallback recommendations
-            
+
         Returns:
-            Tuple of (response_text, recommendations_list)
+            Tuple of (response_text, recommendations_list, render_mode)
         """
         recommendations = []
         response_text = llm_output
-        
+        raw_render_mode: Optional[str] = None
+
         if not llm_output:
             self.logger.warning("⚠️ Empty LLM output, returning empty response")
-            return "", []
+            return "", [], None
         
         # ── ATTEMPT 1: Try to read the entire output as JSON ──
         # This works when the LLM returns ONLY the JSON envelope (the normal/happy case).
@@ -3634,7 +3636,11 @@ You MUST respond with a valid JSON object containing both your response and exac
                 if not response_text:
                     self.logger.warning("⚠️ JSON parsed but 'response' field empty, using full output")
                     response_text = llm_output
-                
+
+                # Extract render_mode from envelope
+                _rm = parsed.get("render_mode")
+                raw_render_mode = _rm if _rm in VALID_RENDER_MODES else None
+
                 # Pull out the recommendation chips from the JSON envelope
                 raw_recommendations = parsed.get("recommendations", [])
                 if isinstance(raw_recommendations, list):
@@ -3644,7 +3650,7 @@ You MUST respond with a valid JSON object containing both your response and exac
                                 "text": str(rec.get("text", "")).strip(),
                                 "action": str(rec.get("action", "")).strip() or None
                             })
-                    
+
                     self.logger.info(f"✅ Parsed {len(recommendations)} recommendations from JSON response")
                 else:
                     self.logger.warning(f"⚠️ 'recommendations' field is not a list: {type(raw_recommendations)}")
@@ -3688,6 +3694,10 @@ You MUST respond with a valid JSON object containing both your response and exac
                             response_text = llm_output
                             break
                         
+                        # Extract render_mode from envelope
+                        _rm = parsed.get("render_mode")
+                        raw_render_mode = _rm if _rm in VALID_RENDER_MODES else None
+
                         # Pull out the recommendation chips
                         raw_recommendations = parsed.get("recommendations", [])
                         if isinstance(raw_recommendations, list):
@@ -3701,7 +3711,7 @@ You MUST respond with a valid JSON object containing both your response and exac
                                 f"✅ Extracted {len(recommendations)} recommendations "
                                 f"via raw_decode from position {brace_pos}"
                             )
-                        
+
                         extracted = True
                         break  # Done — we found and read the JSON successfully
                     else:
@@ -3740,12 +3750,39 @@ You MUST respond with a valid JSON object containing both your response and exac
         if not recommendations and settings.enable_recommendations:
             recommendations = self._generate_fallback_recommendations(intent)
             self.logger.info(f"📋 Using {len(recommendations)} fallback recommendations for intent: {intent}")
-        
-        return response_text.strip(), recommendations
+
+        return response_text.strip(), recommendations, raw_render_mode
+
+    def _extract_render_dsl(self, raw: str) -> Tuple[str, Optional[dict]]:
+        """
+        Split ===RENDER_START=== ... ===RENDER_END=== block from LLM output.
+
+        The DSL block is appended AFTER the JSON recommendations envelope, so
+        stripping it gives _parse_response_with_recommendations clean input.
+
+        Returns:
+            (text_without_dsl_block, dsl_dict)  — dsl_dict is None on any failure.
+        """
+        marker = "===RENDER_START==="
+        end_marker = "===RENDER_END==="
+
+        if marker not in raw:
+            return raw, None
+
+        try:
+            before, rest = raw.split(marker, 1)
+            dsl_str = rest.split(end_marker)[0].strip()
+            dsl_dict = json.loads(dsl_str)
+            if not isinstance(dsl_dict, dict):
+                raise ValueError("DSL root must be a JSON object")
+            return before.rstrip(), dsl_dict
+        except Exception as exc:
+            self.logger.warning("render_dsl extraction failed: %s", exc)
+            return raw, None
 
     def _generate_fallback_recommendations(
-        self, 
-        intent: str, 
+        self,
+        intent: str,
         asked_for_claim: List[str] = None
     ) -> List[Dict[str, str]]:
         """
@@ -4221,14 +4258,58 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             logger.debug("🧠 Thought logging scheduled (async)")
         
         # =====================================================================
+        # Extract Render DSL (runs on raw LLM output, before recommendations)
+        # The DSL block sits AFTER the JSON envelope so stripping it leaves
+        # _parse_response_with_recommendations clean JSON to work with.
+        # =====================================================================
+        render_dsl_dict: Optional[dict] = None
+        if not needs_clarification:
+            response_text, render_dsl_dict = agent._extract_render_dsl(response_text)
+            if render_dsl_dict:
+                logger.info("📊 Extracted render_dsl: layout=%s sections=%d",
+                            render_dsl_dict.get("layout", "?"),
+                            len(render_dsl_dict.get("sections", [])))
+            else:
+                logger.debug("📊 No Render DSL in LLM output (non-data response or omitted)")
+
+        # =====================================================================
         # Parse recommendations from response (if enabled)
         # =====================================================================
+        render_mode_from_llm = None
         recommendations = []
         if recommendations_enabled and not needs_clarification:
             intent = state.get("intent", "unknown")
-            response_text, recommendations = agent._parse_response_with_recommendations(response_text, intent)
-            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response")
+            response_text, recommendations, render_mode_from_llm = agent._parse_response_with_recommendations(response_text, intent)
+            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response, render_mode={render_mode_from_llm}")
         
+        # Safety net: strip table lead-in phrases and trailing colons.
+        # The SELF-SUFFICIENT RESPONSE RULE in the prompt prevents this in most cases;
+        # this is a last-resort fallback for when the LLM still writes a table prelude.
+        _LEAD_IN_RE = re.compile(
+            r'[,\s]+(and\s+)?(here (is|are|follows)|below (is|are)|'
+            r'the following (is|are)|see (the )?(table|below|details?))[^.]*:?\s*$',
+            re.IGNORECASE,
+        )
+        if response_text:
+            _cleaned = _LEAD_IN_RE.sub('', response_text.rstrip().rstrip(':').rstrip())
+            if _cleaned and _cleaned != response_text.rstrip().rstrip(':').rstrip():
+                logger.warning(
+                    "rendering: stripped lead-in phrase from response_text intent=%s",
+                    state.get("intent", "unknown"),
+                )
+                _cleaned = _cleaned.rstrip().rstrip(',').rstrip()
+                response_text = _cleaned + ('' if _cleaned.endswith('.') else '.')
+            elif response_text.rstrip().endswith(':'):
+                _no_colon = response_text.rstrip()[:-1].rstrip()
+                _last_period = _no_colon.rfind('. ')
+                response_text = (
+                    _no_colon[:_last_period + 1].strip() if _last_period > 0 else _no_colon
+                )
+                logger.warning(
+                    "rendering: stripped trailing colon from response_text intent=%s",
+                    state.get("intent", "unknown"),
+                )
+
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
         remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
@@ -4348,6 +4429,8 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             "response_id": response_id,
             "recommendations": recommendations if recommendations_enabled else [],
             "asked_questions_by_claim": updated_asked_questions,  # Dedup tracking persisted via state
+            "render_dsl": render_dsl_dict,
+            "render_mode": render_mode_from_llm,
             "metadata": {
                 **state.get("metadata", {}),
                 "llm_metadata": slim_llm_metadata,  # Issue 1: Small metadata only
