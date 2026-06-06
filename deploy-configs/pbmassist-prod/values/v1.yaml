@@ -83,6 +83,8 @@ envVars: |
     value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
   - name: use_embedding_classifier
     value: 'true'
+  - name: CLAIMS_HISTORY_SEARCH_X_API_KEY
+    value: ""  # TODO: set the prod API key value
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 # Environment secrets from HashiCorp Vault

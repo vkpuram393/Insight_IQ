@@ -166,7 +166,7 @@ class Settings(BaseSettings):
     # Full URL for member-level claims history search (step 2)
     claims_history_search_url: str = "https://internal-sit1-apix.cvshealth.com/pss/myclaims/claims/exp/v1/claims/search"  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_URL env var
     # Server-side API subscription key for claims_history_search_url — overrides client x-api-key when set
-    claims_history_search_x_api_key: str = "fbbae75e-cd91-47a5-bb65-b68f525a66e3"  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_X_API_KEY env var — NEVER hardcode
+    claims_history_search_x_api_key: str = ""  # Set via CLAIMS_HISTORY_SEARCH_X_API_KEY env var per environment
 
 
     # API Fallback Configuration (for testing when external APIs are down)

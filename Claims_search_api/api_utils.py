@@ -71,8 +71,8 @@ def _extract_member_id_from_list(list_response):
 
 async def fetch_claim_list(claim_id, bearer_token, x_api_key, x_clientrefid):
     """Step 1: call claim_list_api with claim_id to resolve member_id."""
-    effective_key = settings.claims_history_search_x_api_key or x_api_key  # add this
-    headers = _build_headers(bearer_token, effective_key, x_clientrefid)   # use effective_ke
+    effective_key = settings.claims_history_search_x_api_key or x_api_key
+    headers = _build_headers(bearer_token, effective_key, x_clientrefid)
     #body = {"claimsRequest": {"claimId": str(claim_id).strip()}}
     body = {"claimsRequest":{"claimId":str(claim_id).strip()},"additionalRequestInfo":{"claimType":"","environment":""}}
     return await _post(_LIST_URL, body, headers, "claim list claim_id=" + str(claim_id))
@@ -145,7 +145,7 @@ def extract_member_cagm_from_response(response):
 #     # Example usage
 #     CLAIM_ID = os.getenv("CLAIM_ID", "260302639954275")
 #     BEARER_TOKEN = os.getenv("BEARER_TOKEN", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InRBSjlZYmlRbXFwYm9vQU5razdsR2RJd04zdER0NnJNUkxYSG0xWUE4SlUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJkZWYzNWU5Ni0xZWIwLTQ4NzctOTdlMS01MTE5OTJhMjQ4YmMiLCJpc3MiOiJodHRwczovL25nYW15cGJtbm9ucHJvZC5iMmNsb2dpbi5jb20vMmEyNzYyZTctZDU2Zi00N2FiLWE3MmEtZGYwMTAyYzQ1NzlhL3YyLjAvIiwiZXhwIjoxNzc4MzI3OTk0LCJuYmYiOjE3NzgzMjQzOTQsInRpZCI6ImZhYmI2MWI4LTNhZmUtNGU3NS1iOTM0LWE0N2Y3ODJiOGNkNyIsImdpdmVuX25hbWUiOiJ2YW1zaGkiLCJmYW1pbHlfbmFtZSI6ImtyaXNobmEiLCJlbWFpbCI6IlZhbXNoaS5LcmlzaG5hMkBjdnNoZWFsdGguY29tIiwibmFtZSI6ImtyaXNobmEsIHZhbXNoaSIsImlkcCI6Imh0dHBzOi8vbG9naW4ubWljcm9zb2Z0b25saW5lLmNvbS9mYWJiNjFiOC0zYWZlLTRlNzUtYjkzNC1hNDdmNzgyYjhjZDcvdjIuMCIsInN1YiI6IjJiOGJmNmQ3LTk5MzYtNGVjMS1hYzcwLTliMDlkN2MyZGI2NiIsIm5vbmNlIjoiY1hScFpHOVBUWEJPWldzNVFqSmpWVnB0TWtoRlMzaEJiVVYzTjJ4RFJUUk5VbTEtVDBGek9UVjJVSFZrIiwic2NwIjoiVXNlci5SZWFkIiwiYXpwIjoiZGVmMzVlOTYtMWViMC00ODc3LTk3ZTEtNTExOTkyYTI0OGJjIiwidmVyIjoiMS4wIiwiaWF0IjoxNzc4MzI0Mzk0fQ.p17WhSGWrfrsPUIORQJRCzIA9KXQEiEN4qmqvx4TjLEjdUtEM0_Q7epAgMvU58Z3tjSXmxKItpK3p_WgGibnoAjEwv-Rw2v_mmOgC0G1Optjvr2nhbm8kuR6I23Px3c1qydcmko6aHAqqXiE2NEplbVOf_wZEqo7Xv0TbtOyN4QBz_VrOGcHeLile80wVCMyhKPGmBiRAQPWCagavEGy1IfnfUASvGrn-BLowcj7sMC9-cP9I9413xsbTH6Vu9W7NStNNWA8M4j-feEGMof3hBCp9l9jSdcpnXC3rlZI9eyZkZfYEcKUdTODlsozX9Nc8IM4_ZeTSIe-ec0AWkdWog")
-#     X_API_KEY = os.getenv("X_API_KEY", "fbbae75e-cd91-47a5-bb65-b68f525a66e3")
+#     X_API_KEY = os.getenv("X_API_KEY", "")
 #     X_CLIENTREFID = os.getenv("X_CLIENTREFID", "b732784c-c490-46f7-a5e2-d595ca57bdd5")
 
 #     async def main():

@@ -81,6 +81,8 @@ envVars: |
     value: "mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net"
   - name: MONGODB_DATABASE_NAME
     value: "myclaims-QA"
+  - name: CLAIMS_HISTORY_SEARCH_X_API_KEY
+    value: "fbbae75e-cd91-47a5-bb65-b68f525a66e3"
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 
