@@ -176,16 +176,45 @@ async def chat(request: ChatRequest, http_request: Request):
 
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
-    user_info["auth_token"] = http_request.headers.get("Authorization", "")
+
+    # ── DIAGNOSTIC LOGS (QA token-flow debug) ─────────────────────────────
+    _body_keys     = list((request.user_info or {}).keys())
+    _body_token    = (request.user_info or {}).get("auth_token", "")
+    _header_token  = http_request.headers.get("Authorization", "")
+    _body_apikey   = (request.user_info or {}).get("x_api_key", "")
+    _header_apikey = http_request.headers.get("x-api-key", "") or http_request.headers.get("x_api_key", "")
+    logger.info("[AUTH-DEBUG] /chat user_info body keys      : %s", _body_keys)
+    logger.info("[AUTH-DEBUG] /chat auth_token  body present : %s | prefix: %s",
+                bool(_body_token), (_body_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /chat auth_token header present: %s | prefix: %s",
+                bool(_header_token), (_header_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /chat x_api_key   body present : %s", bool(_body_apikey))
+    logger.info("[AUTH-DEBUG] /chat x_api_key header present : %s", bool(_header_apikey))
+    # ── END DIAGNOSTIC LOGS ───────────────────────────────────────────────
+
+    # Prefer token from request body (survives APIGEE header stripping in deployed envs);
+    # fall back to Authorization header (used in local dev / direct calls).
+    user_info["auth_token"] = (
+        user_info.get("auth_token")
+        or http_request.headers.get("Authorization", "")
+    )
     # Capture additional API headers required by downstream claims-search API
     user_info["x_api_key"] = (
-        http_request.headers.get("x-api-key")
+        user_info.get("x_api_key")
+        or http_request.headers.get("x-api-key")
         or http_request.headers.get("x_api_key", "")
     )
     user_info["x_clientrefid"] = (
-        http_request.headers.get("x-clientrefid")
+        user_info.get("x_clientrefid")
+        or http_request.headers.get("x-clientrefid")
         or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
     )
+
+    _resolved_token = user_info.get("auth_token", "")
+    logger.info("[AUTH-DEBUG] /chat auth_token RESOLVED      : %s | prefix: %s",
+                "body" if _resolved_token and _resolved_token == _body_token else
+                "header" if _resolved_token else "EMPTY",
+                (_resolved_token or "")[:20] or "(empty)")
 
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
@@ -380,16 +409,45 @@ async def chat_stream(request: ChatRequest, http_request: Request):
 
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
-    user_info["auth_token"] = http_request.headers.get("Authorization", "")
+
+    # ── DIAGNOSTIC LOGS (QA token-flow debug) ─────────────────────────────
+    _body_keys     = list((request.user_info or {}).keys())
+    _body_token    = (request.user_info or {}).get("auth_token", "")
+    _header_token  = http_request.headers.get("Authorization", "")
+    _body_apikey   = (request.user_info or {}).get("x_api_key", "")
+    _header_apikey = http_request.headers.get("x-api-key", "") or http_request.headers.get("x_api_key", "")
+    logger.info("[AUTH-DEBUG] /stream user_info body keys      : %s", _body_keys)
+    logger.info("[AUTH-DEBUG] /stream auth_token  body present : %s | prefix: %s",
+                bool(_body_token), (_body_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /stream auth_token header present: %s | prefix: %s",
+                bool(_header_token), (_header_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /stream x_api_key   body present : %s", bool(_body_apikey))
+    logger.info("[AUTH-DEBUG] /stream x_api_key header present : %s", bool(_header_apikey))
+    # ── END DIAGNOSTIC LOGS ───────────────────────────────────────────────
+
+    # Prefer token from request body (survives APIGEE header stripping in deployed envs);
+    # fall back to Authorization header (used in local dev / direct calls).
+    user_info["auth_token"] = (
+        user_info.get("auth_token")
+        or http_request.headers.get("Authorization", "")
+    )
     # Capture additional API headers required by downstream claims-search API
     user_info["x_api_key"] = (
-        http_request.headers.get("x-api-key")
+        user_info.get("x_api_key")
+        or http_request.headers.get("x-api-key")
         or http_request.headers.get("x_api_key", "")
     )
     user_info["x_clientrefid"] = (
-        http_request.headers.get("x-clientrefid")
+        user_info.get("x_clientrefid")
+        or http_request.headers.get("x-clientrefid")
         or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
     )
+
+    _resolved_token = user_info.get("auth_token", "")
+    logger.info("[AUTH-DEBUG] /stream auth_token RESOLVED      : %s | prefix: %s",
+                "body" if _resolved_token and _resolved_token == _body_token else
+                "header" if _resolved_token else "EMPTY",
+                (_resolved_token or "")[:20] or "(empty)")
 
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))

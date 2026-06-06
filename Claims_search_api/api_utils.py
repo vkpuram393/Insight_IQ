@@ -17,18 +17,37 @@ _LIST_URL = settings.claim_list_api
 MAX_RAW_CLAIMS = 500
 _HTTP_TIMEOUT = 60.0
 
-# Log at startup so pod logs immediately show whether the key was injected
-_configured_key = settings.claims_history_search_x_api_key
-if _configured_key:
-    logger.info("[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY loaded (ends ...%s)", _configured_key[-4:])
-else:
-    logger.warning("[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY is NOT set — will fall back to request x-api-key")
+
+def log_startup_config() -> None:
+    """
+    Log Claims Search API config at pod startup.
+    Call this from main.py startup_event so it appears in pod startup logs
+    rather than at the time of the first request.
+    """
+    _configured_key = settings.claims_history_search_x_api_key
+    if _configured_key:
+        logger.info(
+            "[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY loaded (ends ...%s)",
+            _configured_key[-4:],
+        )
+    else:
+        logger.warning(
+            "[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY is NOT set"
+            " — will fall back to request x-api-key"
+        )
+    logger.info("[ClaimsSearch] Startup: LIST_URL  = %s", _LIST_URL)
+    logger.info("[ClaimsSearch] Startup: SEARCH_URL = %s", _SEARCH_URL)
 
 
 def _build_headers(bearer_token, x_api_key, x_clientrefid):
     auth = (bearer_token or "").strip()
     if auth and not auth.lower().startswith("bearer "):
         auth = "Bearer " + auth
+    # Log token presence/prefix to aid 401 diagnosis without exposing the full value
+    if auth:
+        logger.debug("[ClaimsSearch] Auth token present (prefix: %s...)", auth[:20])
+    else:
+        logger.warning("[ClaimsSearch] Auth token is EMPTY — request will likely 401")
     correlation_id = f"CVS-{uuid.uuid4()}"
     headers = {
         "accept": "application/json",

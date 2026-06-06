@@ -1025,11 +1025,12 @@ async def call_external_api(api, body: Dict[str, Any], auth_token: str = "") -> 
         "Authorization": auth_token  # Thread-safe: passed as parameter
     }
 
-    # Log request details for debugging
+    # Log request details for debugging (auth token masked to first 20 chars)
+    _token_preview = (auth_token or "")[:20] + "..." if auth_token else "(empty)"
     logger.info(f"🌐 Making API request:")
     logger.info(f"   URL: {url}")
     logger.info(f"   Method: {method}")
-    logger.info(f"   Headers: {headers}")
+    logger.info(f"   Auth: {_token_preview}")
     logger.info(f"   Body: {body}")
     
     # Use shared httpx.AsyncClient for connection pooling and memory efficiency

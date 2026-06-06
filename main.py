@@ -74,6 +74,13 @@ async def startup_event():
         await init_graph()
         print("[STARTUP] init_graph done")
 
+        # Log Claims Search API config early so pod logs show key/URL state at startup
+        try:
+            from Claims_search_api.api_utils import log_startup_config
+            log_startup_config()
+        except Exception as _e:
+            print(f"[STARTUP] Claims search config log failed (non-fatal): {_e}")
+
         # Pre-initialize embedding classifier to ensure MongoDB has embeddings
         # (Embedding generation takes ~3 minutes, must happen before queries arrive)
         # This also loads embeddings into memory once (singleton pattern prevents reloads)
