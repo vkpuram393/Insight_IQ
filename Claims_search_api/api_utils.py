@@ -17,6 +17,13 @@ _LIST_URL = settings.claim_list_api
 MAX_RAW_CLAIMS = 500
 _HTTP_TIMEOUT = 60.0
 
+# Log at startup so pod logs immediately show whether the key was injected
+_configured_key = settings.claims_history_search_x_api_key
+if _configured_key:
+    logger.info("[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY loaded (ends ...%s)", _configured_key[-4:])
+else:
+    logger.warning("[ClaimsSearch] Startup: CLAIMS_HISTORY_SEARCH_X_API_KEY is NOT set — will fall back to request x-api-key")
+
 
 def _build_headers(bearer_token, x_api_key, x_clientrefid):
     auth = (bearer_token or "").strip()
@@ -72,6 +79,8 @@ def _extract_member_id_from_list(list_response):
 async def fetch_claim_list(claim_id, bearer_token, x_api_key, x_clientrefid):
     """Step 1: call claim_list_api with claim_id to resolve member_id."""
     effective_key = settings.claims_history_search_x_api_key or x_api_key
+    _key_source = "config (CLAIMS_HISTORY_SEARCH_X_API_KEY)" if settings.claims_history_search_x_api_key else "request header"
+    logger.info("[ClaimsSearch] Step 1 x-api-key source: %s | key set: %s", _key_source, bool(effective_key))
     headers = _build_headers(bearer_token, effective_key, x_clientrefid)
     #body = {"claimsRequest": {"claimId": str(claim_id).strip()}}
     body = {"claimsRequest":{"claimId":str(claim_id).strip()},"additionalRequestInfo":{"claimType":"","environment":""}}
@@ -81,6 +90,8 @@ async def fetch_claim_list(claim_id, bearer_token, x_api_key, x_clientrefid):
 async def fetch_claims_by_member(member_id, bearer_token, x_api_key, x_clientrefid):
     """Step 2: call claims_history_search_url with member_id to get full claim history."""
     effective_key = settings.claims_history_search_x_api_key or x_api_key
+    _key_source = "config (CLAIMS_HISTORY_SEARCH_X_API_KEY)" if settings.claims_history_search_x_api_key else "request header"
+    logger.info("[ClaimsSearch] Step 2 x-api-key source: %s | key set: %s", _key_source, bool(effective_key))
     headers = _build_headers(bearer_token, effective_key, x_clientrefid)
     body = {
         "claimListsearch": {"key": {"member": str(member_id).strip()}},
