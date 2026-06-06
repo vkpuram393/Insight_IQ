@@ -207,6 +207,14 @@ class Settings(BaseSettings):
     # Higher values may increase response latency and token usage
     max_recommendations: int = 2  # ⚠️ Overridden by MAX_RECOMMENDATIONS env var
 
+    # =========================================================================
+    # RENDERING AGENT KILL SWITCH
+    # =========================================================================
+    # Set ENABLE_RENDERING_AGENT=false to force render_format="text" for every
+    # response, bypassing the rendering agent entirely. No UI or code deploy
+    # needed — flip the env var and restart the pod.
+    enable_rendering_agent: bool = True  # ⚠️ Overridden by ENABLE_RENDERING_AGENT env var
+
     class Config:
         """
         Configuration loading priority (Pydantic Settings):

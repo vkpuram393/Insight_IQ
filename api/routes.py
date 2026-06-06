@@ -67,6 +67,101 @@ class ChatResponse(BaseModel):
     intent_resolution_trail: Optional[IntentResolutionTrail] = None  # per-stage classification trail
     metadata: Optional[Dict[str, Any]] = None
     timestamp: str
+    # ── Rendering fields ──
+    render_format: str = "text"
+    html_content: Optional[str] = None
+    css_content: Optional[str] = None
+    answer_header: Optional[str] = None
+    render_dsl: Optional[Dict[str, Any]] = None
+    render_mode: Optional[str] = None
+
+
+def process_rendering(state_or_event_data: dict) -> dict:
+    """Post-graph HTML rendering. NEVER raises — returns render_format='text' on any failure."""
+    try:
+        # Kill switch: set ENABLE_RENDERING_AGENT=false to force text-only mode.
+        if not settings.enable_rendering_agent:
+            return {"render_format": "text", "render_dsl": None}
+
+        from agents.post_processing.myclaims_rendering_agent import MyclaimsRenderingAgent
+        from agents.post_processing.rendering_themes import NO_RENDER_INTENTS
+
+        intent = state_or_event_data.get("intent", "")
+        tool_results = (
+            state_or_event_data.get("tool_results")
+            or state_or_event_data.get("_tool_results")
+        )
+        entities = (
+            state_or_event_data.get("entities")
+            or state_or_event_data.get("_entities")
+            or {}
+        )
+        needs_clarification = state_or_event_data.get("needs_clarification", False)
+
+        if hasattr(tool_results, "dict"):
+            tool_results = tool_results.dict()
+
+        # Unmask tool_results so the rendering agent displays real values, not PII tokens.
+        pii_masking = state_or_event_data.get("metadata", {}).get("response_pii_masking", {})
+        token_mapping = pii_masking.get("tool_metadata", {}).get("token_mapping", {})
+        if token_mapping and isinstance(tool_results, dict):
+            try:
+                import json as _json
+                from services.pii_protection import get_pii_service
+                _pii = get_pii_service()
+                tool_results_str = _json.dumps(tool_results)
+                tool_results_str = _pii.unmask_pii_phi(tool_results_str, token_mapping)
+                tool_results = _json.loads(tool_results_str)
+            except Exception as _ue:
+                logger.warning(f"process_rendering: tool_results unmask failed (continuing with masked): {_ue}")
+
+        if (
+            intent in NO_RENDER_INTENTS
+            or needs_clarification
+            or not tool_results
+            or getattr(tool_results.get("status", ""), "value", tool_results.get("status", "")).lower() != "success"
+        ):
+            return {"render_format": "text", "render_dsl": None}
+
+        render_dsl_validated = None
+        raw_dsl = state_or_event_data.get("render_dsl")
+        render_mode = state_or_event_data.get("render_mode")
+        response_text = state_or_event_data.get("response") or state_or_event_data.get("final_response") or ""
+        logger.debug("render_dsl from state: type=%s truthy=%s", type(raw_dsl).__name__, bool(raw_dsl))
+        if raw_dsl and isinstance(raw_dsl, dict) and tool_results:
+            try:
+                from agents.post_processing.render_dsl import validate_render_dsl
+                validated = validate_render_dsl(raw_dsl)
+                if validated:
+                    render_dsl_validated = validated.to_dict()
+                    logger.info("render_dsl validated: layout=%s sections=%d",
+                                render_dsl_validated.get("layout"), len(render_dsl_validated.get("sections", [])))
+                else:
+                    logger.warning("render_dsl validation returned None — sections pruned. raw_dsl=%s", raw_dsl)
+            except Exception as _de:
+                logger.warning(f"render_dsl validation failed (non-fatal): {_de}")
+
+        result = MyclaimsRenderingAgent().execute(
+            intent=intent,
+            tool_results=tool_results,
+            entities=entities,
+            render_dsl=render_dsl_validated,
+            render_mode=render_mode,
+            response_text=response_text,
+        )
+
+        return {
+            "render_format": result.render_format,
+            "html_content": result.html_content,
+            "css_content": result.css_content,
+            "answer_header": result.answer_header,
+            "render_dsl": render_dsl_validated,
+            "render_mode": render_mode,
+        }
+    except Exception as e:
+        logger.warning(f"Rendering agent failed (silent fallback): {e}")
+        return {"render_format": "text", "render_dsl": None}
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
@@ -192,6 +287,9 @@ async def chat(request: ChatRequest, http_request: Request):
             clarification=_clarification_stage,
         )
 
+        # Run rendering agent on final state
+        rendering = process_rendering(final_state)
+
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
@@ -205,7 +303,13 @@ async def chat(request: ChatRequest, http_request: Request):
             clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
             intent_resolution_trail=_trail,
             metadata=metadata,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            render_format=rendering.get("render_format", "text"),
+            html_content=rendering.get("html_content"),
+            css_content=rendering.get("css_content"),
+            answer_header=rendering.get("answer_header"),
+            render_dsl=rendering.get("render_dsl"),
+            render_mode=rendering.get("render_mode") or final_state.get("render_mode"),
         )
     except HTTPException:
         raise
@@ -327,7 +431,13 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                 event_type = event.get("type")
                 event_data = event.get("data")
                 event_metadata = event.get("metadata", {})
-                
+
+                # Rendering: enrich complete event with HTML table, strip internal fields
+                if event_type == "complete" and event_data:
+                    rendering = process_rendering(event_data)
+                    event_data = {k: v for k, v in event_data.items() if not k.startswith("_")}
+                    event_data.update(rendering)
+
                 # Format as SSE event
                 # Note: SSE requires "event:" and "data:" lines, ending with double newline
                 sse_message = f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"

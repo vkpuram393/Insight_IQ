@@ -135,6 +135,10 @@ class AgentState(TypedDict):
     # ]
     # NOTE: claim_list action is blocked — see BLOCKED_RECOMMENDATION_ACTIONS in response_agent.py
 
+    # === RENDERING (from response_agent → rendering_agent) ===
+    render_dsl: Optional[Dict[str, Any]]   # Flexible layout DSL from response LLM (None for non-data responses)
+    render_mode: Optional[str]             # "text_only" | "table" — LLM envelope decision (set before DSL)
+
     # === RECOMMENDATION DEDUP TRACKING ===
     asked_questions_by_claim: Optional[Dict[str, List[str]]]  # Tracks questions asked per claim key
     # Structure: {"claimNumber_sequenceNumber": ["question1 text", "question2 text"]}
@@ -204,6 +208,8 @@ def create_initial_state(
         context_tokens=None,
         response="",
         response_id=None,
+        render_dsl=None,
+        render_mode=None,
         recommendations=[],              # Initialize empty recommendations list
         asked_questions_by_claim={},      # Initialize empty dedup tracking
         metadata={},

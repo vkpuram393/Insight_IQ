@@ -614,6 +614,10 @@ async def run_graph_stream(
                 "needs_clarification": current_state.get("needs_clarification", False),
                 "clarifying_question": current_state.get("clarifying_question"),
                 "recommendations": current_state.get("recommendations", []),
+                "_tool_results": current_state.get("tool_results"),
+                "_entities": current_state.get("entities"),
+                "render_dsl": current_state.get("render_dsl"),
+                "render_mode": current_state.get("render_mode"),
                 "metadata": current_state.get("metadata", {})
             },
             "metadata": {

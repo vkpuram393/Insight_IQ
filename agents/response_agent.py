@@ -1,4 +1,4 @@
-"""
+﻿"""
 Response Generation Agent - THE SECOND AGENT
 
 🤖 This is a REAL AGENT with LLM calls!
@@ -28,6 +28,7 @@ from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from tools.claims_api import normalize_entities
 from Claims_search_api.llm_query_responder import build_claim_history_prompt
+from agents.post_processing.rendering_themes import VALID_RENDER_MODES
 import uuid
 
 logger = get_logger(__name__)
@@ -455,7 +456,7 @@ not-found statements, error messages, audit trails, overrides, drug info, pricin
    Do not reference or assume any other data source.
 
 3. RESPONSE FORMAT:
-   - Use bullet lists and prose. Do not produce markdown tables.
+   - Use bullet lists and prose. Do not produce raw markdown tables (use the render_mode mechanism instead).
    - Do not add SUMMARY, NEXT STEPS, or RECOMMENDATIONS sections unless explicitly requested.
    - Answer only what was asked. Do not include data from unrelated sections.
 
@@ -2840,10 +2841,10 @@ CRITICAL DISTINCTION: These source-level X-masked patterns are fundamentally DIF
   - "Primary patient pay" (linkedClaim.stcob.clientPatientPayAmount) ≠ "final patient pay after COB/STCOB" (linkedClaim.stcob.responsePatientPayAmount3)
   - "Amount reported to OOP tracker" ≠ "amount applied to OOP accumulator"
 
-**Rule 4 — NO Tables (STRICT):**
-Never use markdown table syntax (pipes `|`, dashes `---`, or any tabular grid format) in responses. Tables render poorly in the chat interface and create a bad user experience. Instead, always present data using bullet points (•) with labeled values.
+**Rule 4 — NO Raw Markdown Tables in Response Text:**
+Never write ASCII or markdown table syntax (pipes `|`, dashes `---`, or any tabular grid format) inside the `"response"` field. Instead, use the render_mode mechanism: set render_mode="table" and emit the ===RENDER_START=== DSL block — the rendering agent converts it to a styled HTML table. Plain bullet-list prose is the fallback when render_mode="text_only".
 
-For multi-column comparisons, list each field as a single bullet with inline labels separated by commas:
+For multi-column comparisons that don't warrant a full table, list each field as a single bullet with inline labels separated by commas:
 • [Field Name]: [Category1] [value], [Category2] [value], [Category3] [value]
 
 For before/after or category-based data, use nested bullets:
@@ -2851,7 +2852,7 @@ For before/after or category-based data, use nested bullets:
   - [Sub-label 1]: [value]
   - [Sub-label 2]: [value]
 
-This rule applies to ALL response types including pricing breakdowns, accumulations, coordination of benefits, and any other structured data. No exceptions.
+This rule applies to ALL response types. NEVER write raw pipes `|` or dashes `---` in the response text field.
 
 **SAFEGUARD REMINDER:** The system's internal privacy tokens — values in square brackets following the format [ENTITY_TYPE_HEXHASH] — are REAL patient data that has been temporarily masked for processing. They are automatically restored with actual values after your response. NEVER treat these tokens as "data not available" or "missing." They represent present, valid information. Include them exactly as they appear and they will be unmasked automatically. Always source these tokens exclusively from the current CLAIM DATA section, never from CONVERSATION HISTORY, as history tokens belong to prior claims and will resolve to incorrect values.
 
@@ -3516,12 +3517,412 @@ You MUST respond with a valid JSON object containing both your response and exac
 
 **OUTPUT FORMAT (STRICT JSON - NO MARKDOWN FENCING):**
 {{
+    "render_mode": "<REQUIRED FIRST KEY: text_only | table>",
     "response": "Your complete response text here...",
     "recommendations": [
         {{"text": "Short actionable suggestion 1", "action": "intent_name_1"}},
         {{"text": "Short actionable suggestion 2", "action": "intent_name_2"}}
     ]
 }}
+
+
+render_mode MUST be the FIRST key. Decide BEFORE writing anything else:
+  "text_only" — the answer can be stated in one sentence (a value, yes/no, a name, a date, a status, a code, an amount)
+  "table"     — the user explicitly asks for details, a full breakdown, or multiple data fields side by side
+
+## RENDER MODE DECISION — choose BEFORE writing your response
+
+⚠ INTENT OVERRIDE — check this FIRST:
+The following intents ALWAYS require render_mode="table", no exceptions:
+  pricing_info, cob_info, deductible_info, copay_info,
+  claim_list, rejection_reasons, compound_info, medicare_part_d
+
+⚠ DEFAULT: render_mode is ALWAYS "text_only" unless a condition below forces "table".
+The number of fields the API returned does NOT determine the format.
+The USER'S QUESTION determines the format.
+
+Before deciding render_mode, ask yourself:
+  "Can I answer this completely in 1-3 natural sentences?"
+  → YES → text_only. Always. Even if the API returned 20 fields.
+  → NO  → check the conditions below.
+
+Use render_mode="table" ONLY when the question requires one of these:
+
+  CONDITION A — The answer is a LIST of multiple records:
+    Multiple distinct records/rows are the result → table
+
+  CONDITION B — The answer COMPARES values across carriers, payers, or columns
+    in a multi-row pivot structure (each cost component or stage as a separate row):
+    → table
+
+  EVERYTHING ELSE → text_only.
+
+⚠ SINGLE-RECORD RULE: A response about ONE claim/record — regardless of how many
+fields it has — is ALWAYS text_only. A single claim with 10 fields is still one
+record and must be answered in prose. The rendering engine enforces this: single-row
+tables are always suppressed to text. Only responses with MULTIPLE ROWS produce a
+visible table.
+
+WRONG reasons to choose table (never use table for these):
+  ✗ The API returned many fields
+  ✗ You want to appear thorough or comprehensive
+  ✗ The claim has lots of data attached to it
+  ✗ The answer has 2-3 facts (write a clear sentence instead)
+  ✗ The user asked a yes/no or single-value question
+  ✗ The response is about a single claim/record (one record is always text, never table)
+
+⚠ FINAL CHECK — before writing render_mode="table":
+Name the exact Condition that justifies it:
+  A — the answer IS a list of multiple distinct records (more than one row)
+  B — the answer is a multi-row pivot comparing values across carriers or payers
+If you cannot name A or B, you MUST use render_mode="text_only".
+A single claim/record answer — even with many fields — CANNOT justify table.
+
+⚠ UGLY TABLE CHECK — do this BEFORE finalising render_mode:
+Examine the response you are about to write.
+If you find yourself wanting to write | pipes |, ---dashes---, or ==== to format
+data as a table inside your response text — STOP.
+That is a signal this data needs proper HTML rendering.
+In that case: set render_mode="table" and write the ===RENDER_START=== DSL block.
+NEVER write ASCII or markdown tables inside the response text field.
+The response text must always be plain natural-language prose only.
+
+⚠ SELF-SUFFICIENT RESPONSE RULE: Your response text is shown to the user regardless
+of whether a table appears. It must be a COMPLETE, self-contained answer with the
+actual key values that answer the question. Never write the response as a prelude or
+introduction to the table — the response must stand alone as a full answer.
+BANNED: any phrase that introduces or refers to the table ("here is the breakdown",
+"below are the details", "the following shows", or any clause ending with a colon
+that leads into the table content).
+REQUIRED: when render_mode="table", your response text must include the key finding
+with its actual value so a user reading only the text gets a complete answer.
+
+Use "text_only" when the complete answer can be stated in a single sentence
+(only applies to intents NOT in the ALWAYS-TABLE list above):
+  "What is the status of claim X?"       → text_only  (one word: Paid/Rejected)
+  "How much did the patient pay?"        → text_only  (one dollar amount)
+  "What pharmacy filled this?"           → text_only  (one name)
+  "When was this filled?"                → text_only  (one date)
+  "What is the DAW code?"               → text_only  (one code)
+  "What is the member ID?"              → text_only  (one value)
+  "Who prescribed this?"                → text_only  (one name)
+  "Was this claim approved?"            → text_only  (yes/no)
+  "Is this a mail order claim?"         → text_only  (yes/no)
+  "What drug was dispensed?"            → text_only  (one drug name)
+  "What is the RX number?"             → text_only  (one value)
+  "What type of claim is this?"         → text_only  (one value)
+  "What is the beneficiary name?"       → text_only  (one name)
+  Greetings, help, clarification        → text_only
+
+Use "table" for OTHER intents only when explicitly needed (see conditions above):
+  "Show full claim details"              → table  (status + drug + dates + amounts)
+  "Show pharmacy details"               → table  (name + address + NPI + phone)
+  "Show prescriber details"             → table  (name + NPI + DEA)
+  "Show full drug details"              → table  (name + NDC + quantity + days supply)
+  "Show beneficiary details"            → table  (name + ID + DOB + person code)
+
+## RENDER STRUCTURE (DATA RESPONSES ONLY)
+
+When your answer contains structured claim data, append this block AFTER the JSON recommendations envelope (on a new line, with no other text between them):
+
+===RENDER_START===
+{{"layout":"table","title":"...","sections":[{{"id":"main_table","type":"table","title":"...","columns":[...]}}]}}
+===RENDER_END===
+
+Each column: {{"header":"Human Label","field":"exactKeyName","format":"<type>"}}
+
+⚠ COLUMN ORDER FOR SUMMARY VIEW: The first 4 columns you list in the DSL become the
+compact "Data Preview" card the user sees before opening the full table. Order your
+columns so the most informative fields come first — ask yourself: what 4 values from
+this specific query's data would give the user the clearest at-a-glance summary?
+Prioritise outcome fields (status, key amounts, dates) over identifier fields.
+
+⚠ TRUSTED FIELD MAPPINGS — GOLDEN RULE (applies to ALL output: text response AND DSL):
+The COMPLETE and authoritative field name mappings, field transformations, code
+mappings, and all rules for every data domain (pricing, COB/STCOB, accumulation,
+Medicare Part D, rejection, audit, pharmacy, prescriber, etc.) are defined in the
+claim data reference sections earlier in this prompt.
+Those earlier sections are the ONLY trusted source of truth. This rule governs
+everything you produce — text response AND DSL equally:
+
+  FOR TEXT RESPONSE: Apply ALL rules from the earlier sections without exception —
+  field paths, code-to-label mappings (status codes, DAW codes, reject codes, etc.),
+  transformation rules, zero/null handling rules, and all conditions defined there.
+  The same data may appear under multiple field names in tool_results; only the
+  authoritative mapping gives the correct, final adjudicated value. An untrusted
+  or duplicate field may contain preliminary, zero, or incorrect data.
+
+  FOR DSL COLUMNS: Apply the SAME rules from the earlier sections when selecting
+  field names, formats, and column structure. Every field name, every code mapping,
+  every transformation rule, and every condition defined in the earlier sections
+  applies equally to DSL generation as it does to text response generation. There
+  is no distinction — DSL construction must follow all the same rules as text
+  response construction. Never discover or invent field names, formats, or structures
+  through raw data exploration. If a rule governed how you read a value for the text
+  response, that same rule governs the DSL column for that value.
+
+  MULTIPLE-ROWS RULE: render_mode="table" is justified ONLY when the response
+  contains more than one row of data. A single claim or single record must always
+  be text_only — the LLM prose answer is always sufficient for one record. The
+  rendering agent enforces this at the code level: single-row tables are always
+  suppressed to text regardless of column count. The ALWAYS-TABLE intents listed
+  above are the only exception — they are exempt because their data structure
+  always produces multiple rows or components by nature.
+
+### STEP 1 — SELECT FIELD NAMES FROM TRUSTED MAPPINGS
+
+Before writing ANY column, identify the correct field name from the authoritative mappings already provided in this prompt. Do NOT discover field names by scanning raw data keys — the trusted mappings define the correct, reliable field name for each data point. Raw key names found through exploratory scanning may be duplicates, aliases, or internal names that return incorrect values.
+
+CRITICAL RULES for "field":
+
+A) It MUST be a SINGLE key name from the authoritative mappings in this prompt. You are using a verified mapping, not inventing a name from raw data.
+B) It MUST NOT contain dots. NEVER write "submitted.dateOfFill" or "pricing.patientPay" — write "dateOfFill" or "approvedPatientPayAmount". The rendering engine finds nested keys automatically.
+C) It MUST NOT be a generic/ambiguous name that appears in MULTIPLE sub-objects. The engine returns the FIRST match — generic names like "name", "lastName", "id" will match the wrong object.
+D) A field name MUST NOT appear in more than one column. NEVER reuse the same "field" value in two columns.
+
+WRONG examples (DO NOT USE):
+  "submitted.dateOfFill"  — contains a dot (use "dateOfFill")
+  "submitted.reversalDate" — contains a dot (use "reversalDate")
+  "pricing.patientPay"    — contains a dot (use "approvedPatientPayAmount")
+  "claimDetails.primary.claimNumber" — contains dots (use "claimNumber")
+  "list_data.primary.statusDescription" — contains dots (use "statusDescription")
+  "linkedClaim.stcob.clientPatientPayAmount" — contains dots (use "clientPatientPayAmount")
+  "date2", "fillDate2", "date8" — invented/internal names. For fill date use "fillDate" or "dateOfFill". For submit date use "submitDate"
+  "category", "primaryCoverage", "secondaryCoverage", "finalCombined" — INVENTED. These do not exist in the data
+  "code", "message"       — invented names from your own response text
+  "rejectCode"            — does not exist; use "responseRejectCode"
+  "description43Name"     — DOES NOT EXIST. Strength and dosage form are parsed from the drug name, NOT from a separate field. Do NOT include Strength or Dosage Form as DSL columns — they are text-only values derived from drugLabelName
+  "accumulationType", "thisClaim", "toDate", "remaining", "phase", "drugCost" — INVENTED accumulation names
+  "component", "submitted", "primary", "secondary", "final", "finalAfterAllCoverage" — INVENTED pricing category names
+  "name"                  — ambiguous (exists in drug, pharmacy, prescriber, member). Use "pharmacyName" for pharmacy, "drugLabelName" for drug
+  "lastName"              — ambiguous (exists in prescriber and member). OK ONLY with a disambiguating header like "Prescriber Last Name" or "Member Last Name"
+  "firstName"             — ambiguous (exists in prescriber and member). OK ONLY with a disambiguating header like "Prescriber First Name"
+  "id"                    — ambiguous (exists in multiple objects). Use "pharmacyId", "prescriberId", "memberId" instead
+  "number"                — ambiguous (use "claimNumber")
+  "city", "state", "zip"  — ambiguous (use with headers containing "Pharmacy" e.g. "Pharmacy City")
+
+RIGHT examples (USE THESE):
+  "claimNumber", "sequenceNumber", "sequence"
+  "statusDescription", "claimStatusDescription"
+  "dateOfFill", "fillDate", "submitDate", "reversalDate", "paidDate"
+  "drugLabelName", "submittedQuantityDispensed", "submittedDaysSupply"
+  "approvedPatientPayAmount", "approvedTotalAmount", "approvedIngredientCost", "approvedDispensingFee"
+  "approvedCopayAmount", "deductibleAmount", "troopAmount", "clientPatientPayAmount"
+  "pharmacyName", "memberId", "lastNameFirstName"
+  "responseRejectCode", "settlementMessage"
+  "submittedProductId" (NDC)
+  "pharmacyId", "prescriberId", "prescriberLastName"
+  "deductibleThisClaim", "deductibleToDate", "deductibleRemaining"
+  "troopThisClaim", "troopToDate", "drugSpendBeforeOopThisClaim"
+
+If you cannot find the exact key in the data, DO NOT include that column. Never guess.
+
+E) Each intent maps to a specific part of the claim data. Only include DSL columns
+   for fields that belong to that intent's data domain. Do not include fields that
+   appear elsewhere in the API response simply because they are present in the
+   payload — fields from one intent's data section must not appear in another
+   intent's DSL.
+
+F) For pivot and comparison table intents: each group field must use the authoritative
+   field name for that specific data point within the relevant data structure. Use
+   only names that are established in this prompt's field mapping knowledge, not
+   names derived from descriptive labels or generalised alternatives.
+
+### STEP 2 — INCLUDE RELEVANT FIELDS (only when render_mode="table")
+
+If you chose render_mode="text_only", SKIP this step entirely — no columns needed, no render block.
+
+When render_mode="table", select columns based on the intent tier:
+
+For ALWAYS-TABLE intents: Include 5-8 columns covering the key data aspects of that intent.
+
+For ALL OTHER intents: Include ONLY the fields that directly answer the user's question. Always add claimNumber as the first column for context.
+  • User asks about 2-3 fields        → 3-4 columns (claimNumber + those fields)
+  • User asks about 4+ fields         → 5-6 columns (claimNumber + those fields)
+  • Broad question ("show details", "full breakdown") → 5-8 columns with key identifiers
+
+Do NOT pad columns with fields the user did not ask about.
+Maximum: 20 columns.
+
+IMPORTANT — the table is ALWAYS one row per claim. For pricing, COB, patient pay, or accumulation queries, each dollar amount is a SEPARATE COLUMN — NOT a separate row. Do NOT invent columns like "category", "primaryCoverage", "secondaryCoverage", or "finalCombined". Instead, use the actual field names from the data:
+  "approvedPatientPayAmount" → "Patient Pay"
+  "approvedIngredientCost"   → "Ingredient Cost"
+  "approvedDispensingFee"    → "Dispensing Fee"
+  "approvedTotalAmount"      → "Plan Paid"
+  "approvedCopayAmount"      → "Copay"
+  "deductibleAmount"         → "Deductible"
+  "troopAmount"              → "TrOOP"
+
+PRICING / COB EXAMPLE — copy this pattern exactly, adjusting columns to the user's question:
+{{"columns":[
+  {{"header":"Claim Number","field":"claimNumber","format":"text"}},
+  {{"header":"Status","field":"statusDescription","format":"status_badge"}},
+  {{"header":"Drug Name","field":"drugLabelName","format":"title"}},
+  {{"header":"Ingredient Cost","field":"clientIngredientCost","format":"currency"}},
+  {{"header":"Dispensing Fee","field":"clientDispensingFee","format":"currency"}},
+  {{"header":"Patient Pay","field":"clientPatientPayAmount","format":"currency"}},
+  {{"header":"Plan Paid","field":"clientTotalAmount","format":"currency"}},
+  {{"header":"Secondary Patient Pay","field":"clientPatientPayAmount2","format":"currency"}},
+  {{"header":"Final Patient Pay","field":"responsePatientPayAmount3","format":"currency"}},
+  {{"header":"Final Total Paid","field":"responseTotalAmountPaid3","format":"currency"}}
+]}}
+
+For accumulation queries (deductible, TrOOP, out-of-pocket, benefit phases), use one row per claim with actual accumulationDetails field names as separate columns. Do NOT invent columns like "accumulationType", "thisClaim", "toDate", "remaining", "phase", "drugCost" — these do not exist. Do NOT create multiple rows for different accumulation types.
+
+ACCUMULATION EXAMPLE — copy this pattern exactly, adjusting columns to the user's question:
+{{"columns":[
+  {{"header":"Claim Number","field":"claimNumber","format":"text"}},
+  {{"header":"Status","field":"statusDescription","format":"status_badge"}},
+  {{"header":"Deductible This Claim","field":"deductibleThisClaim","format":"currency"}},
+  {{"header":"Deductible To Date","field":"deductibleToDate","format":"currency"}},
+  {{"header":"Deductible Remaining","field":"deductibleRemaining","format":"currency"}},
+  {{"header":"TrOOP This Claim","field":"troopThisClaim","format":"currency"}},
+  {{"header":"TrOOP To Date","field":"troopToDate","format":"currency"}},
+  {{"header":"Drug Spend Before OOP","field":"drugSpendBeforeOopThisClaim","format":"currency"}}
+]}}
+
+CRITICAL — ACCUMULATION FIELD NAMES:
+The SHORT names "thisClaim", "toDate", "remaining", "category", "phase", "drugCost"
+are INVENTED — they do NOT exist in the claim data. You MUST use the FULL prefixed
+field names from the example above:
+  WRONG → RIGHT:
+  "thisClaim"  → "deductibleThisClaim" or "troopThisClaim"
+  "toDate"     → "deductibleToDate" or "troopToDate"
+  "remaining"  → "deductibleRemaining" or "remainingOutOfPocketAmount"
+  "category"   → DO NOT USE (no such field)
+  "phase"      → DO NOT USE (no such field)
+  "drugCost"   → "drugSpendBeforeOopThisClaim"
+If you cannot find the prefixed field name in the data, OMIT the column entirely.
+
+REJECTION REASONS EXAMPLE — copy this pattern exactly for rejection_reasons intent:
+{{"columns":[
+  {{"header":"Claim Number","field":"claimNumber","format":"text"}},
+  {{"header":"Status","field":"statusDescription","format":"status_badge"}},
+  {{"header":"Drug Name","field":"drugLabelName","format":"title"}},
+  {{"header":"Fill Date","field":"dateOfFill","format":"date"}},
+  {{"header":"Reject Code","field":"responseRejectCode","format":"reject_codes"}},
+  {{"header":"Reject Reason","field":"settlementMessage","format":"text"}}
+]}}
+
+CRITICAL — REJECTION FIELD NAMES:
+  WRONG → RIGHT:
+  "code"        → "responseRejectCode"   (NEVER use "code" — it does not exist)
+  "message"     → "settlementMessage"    (NEVER use "message" — it does not exist)
+  "rejectCode"  → "responseRejectCode"   (NEVER use "rejectCode")
+  "reason"      → "settlementMessage"    (NEVER use "reason")
+
+### STEP 3 — ORDER BY RELEVANCE
+
+Put columns most relevant to the user's question FIRST (leftmost), then all remaining fields after.
+
+### STEP 4 — ASSIGN FORMAT TYPES
+
+Assign "format" based on what the VALUE contains, not what you think it should be:
+
+  "date"         → value is a date: YYYYMMDD, YYYY-MM-DD, or similar date string
+  "currency"     → value is a dollar amount: number, "50.00", "$1,582.02"
+  "status_badge" → value is a claim status description: "Paid", "Denied", "Reversed/Cancelled"
+  "title"        → value is a drug name or medication name (renders as Title Case)
+  "reject_codes" → value is a rejection/denial code
+  "text"         → everything else
+
+### STEP 5 — WRITE HUMAN-READABLE HEADERS
+
+Convert camelCase key names into readable labels:
+  "approvedPatientPayAmount" → "Patient Pay"
+  "drugLabelName" → "Drug Name"
+  "claimNumber" → "Claim Number"
+  "fillDate" or "dateOfFill" → "Fill Date"  (NEVER use "date2" or "date8")
+  "submitDate" → "Submit Date"
+  "claimStatusDescription" → "Status"
+  "approvedIngredientCost" → "Ingredient Cost"
+  "approvedDispensingFee" → "Dispensing Fee"
+  "approvedTotalAmount" → "Plan Paid"
+  "approvedCopayAmount" → "Copay"
+  "deductibleAmount" → "Deductible"
+  "troopAmount" → "TrOOP"
+  "clientPatientPayAmount" → "Patient Pay (COB)"
+  "submittedProductId" → "NDC"
+  "submittedQuantityDispensed" → "Qty Dispensed"
+  "submittedDaysSupply" → "Days Supply"
+  "responseRejectCode" → "Reject Code"
+  "settlementMessage" → "Reject Reason"
+  "pharmacyName" → "Pharmacy"
+  "prescriberLastName" → "Prescriber"
+
+Drop prefixes like "approved", "submitted" when they add no meaning.
+
+### PRESCRIBER / MEMBER / PHARMACY — DISAMBIGUATION
+
+When showing prescriber info, use "lastName" and "firstName" with headers that contain the word "Prescriber" (e.g., "Prescriber Last Name"). The rendering engine uses the header keyword to look inside the correct sub-object.
+
+NEVER use "lastNameFirstName" for prescriber — that field is the MEMBER's combined name.
+
+Similarly: for pharmacy, use headers containing "Pharmacy" (e.g., "Pharmacy ID"). For member, use headers containing "Member" (e.g., "Member Last Name").
+
+### PIVOT LAYOUT — for pricing breakdowns and COB comparisons
+
+When the user's question naturally groups data into CATEGORIES (ingredient cost,
+dispensing fee, patient pay) with COMPARISON COLUMNS (primary, secondary, final),
+use "layout": "pivot" instead of "layout": "table".
+
+Use "layout": "pivot" for:
+  - Pricing breakdowns comparing primary / secondary / final amounts per component
+  - COB (Coordination of Benefits) comparisons across coverage tiers
+
+Use "layout": "table" for everything else (status, drug info, pharmacy, prescriber,
+reject codes, reversal, accumulation, general claim queries).
+
+PIVOT DSL uses "groups" instead of "columns". Each group becomes one row.
+The field keys inside each group become the comparison columns.
+
+PIVOT EXAMPLE — copy this pattern exactly:
+===RENDER_START===
+{{"layout":"pivot","title":"Pricing Breakdown","sections":[{{"id":"pricing","type":"table","data_path":"","is_list":false,"identifier_columns":[{{"header":"Claim Number","field":"claimNumber","format":"text"}},{{"header":"Drug Name","field":"drugLabelName","format":"title"}}],"groups":[{{"label":"Ingredient Cost","fields":{{"Primary":{{"field":"clientIngredientCost","format":"currency"}},"Secondary":{{"field":"clientIngredientCost2","format":"currency"}},"Final":{{"field":"responseIngredCostPaid3","format":"currency"}}}}}},{{"label":"Dispensing Fee","fields":{{"Primary":{{"field":"clientDispensingFee","format":"currency"}},"Secondary":{{"field":"clientDispensingFee2","format":"currency"}},"Final":{{"field":"responseDispensingFeeP3","format":"currency"}}}}}},{{"label":"Patient Pay","fields":{{"Primary":{{"field":"clientPatientPayAmount","format":"currency"}},"Secondary":{{"field":"clientPatientPayAmount2","format":"currency"}},"Final":{{"field":"responsePatientPayAmount3","format":"currency"}}}}}},{{"label":"Total Paid","fields":{{"Primary":{{"field":"clientTotalAmount","format":"currency"}},"Secondary":{{"field":"clientTotalAmount2","format":"currency"}},"Final":{{"field":"responseTotalAmountPaid3","format":"currency"}}}}}}]}}]}}
+===RENDER_END===
+
+WHEN TO INCLUDE THE RENDER BLOCK:
+  render_mode = "table"     → ALWAYS append ===RENDER_START=== block after JSON
+  render_mode = "text_only" → DO NOT write any render block at all
+
+## MANDATORY RENDER INTENTS — render_mode MUST be "table", NO EXCEPTIONS
+
+If the CURRENT INTENT is in the ALWAYS-TABLE list below,
+you MUST output render_mode="table" AND include the ===RENDER_START=== render block.
+
+**ALWAYS-TABLE intents** (NEVER use text_only for these):
+  pricing_info, cob_info, deductible_info, copay_info,
+  claim_list, rejection_reasons, compound_info, medicare_part_d
+
+  "What is the copay?"                 → render_mode="table" + render block
+  "Show deductible status"             → render_mode="table" + render block
+  "Why was my claim rejected?"         → render_mode="table" + render block
+  "What are the compound ingredients?" → render_mode="table" + render block
+  "What Medicare stage am I in?"       → render_mode="table" + render block
+  "What is the pricing breakdown?"     → render_mode="table" + render block
+  ⚠ NEVER use text_only for these — they always have multi-column structure that requires tabular layout.
+
+⚠ DATA UNAVAILABLE EXCEPTION — for MUST_RENDER intents only:
+If the claim's API data genuinely lacks the information for this intent
+(e.g., compound intent but claim has no compound ingredients, rejection intent
+but claim is Paid with no reject codes, pricing intent but claim is reversed),
+add "suppress_table": true to the render_dsl JSON object.
+Just answer the question naturally in your response text — the rendering engine will show text only.
+This exception is ONLY for genuinely absent data — not for simple questions.
+Example: {{"suppress_table": true, "layout": "table", "sections": [...]}}
+
+**ALL OTHER intents** — apply the MULTIPLE-ROWS RULE:
+  text_only: any response about a single claim or single record — regardless of
+    how many fields that record has. Write the answer in clear prose sentences.
+  table: ONLY when the question results in MORE THAN ONE record/row of data.
+
+  THE ONLY QUESTION THAT MATTERS:
+    "Will my response contain more than one row of data?"
+    → YES (multiple records) → render_mode="table"
+    → NO  (one record, any number of fields) → render_mode="text_only"
+
+  Queries about a specific claim ID always produce one record → text_only.
+  Queries requesting a list, history, or range of claims → multiple records → table.
 
 **RECOMMENDATION GUIDELINES:**
 1. Generate exactly {max_recs} recommendations
@@ -3580,36 +3981,48 @@ You MUST respond with a valid JSON object containing both your response and exac
 
 **CURRENT INTENT:** {intent}
 
-**CRITICAL:** Output ONLY the JSON object. Do NOT wrap in markdown code blocks. Do NOT include any text before or after the JSON."""
+⚠ DSL REMINDER — there are exactly three valid output states:
+  1. render_mode="table" + ===RENDER_START=== DSL block  → structured table rendered
+  2. render_mode="table" + suppress_table:true in DSL    → data absent, text shown (MUST_RENDER escape hatch)
+  3. render_mode="text_only" + no DSL                   → LLM-decides text response
+  INVALID: render_mode="table" with NO DSL block written — this always produces broken output.
+  If you chose "table" you MUST write the DSL block. If data is absent, use suppress_table:true instead.
+
+**CRITICAL OUTPUT RULES:**
+1. Output the JSON object first (with render_mode as the FIRST key). Do NOT wrap it in markdown code blocks. Do NOT include any text before the JSON.
+2. If render_mode = "table": append a RENDER STRUCTURE block (===RENDER_START=== ... ===RENDER_END===) after the JSON.
+3. If render_mode = "text_only": do NOT write any render block — stop after the JSON.
+4. No other text is allowed outside the JSON and the optional render block."""
 
     def _parse_response_with_recommendations(
-        self, 
-        llm_output: str, 
+        self,
+        llm_output: str,
         intent: str
-    ) -> Tuple[str, List[Dict[str, str]]]:
+    ) -> Tuple[str, List[Dict[str, str]], Optional[str]]:
         """
-        Parse LLM output to extract response text and recommendations.
-        
+        Parse LLM output to extract response text, recommendations, and render_mode.
+
         Handles both structured JSON output (when recommendations enabled) and
         plain text output (fallback or when recommendations disabled).
-        
+
         Uses json.JSONDecoder().raw_decode() as the fallback parser instead of
         greedy regex to correctly handle cases where the LLM prepends plain text
         before the JSON object.
-        
+
         Args:
             llm_output: Raw output from LLM
             intent: Current intent for fallback recommendations
-            
+
         Returns:
-            Tuple of (response_text, recommendations_list)
+            Tuple of (response_text, recommendations_list, render_mode)
         """
         recommendations = []
         response_text = llm_output
-        
+        raw_render_mode: Optional[str] = None
+
         if not llm_output:
             self.logger.warning("⚠️ Empty LLM output, returning empty response")
-            return "", []
+            return "", [], None
         
         # ── ATTEMPT 1: Try to read the entire output as JSON ──
         # This works when the LLM returns ONLY the JSON envelope (the normal/happy case).
@@ -3634,7 +4047,11 @@ You MUST respond with a valid JSON object containing both your response and exac
                 if not response_text:
                     self.logger.warning("⚠️ JSON parsed but 'response' field empty, using full output")
                     response_text = llm_output
-                
+
+                # Extract render_mode from envelope
+                _rm = parsed.get("render_mode")
+                raw_render_mode = _rm if _rm in VALID_RENDER_MODES else None
+
                 # Pull out the recommendation chips from the JSON envelope
                 raw_recommendations = parsed.get("recommendations", [])
                 if isinstance(raw_recommendations, list):
@@ -3644,7 +4061,7 @@ You MUST respond with a valid JSON object containing both your response and exac
                                 "text": str(rec.get("text", "")).strip(),
                                 "action": str(rec.get("action", "")).strip() or None
                             })
-                    
+
                     self.logger.info(f"✅ Parsed {len(recommendations)} recommendations from JSON response")
                 else:
                     self.logger.warning(f"⚠️ 'recommendations' field is not a list: {type(raw_recommendations)}")
@@ -3688,6 +4105,10 @@ You MUST respond with a valid JSON object containing both your response and exac
                             response_text = llm_output
                             break
                         
+                        # Extract render_mode from envelope
+                        _rm = parsed.get("render_mode")
+                        raw_render_mode = _rm if _rm in VALID_RENDER_MODES else None
+
                         # Pull out the recommendation chips
                         raw_recommendations = parsed.get("recommendations", [])
                         if isinstance(raw_recommendations, list):
@@ -3701,7 +4122,7 @@ You MUST respond with a valid JSON object containing both your response and exac
                                 f"✅ Extracted {len(recommendations)} recommendations "
                                 f"via raw_decode from position {brace_pos}"
                             )
-                        
+
                         extracted = True
                         break  # Done — we found and read the JSON successfully
                     else:
@@ -3740,12 +4161,39 @@ You MUST respond with a valid JSON object containing both your response and exac
         if not recommendations and settings.enable_recommendations:
             recommendations = self._generate_fallback_recommendations(intent)
             self.logger.info(f"📋 Using {len(recommendations)} fallback recommendations for intent: {intent}")
-        
-        return response_text.strip(), recommendations
+
+        return response_text.strip(), recommendations, raw_render_mode
+
+    def _extract_render_dsl(self, raw: str) -> Tuple[str, Optional[dict]]:
+        """
+        Split ===RENDER_START=== ... ===RENDER_END=== block from LLM output.
+
+        The DSL block is appended AFTER the JSON recommendations envelope, so
+        stripping it gives _parse_response_with_recommendations clean input.
+
+        Returns:
+            (text_without_dsl_block, dsl_dict)  — dsl_dict is None on any failure.
+        """
+        marker = "===RENDER_START==="
+        end_marker = "===RENDER_END==="
+
+        if marker not in raw:
+            return raw, None
+
+        try:
+            before, rest = raw.split(marker, 1)
+            dsl_str = rest.split(end_marker)[0].strip()
+            dsl_dict = json.loads(dsl_str)
+            if not isinstance(dsl_dict, dict):
+                raise ValueError("DSL root must be a JSON object")
+            return before.rstrip(), dsl_dict
+        except Exception as exc:
+            self.logger.warning("render_dsl extraction failed: %s", exc)
+            return raw, None
 
     def _generate_fallback_recommendations(
-        self, 
-        intent: str, 
+        self,
+        intent: str,
         asked_for_claim: List[str] = None
     ) -> List[Dict[str, str]]:
         """
@@ -4221,14 +4669,58 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             logger.debug("🧠 Thought logging scheduled (async)")
         
         # =====================================================================
+        # Extract Render DSL (runs on raw LLM output, before recommendations)
+        # The DSL block sits AFTER the JSON envelope so stripping it leaves
+        # _parse_response_with_recommendations clean JSON to work with.
+        # =====================================================================
+        render_dsl_dict: Optional[dict] = None
+        if not needs_clarification:
+            response_text, render_dsl_dict = agent._extract_render_dsl(response_text)
+            if render_dsl_dict:
+                logger.info("📊 Extracted render_dsl: layout=%s sections=%d",
+                            render_dsl_dict.get("layout", "?"),
+                            len(render_dsl_dict.get("sections", [])))
+            else:
+                logger.debug("📊 No Render DSL in LLM output (non-data response or omitted)")
+
+        # =====================================================================
         # Parse recommendations from response (if enabled)
         # =====================================================================
+        render_mode_from_llm = None
         recommendations = []
         if recommendations_enabled and not needs_clarification:
             intent = state.get("intent", "unknown")
-            response_text, recommendations = agent._parse_response_with_recommendations(response_text, intent)
-            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response")
+            response_text, recommendations, render_mode_from_llm = agent._parse_response_with_recommendations(response_text, intent)
+            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response, render_mode={render_mode_from_llm}")
         
+        # Safety net: strip table lead-in phrases and trailing colons.
+        # The SELF-SUFFICIENT RESPONSE RULE in the prompt prevents this in most cases;
+        # this is a last-resort fallback for when the LLM still writes a table prelude.
+        _LEAD_IN_RE = re.compile(
+            r'[,\s]+(and\s+)?(here (is|are|follows)|below (is|are)|'
+            r'the following (is|are)|see (the )?(table|below|details?))[^.]*:?\s*$',
+            re.IGNORECASE,
+        )
+        if response_text:
+            _cleaned = _LEAD_IN_RE.sub('', response_text.rstrip().rstrip(':').rstrip())
+            if _cleaned and _cleaned != response_text.rstrip().rstrip(':').rstrip():
+                logger.warning(
+                    "rendering: stripped lead-in phrase from response_text intent=%s",
+                    state.get("intent", "unknown"),
+                )
+                _cleaned = _cleaned.rstrip().rstrip(',').rstrip()
+                response_text = _cleaned + ('' if _cleaned.endswith('.') else '.')
+            elif response_text.rstrip().endswith(':'):
+                _no_colon = response_text.rstrip()[:-1].rstrip()
+                _last_period = _no_colon.rfind('. ')
+                response_text = (
+                    _no_colon[:_last_period + 1].strip() if _last_period > 0 else _no_colon
+                )
+                logger.warning(
+                    "rendering: stripped trailing colon from response_text intent=%s",
+                    state.get("intent", "unknown"),
+                )
+
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
         remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
@@ -4348,6 +4840,8 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             "response_id": response_id,
             "recommendations": recommendations if recommendations_enabled else [],
             "asked_questions_by_claim": updated_asked_questions,  # Dedup tracking persisted via state
+            "render_dsl": render_dsl_dict,
+            "render_mode": render_mode_from_llm,
             "metadata": {
                 **state.get("metadata", {}),
                 "llm_metadata": slim_llm_metadata,  # Issue 1: Small metadata only

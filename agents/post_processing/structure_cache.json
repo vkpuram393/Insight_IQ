@@ -1,0 +1,134 @@
+{
+  "claim_details_enriched:claim_status": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",              "format": "text"},
+      {"header": "Status",       "path": "claimStatus",              "format": "status_badge"},
+      {"header": "Submit Date",  "path": "submitDate",               "format": "date"},
+      {"header": "Drug",         "path": "drugLabelName",            "format": "title"},
+      {"header": "Patient Pay",  "path": "approvedPatientPayAmount", "format": "currency"},
+      {"header": "Plan Paid",    "path": "approvedTotalAmount",      "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "claim_status",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:pricing_info": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",         "path": "claimNumber",              "format": "text"},
+      {"header": "Status",          "path": "claimStatus",              "format": "status_badge"},
+      {"header": "Submit Date",     "path": "submitDate",               "format": "date"},
+      {"header": "Drug",            "path": "drugLabelName",            "format": "title"},
+      {"header": "Ingredient Cost", "path": "approvedIngredientCost",   "format": "currency"},
+      {"header": "Dispensing Fee",  "path": "approvedDispensingFee",    "format": "currency"},
+      {"header": "Patient Pay",     "path": "approvedPatientPayAmount", "format": "currency"},
+      {"header": "Plan Paid",       "path": "approvedTotalAmount",      "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "pricing_info",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:claim_details": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",                 "format": "text"},
+      {"header": "Status",       "path": "claimStatus",                 "format": "status_badge"},
+      {"header": "Submit Date",  "path": "submitDate",                  "format": "date"},
+      {"header": "Drug",         "path": "drugLabelName",               "format": "title"},
+      {"header": "Qty",          "path": "submittedQuantityDispensed",  "format": "text"},
+      {"header": "Days Supply",  "path": "submittedDaysSupply",         "format": "text"},
+      {"header": "Patient Pay",  "path": "approvedPatientPayAmount",    "format": "currency"},
+      {"header": "Plan Paid",    "path": "approvedTotalAmount",         "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "claim_details",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:reimbursement_info": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",          "path": "claimNumber",              "format": "text"},
+      {"header": "Drug",             "path": "drugLabelName",            "format": "title"},
+      {"header": "Ingredient Cost",  "path": "approvedIngredientCost",   "format": "currency"},
+      {"header": "Dispensing Fee",   "path": "approvedDispensingFee",    "format": "currency"},
+      {"header": "Incentive Amt",    "path": "approvedIncentiveAmount",  "format": "currency"},
+      {"header": "Patient Pay",      "path": "approvedPatientPayAmount", "format": "currency"},
+      {"header": "Plan Paid",        "path": "approvedTotalAmount",      "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "reimbursement_info",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:approval_info": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",              "format": "text"},
+      {"header": "Status",       "path": "claimStatus",              "format": "status_badge"},
+      {"header": "Submit Date",  "path": "submitDate",               "format": "date"},
+      {"header": "Paid Date",    "path": "paidDate",                 "format": "date"},
+      {"header": "Drug",         "path": "drugLabelName",            "format": "title"},
+      {"header": "Patient Pay",  "path": "approvedPatientPayAmount", "format": "currency"},
+      {"header": "Plan Paid",    "path": "approvedTotalAmount",      "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "approval_info",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:drug_info": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Drug",         "path": "drugLabelName",               "format": "title"},
+      {"header": "NDC",          "path": "submittedProductId",          "format": "text"},
+      {"header": "Qty",          "path": "submittedQuantityDispensed",  "format": "text"},
+      {"header": "Days Supply",  "path": "submittedDaysSupply",         "format": "text"},
+      {"header": "GPI",          "path": "gpiNumber",                   "format": "text"},
+      {"header": "Claim #",      "path": "claimNumber",                 "format": "text"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "drug_info",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:rejection_reasons": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",       "format": "text"},
+      {"header": "Status",       "path": "claimStatus",       "format": "status_badge"},
+      {"header": "Reject Code",  "path": "rejectCode",        "format": "reject_codes"},
+      {"header": "Drug",         "path": "drugLabelName",     "format": "title"},
+      {"header": "Submit Date",  "path": "submitDate",        "format": "date"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "rejection_reasons",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:rx_details": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",                 "format": "text"},
+      {"header": "Drug",         "path": "drugLabelName",               "format": "title"},
+      {"header": "NDC",          "path": "submittedProductId",          "format": "text"},
+      {"header": "Qty",          "path": "submittedQuantityDispensed",  "format": "text"},
+      {"header": "Days Supply",  "path": "submittedDaysSupply",         "format": "text"},
+      {"header": "Submit Date",  "path": "submitDate",                  "format": "date"},
+      {"header": "Patient Pay",  "path": "approvedPatientPayAmount",    "format": "currency"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "rx_details",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  },
+  "claim_details_enriched:audit_info": {
+    "data_path": "data.claimDetails.primary",
+    "columns": [
+      {"header": "Claim #",      "path": "claimNumber",    "format": "text"},
+      {"header": "Status",       "path": "claimStatus",    "format": "status_badge"},
+      {"header": "Submit Date",  "path": "submitDate",     "format": "date"},
+      {"header": "Paid Date",    "path": "paidDate",       "format": "date"},
+      {"header": "Drug",         "path": "drugLabelName",  "format": "title"},
+      {"header": "Tracking #",   "path": "trackingNumber", "format": "text"}
+    ],
+    "tool_name": "claim_details_enriched",
+    "intent": "audit_info",
+    "created_at": "2026-05-01T00:00:00+00:00"
+  }
+}
