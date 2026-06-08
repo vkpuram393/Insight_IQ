@@ -81,6 +81,10 @@ envVars: |
     value: "mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net"
   - name: MONGODB_DATABASE_NAME
     value: "myclaims-QA"
+  - name: CLAIM_LIST_API
+    value: "https://claiminquiry-cap-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/byclaimnumber"  # TODO: set QA URL for /exp/v1/claims/search (claimId lookup) — get from API team
+  - name: CLAIMS_HISTORY_SEARCH_URL
+    value: "https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/membercarrieraccountgroup"  # TODO: set QA URL for /exp/v1/claims/search (member history) — get from API team
   - name: CLAIMS_HISTORY_SEARCH_X_API_KEY
     value: "fbbae75e-cd91-47a5-bb65-b68f525a66e3"
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets

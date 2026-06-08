@@ -146,12 +146,22 @@ async def call_claims_search_node_v2(state: Dict[str, Any]) -> Dict[str, Any]:
             missing_entities=["claim_number", "date_range"],
         )
 
-    bearer_token = user_info.get("auth_token", "")
-    x_api_key = user_info.get("x_api_key", "")
-    x_clientrefid = user_info.get("x_clientrefid", "")
+    # Extract auth token from user_info — same pattern as prod claims_api.py (thread-safe)
+    user_info_dict = user_info if isinstance(user_info, dict) else {}
+    bearer_token  = user_info_dict.get("auth_token", "")
+    x_api_key     = user_info_dict.get("x_api_key", "")
+    x_clientrefid = user_info_dict.get("x_clientrefid", "")
+
+    # Log token presence at INFO so DEV/QA pod logs show whether APIGEE stripped it
+    logger.info("[ClaimsSearchV2] auth_token present=%s | prefix=%s",
+                bool(bearer_token), (bearer_token or "")[:20] or "(empty)")
+    logger.info("[ClaimsSearchV2] x_api_key present=%s | x_clientrefid present=%s",
+                bool(x_api_key), bool(x_clientrefid))
 
     if not bearer_token:
-        logger.warning("[ClaimsSearchV2] No auth token in user_info")
+        logger.warning("[ClaimsSearchV2] No auth token in user_info — "
+                       "in DEV/QA check if APIGEE is stripping the Authorization header; "
+                       "the UI must send auth_token in the request body JSON, not only as a header")
         return _failure_payload("Missing authorization token")
 
     # ------------------------------------------------------------------

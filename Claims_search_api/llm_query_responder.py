@@ -147,13 +147,24 @@ def _sort_newest_first(claims: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _summarize_member(api_response: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract a tiny, non-PII member summary for the LLM context."""
-    claims = (api_response or {}).get("claims") or []
-    if not claims:
-        return {}
-    m = (claims[0] or {}).get("member") or {}
+    """Extract a tiny, non-PII member summary for the LLM context.
+
+    trim_api_response moves the member object to the top-level "member" key
+    and removes it from each individual claim.  Check the top-level key first
+    so this function works on both trimmed and raw responses.
+    """
+    r = api_response or {}
+    # Preferred: top-level "member" key (set by trim_api_response)
+    m = r.get("member") or {}
+    if not m:
+        # Fallback: raw (un-trimmed) response still has member inside each claim
+        claims = r.get("claims") or []
+        if claims:
+            m = (claims[0] or {}).get("member") or {}
     return {
         "memberId": m.get("memberId") or m.get("cardholderId"),
+        "firstName": m.get("firstName"),
+        "lastName": m.get("lastName"),
         "planId": m.get("planId"),
         "carrierId": m.get("carrierId"),
         "groupId": m.get("groupId"),
@@ -188,8 +199,10 @@ Rules
     days-supply / DAW filters, use exact matches.
 
 STATUS FILTER — apply this FIRST, before any other filter:
-  • Default (no status word in the question): consider ONLY claims where
-    claimInformation.claimStatus = "P" (Paid).
+  • Default (no status word in the question): consider ALL claims
+    regardless of claimStatus (Paid, Rejected, Reversed, etc.).
+  • User says "paid":
+    consider ONLY claimStatus = "P" (Paid).
   • User says "rejected" / "reject" / "denial" / "denied":
     consider ONLY claimStatus = "R" (Rejected).
   • User says "reversed" / "reversal" / "cancelled" / "canceled":
@@ -220,7 +233,14 @@ STATUS FILTER — apply this FIRST, before any other filter:
 10. If the question is unrelated to the supplied claims (e.g. asks about
     a different member, eligibility, formulary, appeals), respond:
     "I can only answer questions about the claims shown above."
-11. TEMPORAL REFERENCE: a CURRENT DATE is supplied in the user section
+11. CLAIM-ID IN QUERY: The user's query may contain a long numeric claim ID
+    (typically 15 digits, e.g. "260302639954275") and/or a sequence number
+    (e.g. "001").  These were used ONLY to identify which member's history
+    to retrieve — they are NOT filters on claimNumber or claimSequence.
+    Do NOT restrict results to that specific claim number.  Answer the
+    user's actual question (last fill, all drugs, this month, etc.) using
+    ALL claims in the provided history.
+12. TEMPORAL REFERENCE: a CURRENT DATE is supplied in the user section
     below.  Use it ONLY to resolve relative time expressions in the user's
     claim query (e.g. "last week", "past 30 days", "last month",
     "yesterday").  Do NOT answer general time or date questions (e.g.

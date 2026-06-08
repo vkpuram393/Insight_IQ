@@ -43,11 +43,13 @@ def _build_headers(bearer_token, x_api_key, x_clientrefid):
     auth = (bearer_token or "").strip()
     if auth and not auth.lower().startswith("bearer "):
         auth = "Bearer " + auth
-    # Log token presence/prefix to aid 401 diagnosis without exposing the full value
+    # Log token presence/prefix at INFO so DEV/QA pod logs capture it
     if auth:
-        logger.debug("[ClaimsSearch] Auth token present (prefix: %s...)", auth[:20])
+        logger.info("[ClaimsSearch] Auth token present (prefix: %s...)", auth[:20])
     else:
-        logger.warning("[ClaimsSearch] Auth token is EMPTY — request will likely 401")
+        logger.warning("[ClaimsSearch] Auth token is EMPTY — request will 401. "
+                       "In DEV/QA: APIGEE strips Authorization header — "
+                       "UI must send auth_token inside the request body JSON.")
     correlation_id = f"CVS-{uuid.uuid4()}"
     headers = {
         "accept": "application/json",
@@ -84,15 +86,29 @@ async def _post(url, body, headers, label):
         r.raise_for_status()
         return r.json()
 
-
-
 def _extract_member_id_from_list(list_response):
-    """Extract member_id from the claim_list_api response (claims[0].member.memberId)."""
-    claims = (list_response or {}).get("claims") or []
-    if not claims:
+    """
+    Extract member_id or cardholderId from claim_list_api response.
+
+    Expected path:
+    claimList[0].primary.beneficiary.memberId
+    """
+
+    try:
+        claim_list = (list_response or {}).get("claimList") or []
+        if not claim_list:
+            return None
+
+        primary = (claim_list[0] or {}).get("primary") or {}
+        beneficiary = primary.get("beneficiary") or {}
+
+        # Prefer memberId, fallback to cardholderId
+        return beneficiary.get("memberId") or beneficiary.get("cardholderId")
+
+    except Exception as e:
+        logger.error("[ClaimsSearch] Failed to extract memberId: %s", str(e))
         return None
-    member = (claims[0] or {}).get("member") or {}
-    return member.get("memberId") or member.get("cardholderId")
+
 
 
 async def fetch_claim_list(claim_id, bearer_token, x_api_key, x_clientrefid):
@@ -133,6 +149,7 @@ async def extract_list_api_response_structure(claim_id, bearer_token, x_api_key,
             raise ValueError("either claim_id or member_id is required")
         logger.info("[ClaimsSearch] Step 1 — resolving member_id for claim_id=%r", cid)
         list_response = await fetch_claim_list(cid, bearer_token, x_api_key, x_clientrefid)
+        #print("[ClaimsSearch] Step 1 response: %s", _json.dumps(list_response, indent=2))
         mid = _extract_member_id_from_list(list_response)
         if not mid:
             raise ValueError(f"member_id not found in claim list response for claim_id={cid!r}")
@@ -173,9 +190,9 @@ def extract_member_cagm_from_response(response):
 #     import os
 
 #     # Example usage
-#     CLAIM_ID = os.getenv("CLAIM_ID", "260302639954275")
-#     BEARER_TOKEN = os.getenv("BEARER_TOKEN", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InRBSjlZYmlRbXFwYm9vQU5razdsR2RJd04zdER0NnJNUkxYSG0xWUE4SlUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJkZWYzNWU5Ni0xZWIwLTQ4NzctOTdlMS01MTE5OTJhMjQ4YmMiLCJpc3MiOiJodHRwczovL25nYW15cGJtbm9ucHJvZC5iMmNsb2dpbi5jb20vMmEyNzYyZTctZDU2Zi00N2FiLWE3MmEtZGYwMTAyYzQ1NzlhL3YyLjAvIiwiZXhwIjoxNzc4MzI3OTk0LCJuYmYiOjE3NzgzMjQzOTQsInRpZCI6ImZhYmI2MWI4LTNhZmUtNGU3NS1iOTM0LWE0N2Y3ODJiOGNkNyIsImdpdmVuX25hbWUiOiJ2YW1zaGkiLCJmYW1pbHlfbmFtZSI6ImtyaXNobmEiLCJlbWFpbCI6IlZhbXNoaS5LcmlzaG5hMkBjdnNoZWFsdGguY29tIiwibmFtZSI6ImtyaXNobmEsIHZhbXNoaSIsImlkcCI6Imh0dHBzOi8vbG9naW4ubWljcm9zb2Z0b25saW5lLmNvbS9mYWJiNjFiOC0zYWZlLTRlNzUtYjkzNC1hNDdmNzgyYjhjZDcvdjIuMCIsInN1YiI6IjJiOGJmNmQ3LTk5MzYtNGVjMS1hYzcwLTliMDlkN2MyZGI2NiIsIm5vbmNlIjoiY1hScFpHOVBUWEJPWldzNVFqSmpWVnB0TWtoRlMzaEJiVVYzTjJ4RFJUUk5VbTEtVDBGek9UVjJVSFZrIiwic2NwIjoiVXNlci5SZWFkIiwiYXpwIjoiZGVmMzVlOTYtMWViMC00ODc3LTk3ZTEtNTExOTkyYTI0OGJjIiwidmVyIjoiMS4wIiwiaWF0IjoxNzc4MzI0Mzk0fQ.p17WhSGWrfrsPUIORQJRCzIA9KXQEiEN4qmqvx4TjLEjdUtEM0_Q7epAgMvU58Z3tjSXmxKItpK3p_WgGibnoAjEwv-Rw2v_mmOgC0G1Optjvr2nhbm8kuR6I23Px3c1qydcmko6aHAqqXiE2NEplbVOf_wZEqo7Xv0TbtOyN4QBz_VrOGcHeLile80wVCMyhKPGmBiRAQPWCagavEGy1IfnfUASvGrn-BLowcj7sMC9-cP9I9413xsbTH6Vu9W7NStNNWA8M4j-feEGMof3hBCp9l9jSdcpnXC3rlZI9eyZkZfYEcKUdTODlsozX9Nc8IM4_ZeTSIe-ec0AWkdWog")
-#     X_API_KEY = os.getenv("X_API_KEY", "")
+#     CLAIM_ID = os.getenv("CLAIM_ID", "261587613904003")
+#     BEARER_TOKEN = os.getenv("BEARER_TOKEN", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InRBSjlZYmlRbXFwYm9vQU5razdsR2RJd04zdER0NnJNUkxYSG0xWUE4SlUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJkZWYzNWU5Ni0xZWIwLTQ4NzctOTdlMS01MTE5OTJhMjQ4YmMiLCJpc3MiOiJodHRwczovL25nYW15cGJtbm9ucHJvZC5iMmNsb2dpbi5jb20vMmEyNzYyZTctZDU2Zi00N2FiLWE3MmEtZGYwMTAyYzQ1NzlhL3YyLjAvIiwiZXhwIjoxNzgwODkyNjczLCJuYmYiOjE3ODA4ODkwNzMsInRpZCI6ImZhYmI2MWI4LTNhZmUtNGU3NS1iOTM0LWE0N2Y3ODJiOGNkNyIsImdpdmVuX25hbWUiOiJ2YW1zaGkiLCJmYW1pbHlfbmFtZSI6ImtyaXNobmEiLCJlbWFpbCI6IlZhbXNoaS5LcmlzaG5hMkBjdnNoZWFsdGguY29tIiwibmFtZSI6ImtyaXNobmEsIHZhbXNoaSIsImlkcCI6Imh0dHBzOi8vbG9naW4ubWljcm9zb2Z0b25saW5lLmNvbS9mYWJiNjFiOC0zYWZlLTRlNzUtYjkzNC1hNDdmNzgyYjhjZDcvdjIuMCIsInN1YiI6IjJiOGJmNmQ3LTk5MzYtNGVjMS1hYzcwLTliMDlkN2MyZGI2NiIsIm5vbmNlIjoiYmpKaFEySjFXSDVRV0hwcFFXMVJhamh3YzNSaWFVcDZUWEIwTVdkS1VtcFFaR1l0TjJkQ1RIVk9PVkZMIiwic2NwIjoiVXNlci5SZWFkIiwiYXpwIjoiZGVmMzVlOTYtMWViMC00ODc3LTk3ZTEtNTExOTkyYTI0OGJjIiwidmVyIjoiMS4wIiwiaWF0IjoxNzgwODg5MDczfQ.FcUjXxg5NKrThmBlYPgGtZ7h7lgrG7vLk4QKJl7Ev43BDsFQoVHyJ34ABceSgCG3ucLg5IzLxHIBRGBnChT2qlvd68PAs31SYD8fAFKwIwkJ2jIZe7qH3fhV0MjN7OjNGq8plm91LxG5In7WyMC-VRVmHEvQ7_XJo2A-s_IjzfR-Gu-xflaENRtSfm9Lrg_Q3eu5X5YV6A6U0A20JQuPgXMC-GLp7mjjgE3CDx5NEI5kwEdzHouRZWYC8SgCGBWbS-tIq_SYMweWC-jPCIMvWBHjDTeSl_nkgIClmZyXeLnIiyjA-Lr7UyJBFyKLLel7NpuZCxG0w5IqMA6y7V3FcA")
+#     X_API_KEY = os.getenv("X_API_KEY", "fbbae75e-cd91-47a5-bb65-b68f525a66e3")
 #     X_CLIENTREFID = os.getenv("X_CLIENTREFID", "b732784c-c490-46f7-a5e2-d595ca57bdd5")
 
 #     async def main():

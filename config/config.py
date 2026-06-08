@@ -119,7 +119,6 @@ class Settings(BaseSettings):
     redis_ssl: bool = True  # ⚠️ Overridden by REDIS_SSL env var - set True in production
     redis_ssl_cert_reqs: str = ""  # Options: "required", "optional", "none"
 
-
     # Persistence Store (telemetry and analytics)
     # ⚠️ IMPORTANT: This default is OVERRIDDEN by PERSISTENCE_STORE_TYPE in .env file
     # The .env file takes precedence - set PERSISTENCE_STORE_TYPE=sqlite or PERSISTENCE_STORE_TYPE=mongodb in .env
@@ -142,6 +141,7 @@ class Settings(BaseSettings):
     # Legacy - for local development only (ignored if above env vars are set)
     mongodb_connection_string: str = "mongodb://localhost:27017"
 
+
     use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
     
     enable_telemetry: bool = True
@@ -160,11 +160,12 @@ class Settings(BaseSettings):
     # API Endpoints (can be overridden via environment variables)
     api_endpoint_claim_details: str = "/myclaims/claims/v1/claim/byclaimnumberandseq"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_DETAILS env var
     api_endpoint_claim_list: str = "/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_LIST env var
-    claim_list_api: str = "https://internal-sit1-apix.cvshealth.com/pss/myclaims/claims/exp/v1/claims/search"  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1
+    #claim_list_api: str = "https://internal-sit1-apix.cvshealth.com/pss/myclaims/claims/exp/v1/claims/search"  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1
+    claim_list_api: str = "https://claiminquiry-cap-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1 (QA URL - get from API team)
     # Internal API gateway base URL used by Claims_search_api for both search steps
     claims_internal_base_url: str = "https://internal-sit1-apix.cvshealth.com/pss"  # ⚠️ Overridden by CLAIMS_INTERNAL_BASE_URL env var
     # Full URL for member-level claims history search (step 2)
-    claims_history_search_url: str = "https://internal-sit1-apix.cvshealth.com/pss/myclaims/claims/exp/v1/claims/search"  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_URL env var
+    claims_history_search_url: str = "https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/membercarrieraccountgroup"  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_URL env var
     # Server-side API subscription key for claims_history_search_url — overrides client x-api-key when set
     claims_history_search_x_api_key: str = ""  # Set via CLAIMS_HISTORY_SEARCH_X_API_KEY env var per environment
 
