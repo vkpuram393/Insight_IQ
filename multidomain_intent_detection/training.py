@@ -282,25 +282,30 @@ def search_pca(X, y, labels) -> int:
         print(f"\n  PCA dims fixed at {fixed_dims} (pca_search_enabled=false)")
         return fixed_dims
 
-    print(f"\n{'=' * 60}")
+    from sklearn.decomposition import PCA as _PCA
+    from sklearn.preprocessing import normalize as _normalize
+
+    print(f"\n{'=' * 70}")
     print(f"  PCA DIMENSION SEARCH (5-fold CV)")
-    print(f"{'=' * 60}")
-    print(f"  {'Dims':>8} {'CV Acc':>10} {'Std':>8}")
-    print(f"  {'-' * 28}")
+    print(f"{'=' * 70}")
+    print(f"  {'Dims':>8} {'Var%':>8} {'CV Acc':>10} {'Std':>8}")
+    print(f"  {'-' * 38}")
     best_d, best_a = 50, 0.0
+    X_norm = _normalize(X)
     for d in pca_range:
         if d >= X.shape[0]:
             continue
+        var_pct = _PCA(n_components=d, whiten=True, random_state=42).fit(X_norm).explained_variance_ratio_.sum() * 100
         p = IntentPipeline(n_pca=d)
         p.label_names = labels
         a, s, _ = p.cross_validate(X, y)
         star = " <-- BEST" if a > best_a else ""
-        print(f"  {d:>8} {a * 100:>8.2f}% {s * 100:>6.2f}%{star}")
+        print(f"  {d:>8} {var_pct:>7.1f}% {a * 100:>8.2f}% {s * 100:>6.2f}%{star}")
         if a > best_a:
             best_a = a
             best_d = d
     print(f"\n  Optimal: PCA-{best_d} ({best_a * 100:.2f}%)")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 70}\n")
     return best_d
 
 
@@ -507,7 +512,7 @@ def train_and_evaluate():
 
     # Test data — prefer ImportantData/training_compatible_testset.csv, then fall back to combinedtestset.csv
     for candidate in [
-        os.path.join(os.path.dirname(BASE_DIR), "ImportantData", "training_compatible_testset.csv"),
+        os.path.join(os.path.dirname(BASE_DIR), "ImportantData", "trainingcomplete_set.csv"),
         os.path.join(os.path.dirname(BASE_DIR), "combinedtestset.csv"),
     ]:
         if os.path.exists(candidate):
@@ -554,8 +559,10 @@ def train_and_evaluate():
     X, y, labels = build_Xy(augmented_emb, train_intents)
     print(f"  {X.shape[0]} samples × {X.shape[1]} dims, {len(labels)} classes")
 
-    print("\nStep 3 — PCA dimension search...")
-    best_dim = search_pca(X, y, labels)
+    
+    # best_dim = search_pca(X, y, labels)
+    best_dim = 150
+    print(f"\nStep 3 — PCA dimension fixed at {best_dim} (skipping search)...")
 
     print(f"\nStep 4 — Training final ensemble (PCA-{best_dim})...")
     pipe = IntentPipeline(n_pca=best_dim)
