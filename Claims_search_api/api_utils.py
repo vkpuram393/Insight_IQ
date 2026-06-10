@@ -90,24 +90,40 @@ def _extract_member_id_from_list(list_response):
     """
     Extract member_id or cardholderId from claim_list_api response.
 
-    Expected path:
-    claimList[0].primary.beneficiary.memberId
+    Tries paths in order:
+    1. (old) claimList[0].primary.beneficiary.memberId / cardholderId
+    2. (new) claims[0].member.memberId / cardholderId
+    Returns None if all paths miss (caller raises ValueError as fallback).
     """
+    resp = list_response or {}
 
+    # --- Path 1 (old): claimList[0].primary.beneficiary ---
     try:
-        claim_list = (list_response or {}).get("claimList") or []
-        if not claim_list:
-            return None
-
-        primary = (claim_list[0] or {}).get("primary") or {}
-        beneficiary = primary.get("beneficiary") or {}
-
-        # Prefer memberId, fallback to cardholderId
-        return beneficiary.get("memberId") or beneficiary.get("cardholderId")
-
+        claim_list = resp.get("claimList") or []
+        if claim_list:
+            primary = (claim_list[0] or {}).get("primary") or {}
+            beneficiary = primary.get("beneficiary") or {}
+            mid = beneficiary.get("memberId") or beneficiary.get("cardholderId")
+            if mid:
+                logger.info("[ClaimsSearch] memberId resolved via path 1 (claimList.primary.beneficiary): %r", mid)
+                return mid
     except Exception as e:
-        logger.error("[ClaimsSearch] Failed to extract memberId: %s", str(e))
-        return None
+        logger.warning("[ClaimsSearch] Path 1 extraction failed: %s", str(e))
+
+    # --- Path 2 (new): claims[0].member ---
+    try:
+        claims = resp.get("claims") or []
+        if claims:
+            member = (claims[0] or {}).get("member") or {}
+            mid = member.get("memberId") or member.get("cardholderId")
+            if mid:
+                logger.info("[ClaimsSearch] memberId resolved via path 2 (claims.member): %r", mid)
+                return mid
+    except Exception as e:
+        logger.warning("[ClaimsSearch] Path 2 extraction failed: %s", str(e))
+
+    logger.error("[ClaimsSearch] memberId not found via any known path in claim list response")
+    return None
 
 
 
