@@ -6,9 +6,9 @@ starlette==0.49.2
 uvicorn[standard]==0.23.2
 
 # LangChain / LLM
-# Codebase imports langchain_core only; keep core patched for Snyk (directory traversal fix in 1.2.22+).
-langchain-core==1.2.23
-langsmith>=0.3.45,<0.4.0
+# Codebase imports langchain_core only; keep core patched for Snyk (CVE-2026-44843 fix in 1.3.3+).
+langchain-core==1.3.3
+langsmith>=0.8.0,<1.0.0
 
 # LangGraph — 1.0.10+ and checkpoint 4.0.1+ address high-severity deserialization findings (Snyk SLA).
 langgraph==1.0.10
