@@ -53,8 +53,18 @@ class Settings(BaseSettings):
 
     # Agent
     confidence_threshold: float = 0.6  # Not used. It is bypassed in domain_config.json. Low confidence queries (< 0.6) route to response_agent (LLM)
+    LLM_FALLBACK_CONFIDENCE_THRESHOLD: float = 0.85  # When multidomain LLM fallback confidence < this, route to clarification instead of llm_judge
+
+    # ─── Training-time LLM fallback CSV log (used ONLY by multidomain_intent_detection/training.py) ───
+    TRAINING_LLM_FALLBACK_CSV_PATH: str = "multidomain_intent_detection/outputs/llm_fallback_decisions.csv"
     conversation_history_limit: int = 100  # Number of past messages (50 turns) to include in response generation and entity extraction
     use_embedding_classifier: bool = True  # True = Embedding-based classifier (semantic), False = Keyword-based classifier (fast)
+    # When True, intent classification uses the multidomain_intent_detection package
+    # (PCA + Ensemble + LLM fallback). Produces a `domain` field used to route
+    # claim_history_search queries to the member-history pipeline under Claims_search_api/.
+    # When False, falls back to use_embedding_classifier.
+    use_multidomain_classifier: bool = True
+    is_normalised: bool = True  # When True, user queries are normalized before embedding at inference time
 
     # Safety
     enable_safety_precheck: bool = True  # Match remote MVP-1
@@ -109,7 +119,6 @@ class Settings(BaseSettings):
     redis_ssl: bool = True  # ⚠️ Overridden by REDIS_SSL env var - set True in production
     redis_ssl_cert_reqs: str = ""  # Options: "required", "optional", "none"
 
-
     # Persistence Store (telemetry and analytics)
     # ⚠️ IMPORTANT: This default is OVERRIDDEN by PERSISTENCE_STORE_TYPE in .env file
     # The .env file takes precedence - set PERSISTENCE_STORE_TYPE=sqlite or PERSISTENCE_STORE_TYPE=mongodb in .env
@@ -132,6 +141,7 @@ class Settings(BaseSettings):
     # Legacy - for local development only (ignored if above env vars are set)
     mongodb_connection_string: str = "mongodb://localhost:27017"
 
+
     use_mongodb_for_embeddings: bool = True  # True = MongoDB Vector Search (scalable) | False = .pkl file (local dev)
     
     enable_telemetry: bool = True
@@ -150,7 +160,16 @@ class Settings(BaseSettings):
     # API Endpoints (can be overridden via environment variables)
     api_endpoint_claim_details: str = "/myclaims/claims/v1/claim/byclaimnumberandseq"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_DETAILS env var
     api_endpoint_claim_list: str = "/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by API_ENDPOINT_CLAIM_LIST env var
-    
+    #claim_list_api: str = "https://internal-sit1-apix.cvshealth.com/pss/myclaims/claims/exp/v1/claims/search"  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1
+    claim_list_api: str = "https://claiminquiry-cap-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/byclaimnumber"  # ⚠️ Overridden by CLAIM_LIST_API env var — full URL for claims list step 1 (QA URL - get from API team)
+    # Internal API gateway base URL used by Claims_search_api for both search steps
+    claims_internal_base_url: str = "https://internal-sit1-apix.cvshealth.com/pss"  # ⚠️ Overridden by CLAIMS_INTERNAL_BASE_URL env var
+    # Full URL for member-level claims history search (step 2)
+    claims_history_search_url: str = "https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/membercarrieraccountgroup"  # ⚠️ Overridden by CLAIMS_HISTORY_SEARCH_URL env var
+    # Server-side API subscription key for claims_history_search_url — overrides client x-api-key when set
+    claims_history_search_x_api_key: str = ""  # Set via CLAIMS_HISTORY_SEARCH_X_API_KEY env var per environment
+
+
     # API Fallback Configuration (for testing when external APIs are down)
     enable_api_fallback: bool = True  # ⚠️ Overridden by ENABLE_API_FALLBACK env var - Set to False in production to return real errors
     # When True: Uses mock data if API server is down (5xx errors, timeouts) - allows testing to continue
@@ -188,6 +207,14 @@ class Settings(BaseSettings):
     # Number of recommendation chips to generate per response (1-5)
     # Higher values may increase response latency and token usage
     max_recommendations: int = 2  # ⚠️ Overridden by MAX_RECOMMENDATIONS env var
+
+    # =========================================================================
+    # RENDERING AGENT KILL SWITCH
+    # =========================================================================
+    # Set ENABLE_RENDERING_AGENT=false to force render_format="text" for every
+    # response, bypassing the rendering agent entirely. No UI or code deploy
+    # needed — flip the env var and restart the pod.
+    enable_rendering_agent: bool = True  # ⚠️ Overridden by ENABLE_RENDERING_AGENT env var
 
     class Config:
         """

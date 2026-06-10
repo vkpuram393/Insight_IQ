@@ -7,6 +7,7 @@
 venv/
 ENV/
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -92,3 +93,21 @@ CVS_INTENT_CLASSIFIER_INTEGRATION.md
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
+
+# Claude Code local files (personal overrides, not team-wide)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Bearer tokens and API credentials — NEVER commit
+bearer.txt
+*.bearer.txt
+
+# Test datasets and evaluation artifacts (generated, not source)
+ImportantData/
+accuracy_results.csv
+multidomain_intent_detection/outputs/
+
+# Graphify tool artifacts
+.graphify_detect.json
+.graphify_python
+*graphify*

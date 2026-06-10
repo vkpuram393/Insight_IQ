@@ -8,14 +8,26 @@ tool (call_claims_tool).
 This module is used as a conditional router in the LangGraph graph,
 inserted between build_context and the tool nodes.
 
+Routing strategy (in order):
+  1. Honor `state["domain"]` if the multidomain classifier produced one
+     (preferred — semantic, accurate, domain-aware).
+  2. Honor `state["intent"]` if it maps to the claim_history_search domain
+     in api_routing_config.
+  3. Fall back to regex pattern matching on the raw user_input (legacy).
+
 No existing classifiers or config files are modified — this is an
-additive routing layer that checks for patterns the existing intents
-don't cover (member history, multi-claim filtering, etc.).
+additive routing layer that respects whichever upstream signal is present.
 """
 
 import re
 from typing import Dict, Any
 from core.logger import get_logger
+
+try:
+    from config.api_routing_config import is_claim_history_search_intent
+except Exception:  # pragma: no cover - defensive
+    def is_claim_history_search_intent(intent: str) -> bool:
+        return False
 
 logger = get_logger(__name__)
 
@@ -49,12 +61,15 @@ _CLAIMS_SEARCH_PATTERNS = [
     # Pharmacy / prescriber history
     re.compile(r'claims?\s+(filled|dispensed|from)\s+(at|by)', re.IGNORECASE),
     re.compile(r'(pharmacy|prescriber|doctor)\s+.+\s+claims', re.IGNORECASE),
+    re.compile(r'\bby\s+(prescriber|doctor|dr|physician|provider)\b', re.IGNORECASE),
+    re.compile(r'\bclaims?\s+by\s+(prescriber|doctor|dr|physician|provider)', re.IGNORECASE),
 
     # Cost across claims
     re.compile(r'(how\s+much|total|cost|copay|patient\s+pay).+(all|member|history)', re.IGNORECASE),
 
     # Generic/brand filter
-    re.compile(r'(generic|brand)\s+(drug|claim|medication)', re.IGNORECASE),
+    re.compile(r'(generic|brand)\s+(drug|claim|medication|name)', re.IGNORECASE),
+    re.compile(r'\b(generic|brand)\s+name\s+claims?', re.IGNORECASE),
 
     # Days supply / quantity filter
     re.compile(r'\d+\s+day\s+supply', re.IGNORECASE),
@@ -80,6 +95,52 @@ _CLAIMS_SEARCH_PATTERNS = [
     # Refill queries
     re.compile(r'(all\s+)?refills?\s+(for|of)', re.IGNORECASE),
     re.compile(r'show\s+(all\s+)?refills', re.IGNORECASE),
+    re.compile(r'\brefill\s+(this|last|in\s+the)\b', re.IGNORECASE),
+
+    # Medicine / medication / prescription / drug history (member-level)
+    re.compile(r'(medicines?|medications?|prescriptions?|drugs?)\s+(taken|filled|dispensed|used|prescribed)', re.IGNORECASE),
+    re.compile(r'list\s+(of\s+)?(all\s+)?(medicines?|medications?|prescriptions?|drugs?)', re.IGNORECASE),
+    re.compile(r'(all|history\s+of|show\s+(me\s+)?)\s*(medicines?|medications?|prescriptions?|drugs?)', re.IGNORECASE),
+    re.compile(r'(medicines?|medications?|prescriptions?|drugs?)\s+(in|for|from|during)\s+(january|february|march|april|may|june|july|august|september|october|november|december|this\s+month|last\s+month|\d+\s+months?)', re.IGNORECASE),
+
+    # ── Additional patterns for common claim_history_search query forms ──────
+    # SAFETY NOTE: Every pattern here was audited against cap_api training
+    # examples.  Only patterns with NO confirmed cap_api collisions are kept.
+    # Patterns that matched approval_info ("transition fill"), claim_status
+    # ("paid or rejected", "another claim"), pricing_info ("out-of-pocket
+    # amount for"), beneficiary_info ("TrOOP"), or audit_info ("claim history
+    # summary") were removed to prevent domain-override false positives.
+
+    # "last / past N days|months|weeks|years" — DateRange queries.
+    # Requires "last/past/previous" BEFORE the number so "90 day supply"
+    # (no leading qualifier) does NOT match.
+    re.compile(r'\b(last|past|previous|in\s+the\s+(last|past))\s+\d+\s+(days?|months?|weeks?|years?)\b', re.IGNORECASE),
+
+    # Year-to-date / YTD spending — Pricing queries.
+    # No cap_api intent has YTD training examples.
+    re.compile(r'\byear.to.date\b|\bytd\b', re.IGNORECASE),
+
+    # "Latest / most-recent [claim|fill|prescription] for|of|including" —
+    # DrugLast queries.  No cap_api training example uses this exact structure.
+    re.compile(r'(latest|most\s+recent)\s+(claim|fill|prescription)\s+(for|of|including)\b', re.IGNORECASE),
+
+    # "Paid using prior authorization" — PriorAuth queries.
+    # Audit confirmed: phrasing is owned exclusively by PriorAuth (CHS);
+    # prior_auth_info (cap_api) uses "required"/"status" language, not "paid using".
+    re.compile(r'\bpaid\s+using\s+(prior\s+auth|prior\s+authorization)\b', re.IGNORECASE),
+
+    # "Spent on prescriptions/drugs/medications" — Pricing queries.
+    # No cap_api intent uses "spent on" phrasing.
+    re.compile(r'\bspent\s+on\s+(prescriptions?|drugs?|medications?)\b', re.IGNORECASE),
+
+    # "Refill this/last month/year/week" — Refills queries.
+    # Single-claim queries ask "was the refill approved?" not "refill this month".
+    re.compile(r'\brefill\s+(this|last)\s+(month|year|week)\b', re.IGNORECASE),
+
+    # "Claims (plural) rejected/denied for [reason]" — RejectCode queries.
+    # Plural "claims" (no trailing ?) avoids collision with single-claim
+    # rejection_reasons queries that use "claim" (singular).
+    re.compile(r'\bclaims\s+(rejected|denied)\s+for\b', re.IGNORECASE),
 ]
 
 
@@ -93,7 +154,26 @@ def is_claims_search_query(state: Dict[str, Any]) -> bool:
     Returns:
         True if the query matches claims-search patterns
     """
-    user_input = (state.get("user_input") or "").strip()
+    # ------------------------------------------------------------------
+    # 1. Domain-based routing (multidomain classifier output)
+    # ------------------------------------------------------------------
+    domain = (state.get("domain") or "").strip()
+    if domain == "claim_history_search":
+        logger.info("🔍 Domain == 'claim_history_search' → claims_search pipeline")
+        return True
+
+    # ------------------------------------------------------------------
+    # 2. Intent-based routing (api_routing_config mapping)
+    # ------------------------------------------------------------------
+    intent = (state.get("intent") or "").strip()
+    if intent and is_claim_history_search_intent(intent):
+        logger.info(f"🔍 Intent '{intent}' belongs to claim_history_search domain")
+        return True
+
+    # ------------------------------------------------------------------
+    # 3. Regex fallback (legacy / classifier-less paths)
+    # ------------------------------------------------------------------
+    user_input = (state.get("user_input") or state.get("text") or "").strip()
     if not user_input:
         return False
 

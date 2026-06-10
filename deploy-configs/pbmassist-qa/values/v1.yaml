@@ -20,24 +20,24 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  dockerImageTag: 29334a5d00eb386b0336638c1bcc2d6163054e1d  # This will be overridden by the deployment workflow with git SHA tag.
+  dockerImageTag: db45a9e510e33ee8a1fb19c6a6323eef29db4fd6  # This will be overridden by the deployment workflow with git SHA tag.
 
 
 #hpa settings - min and max replicas and minAvailable for PDB
 hpaSettings: 
   minAvailable: 3
   minReplicas: 3
-  maxReplicas: 3
+  maxReplicas: 4
   averageUtilization: 80
 
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
   limits:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
 
 # environment variables for app - secret values come from vault.
 envVars: |
@@ -66,7 +66,7 @@ envVars: |
   - name: APP_VERSION
     value: "2.0.1.4"
   - name: LOG_LEVEL
-    value: INFO
+    value: DEBUG
   - name: USE_MOCK_LLM
     value: "false"
   - name: LLM_MODEL
@@ -81,6 +81,12 @@ envVars: |
     value: "mdb-use4-myclaims-dev01-pl-0.knpouh.mongodb.net"
   - name: MONGODB_DATABASE_NAME
     value: "myclaims-QA"
+  - name: CLAIM_LIST_API
+    value: "https://claiminquiry-cap-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/byclaimnumber"  # TODO: set QA URL for /exp/v1/claims/search (claimId lookup) — get from API team
+  - name: CLAIMS_HISTORY_SEARCH_URL
+    value: "https://claiminquiry-exp-qa.myclaims.pss-np.caremark.com/myclaims/claims/v1/claim/membercarrieraccountgroup"  # TODO: set QA URL for /exp/v1/claims/search (member history) — get from API team
+  - name: CLAIMS_HISTORY_SEARCH_X_API_KEY
+    value: "fbbae75e-cd91-47a5-bb65-b68f525a66e3"
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 
@@ -103,5 +109,5 @@ istioHttpRoutes:
     - route: "/pss/pbmassist/"
     - route: "/debug/memory/"
     - route: "/debug/memory/reset-baseline"
-## Triggers 2
+## Triggers 4
   

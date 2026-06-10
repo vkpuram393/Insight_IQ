@@ -61,14 +61,19 @@ class AgentState(TypedDict):
 
     # === INPUT (from user) ===
     text: str                                    # User's message
-    session_id: str                              # Conversation ID
+    session_id: str                              # Conversation ID (per chatbot open — ephemeral)
+    user_session: Optional[str]                  # UI-provided stable session ID for persistent history (per MyClaims login)
     user_info: Dict[str, Any]                    # User metadata
     uuid: Optional[str]                          # Request UUID from orchestrator
     domain: Optional[str]                        # Domain (e.g., "claims", "prescriptions")
 
     # === INTENT & ENTITIES (from intent_agent) ===
     intent: Optional[str]                        # What user wants
-    confidence: Optional[float]                  # How sure we are (0-1)
+    confidence: Optional[float]                  # How sure we are (0-1); always the ensemble post-calibration score, never overwritten by llm_fallback_confidence
+    llm_fallback_confidence: Optional[float]     # LLM fallback confidence (0-1); None when ensemble was used directly
+    ensemble_intent: Optional[str]               # Ensemble classifier's pick (pre-LLM-fallback)
+    ensemble_confidence: Optional[float]         # Ensemble post-calibration confidence; always set when multidomain runs, regardless of whether LLM fallback ran
+    llm_fallback_intent: Optional[str]           # LLM fallback's pick; None when ensemble was used directly
     entities: Optional[Dict[str, Any]]           # Extracted info
     slots: Optional[Dict[str, Any]]              # API parameters (from intent classifier)
     required_slots: Optional[List[str]]          # Required slots for this intent (from intent classifier)
@@ -130,6 +135,10 @@ class AgentState(TypedDict):
     # ]
     # NOTE: claim_list action is blocked — see BLOCKED_RECOMMENDATION_ACTIONS in response_agent.py
 
+    # === RENDERING (from response_agent → rendering_agent) ===
+    render_dsl: Optional[Dict[str, Any]]   # Flexible layout DSL from response LLM (None for non-data responses)
+    render_mode: Optional[str]             # "text_only" | "table" — LLM envelope decision (set before DSL)
+
     # === RECOMMENDATION DEDUP TRACKING ===
     asked_questions_by_claim: Optional[Dict[str, List[str]]]  # Tracks questions asked per claim key
     # Structure: {"claimNumber_sequenceNumber": ["question1 text", "question2 text"]}
@@ -147,7 +156,8 @@ class AgentState(TypedDict):
 def create_initial_state(
     text: str,
     session_id: str,
-    user_info: Dict[str, Any] = None
+    user_info: Dict[str, Any] = None,
+    user_session: Optional[str] = None        # UI-provided stable session ID; None until UI provides it
 ) -> AgentState:
     """
     Create starting state for new request
@@ -158,11 +168,16 @@ def create_initial_state(
     return AgentState(
         text=text,
         session_id=session_id,
+        user_session=user_session,            # Flows through graph untouched; used only by update_memory_node for MongoDB
         user_info=user_info or {},
         uuid=None,
         domain=None,
         intent=None,
         confidence=None,
+        llm_fallback_confidence=None,
+        ensemble_intent=None,
+        ensemble_confidence=None,
+        llm_fallback_intent=None,
         entities=None,
         slots=None,
         required_slots=None,
@@ -193,6 +208,8 @@ def create_initial_state(
         context_tokens=None,
         response="",
         response_id=None,
+        render_dsl=None,
+        render_mode=None,
         recommendations=[],              # Initialize empty recommendations list
         asked_questions_by_claim={},      # Initialize empty dedup tracking
         metadata={},

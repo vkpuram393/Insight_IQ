@@ -17,7 +17,7 @@ appData:
   dockerHub: cvsh.jfrog.io
   dockerImageGroupName: cvsdigital-docker/ghemu/cvs-health-source-code/pss-myclaims-ai-agent
   dockerImageName: pss-myclaims-ai-agent
-  dockerImageTag: d425cd9ad133ee8af3cd8a16cfa3f6c8144630cb
+  dockerImageTag: 537b70096923a5810e1d2ee5b8136480ebe057fd
   # This will be overridden by the deployment workflow with git SHA tag
 
 
@@ -25,17 +25,17 @@ appData:
 hpaSettings: 
   minAvailable: 3
   minReplicas: 3
-  maxReplicas: 3
+  maxReplicas: 4
   averageUtilization: 80
 
 # Pod resource requests and limits
 resources:
   requests:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
   limits:
-    cpu: "2000m"
-    memory: "2Gi"
+    cpu: "8"
+    memory: "24Gi"
 
 # environment variables for app - secret values come from vault
 envVars: |
@@ -83,6 +83,8 @@ envVars: |
     value: "https://claiminquiry-cap-prod.myclaims.pss.caremark.com"
   - name: use_embedding_classifier
     value: 'true'
+  - name: CLAIMS_HISTORY_SEARCH_X_API_KEY
+    value: ""  # TODO: set the prod API key value
   # ⚠️ MONGODB_USER and MONGODB_PASSWORD are injected by Vault sidecar via envSecrets
 
 # Environment secrets from HashiCorp Vault

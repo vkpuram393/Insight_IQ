@@ -42,6 +42,49 @@ from services.pii_protection import (
 logger = get_logger(__name__)
 
 # ============================================================================
+# SYSTEM PROMPT LEAKAGE FINGERPRINTS
+# ============================================================================
+# Phrases that appear in the system prompt but should NEVER appear in a response.
+# If 2+ of these are found in a response, the LLM is leaking system instructions.
+SYSTEM_PROMPT_FINGERPRINTS = [
+    "pharmacy claim assistant system prompt",
+    "critical: masked token handling",
+    "entity_type_hash",
+    "data source rules (must follow step by step)",
+    "golden rule: understand first, answer second",
+    "explore all relevant fields in claim data",
+    "data exploration and reasoning strategy",
+    "pricing tier preference",
+    "source-level masked or placeholder data",
+    "safeguard reminder",
+    "strict rules:",
+    "how to construct your response:",
+    "conversation history (context only",
+    "step 1: entities section",
+    "step 2: claim data section",
+    "step 3: conversation history",
+    "yes/no status flags vs. detail sections",
+    "stcob (single transaction coordination of benefits)",
+    "adjudication pathway questions",
+    "mandatory output filter for straightforward paid claims",
+    "drug alternatives / formulary alternatives rule",
+    "coverage type / plan type questions",
+    "instruction confidentiality",
+    "absolute rule",
+]
+
+def _check_system_prompt_leakage(response_text: str) -> Tuple[bool, int, list]:
+    """Check if response contains system prompt fragments.
+    
+    Returns:
+        (is_leakage, match_count, matched_phrases)
+        Threshold: 2+ matches = definite leakage
+    """
+    response_lower = response_text.lower()
+    matched = [fp for fp in SYSTEM_PROMPT_FINGERPRINTS if fp in response_lower]
+    return len(matched) >= 2, len(matched), matched
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -1472,6 +1515,33 @@ async def response_safety_pii_postcheck_node(state: AgentState) -> Dict[str, Any
         if not combined_token_mapping:
             logger.info("ℹ️ No tokens in mapping - using lenient leakage detection")
             lenient_mode = True
+        
+        # ===== STEP 0.5: Check for System Prompt Leakage =====
+        logger.info("Step 0.5: System prompt leakage detection")
+        is_prompt_leaked, match_count, matched_phrases = _check_system_prompt_leakage(response)
+        if is_prompt_leaked:
+            logger.warning(f"🚨 SYSTEM PROMPT LEAKAGE DETECTED: {match_count} fingerprints matched: {matched_phrases[:5]}")
+            safe_response = (
+                "I'm sorry, I wasn't able to process that request properly. "
+                "Could you please rephrase your question about your pharmacy claims?"
+            )
+            result = {
+                "response": safe_response,
+                "recommendations": [],
+                "safety_postcheck_passed": False,
+                "metadata": {
+                    **metadata,
+                    "leakage_check": {
+                        "has_leakage": True,
+                        "type": "system_prompt",
+                        "match_count": match_count,
+                        "matched_phrases": matched_phrases[:5],
+                        "action": "blocked"
+                    }
+                }
+            }
+            await log_state_snapshot(state, node_name, result)
+            return result
         
         # ===== STEP 1: Check for PII Leakage =====
         # Configurable leakage detection mode: "block", "log", or "disabled"

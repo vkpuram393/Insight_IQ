@@ -747,9 +747,21 @@ def generalized_claims_query(claims, user_prompt, current_date=None):
         'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
         'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
     }
+    # Look for an explicit 4-digit year in the prompt (e.g. "january 2025")
+    year_match = re.search(r'\b(20\d{2})\b', prompt)
+    explicit_year = int(year_match.group(1)) if year_match else None
+
     for mname, mnum in month_map.items():
         if mname in prompt:
-            filtered = filter_claims_by_month(claims, current_date.year, mnum)
+            if explicit_year is not None:
+                filtered = filter_claims_by_month(claims, explicit_year, mnum)
+            else:
+                # No year specified — match the month across ALL years present
+                # in the (already capped, recent-first) member history.
+                filtered = [
+                    c for c in claims
+                    if (c.get('claimInformation', {}).get('fillDate') or '')[5:7] == f"{mnum:02d}"
+                ]
             filtered.sort(key=lambda c: c.get('claimInformation', {}).get('fillDate', ''), reverse=True)
             return filtered
     if 'this month' in prompt:
@@ -835,6 +847,12 @@ _STOP_WORDS = frozenset({
     'diagnosis', 'icd', 'settlement', 'ndc', 'gpi', 'npi',
     'manufacturer', 'manufactured', 'made', 'name', 'number',
     'show', 'give', 'get', 'find', 'list', 'fetch', 'display',
+    # Time-window / list-style words — never drug names
+    'january', 'february', 'march', 'april', 'may', 'june', 'july',
+    'august', 'september', 'october', 'november', 'december',
+    'today', 'yesterday', 'week', 'weeks', 'day', 'days', 'years',
+    'medicines', 'medications', 'drugs', 'prescriptions', 'fills',
+    'taken', 'medicine', 'medication', 'drug', 'prescription',
 })
 
 
@@ -843,6 +861,20 @@ def _extract_drug_name(prompt: str) -> str:
     Extract a drug name from a natural-language user prompt.
     Returns the cleaned drug name or empty string if none found.
     """
+    # Bail out early if the prompt clearly asks for a member-history list
+    # rather than a single-drug lookup (avoids phantom matches like
+    # "january for claim 26035..." being treated as a drug name).
+    p = prompt.lower()
+    list_phrases = (
+        'list of all', 'list of drugs', 'list of medications', 'list of medicines',
+        'list of prescriptions', 'list of fills',
+        'all medicines', 'all medications', 'all drugs',
+        'all the claims', 'all claims', 'list all', 'show all',
+        'give me all', 'every claim', 'every prescription',
+    )
+    if any(ph in p for ph in list_phrases):
+        return ''
+
     for pattern in _DRUG_PATTERNS:
         m = pattern.search(prompt)
         if m:
@@ -855,6 +887,16 @@ def _extract_drug_name(prompt: str) -> str:
             while words and words[-1].lower() in _STOP_WORDS:
                 words.pop()
             cleaned = ' '.join(words)
-            if cleaned and cleaned.lower() not in _STOP_WORDS:
-                return cleaned
+            if not cleaned or cleaned.lower() in _STOP_WORDS:
+                continue
+            # Reject candidates that contain digits (claim numbers, NDCs)
+            if any(ch.isdigit() for ch in cleaned):
+                continue
+            # Reject candidates that contain only stop words after splitting
+            if all(w.lower() in _STOP_WORDS for w in cleaned.split()):
+                continue
+            # Drug names are usually 1-4 tokens; longer matches are noise
+            if len(cleaned.split()) > 4:
+                continue
+            return cleaned
     return ''

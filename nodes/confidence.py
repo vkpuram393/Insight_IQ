@@ -98,11 +98,67 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
     
     config = _load_config()
     threshold = config.get("confidence_threshold", 0.7)
+    confidence = state.get("confidence", 0.0)
     
+    # PRIORITY CHECK: LLM fallback already ran inside the multidomain classifier.
+    # If its confidence is below the LLM fallback threshold, route straight to clarification
+    # instead of llm_judge (avoids a redundant second LLM call).
+    # EXCEPTION: claim_history_search queries must NOT use this short-circuit.
+    # The internal LLM fallback uses per-domain prompts that may lack claim-history
+    # context, while llm_judge uses claim_prompt_template with conversation history
+    # and is far more capable for these queries.  Skipping llm_judge for CHS domains
+    # was the primary cause of correct queries reaching the clarification node.
+    llm_fallback_confidence = state.get("llm_fallback_confidence")
+    llm_fb_threshold = config.get(
+        "llm_fallback_confidence_threshold",
+        settings.LLM_FALLBACK_CONFIDENCE_THRESHOLD,
+    )
+    domain = state.get("domain", "")
+    if (
+        llm_fallback_confidence is not None
+        and llm_fallback_confidence < llm_fb_threshold
+        and confidence < threshold          # only clarify when ensemble is also uncertain
+        and not state.get("intent_reclassified", False)
+        and domain != "claim_history_search"   # let llm_judge handle CHS queries
+    ):
+        logger.info(
+            f"⚠️ LLM fallback confidence ({llm_fallback_confidence:.2f}) "
+            f"< threshold ({llm_fb_threshold}) AND ensemble confidence "
+            f"({confidence:.2f}) < threshold ({threshold}) -> Clarification "
+            f"(LLM already ran inside multidomain classifier)"
+        )
+        return "clarification"
+
+    # ── Vague-query safety net for CHS domain ──────────────────────────────
+    # Fix B (above) exempts CHS queries from the early-exit so that medium-
+    # confidence queries reach llm_judge instead of clarification.  But when
+    # both the internal LLM fallback AND the classifier are DEEPLY uncertain
+    # (below vague_query_confidence_threshold, default 0.4) AND the current
+    # query contains no extractable entities, the intent cannot be determined
+    # and the system must ask the user to clarify what they need.
+    #
+    # Note: confidence in state may be boosted to 0.85 for CHS by the intent
+    # agent (Fix A), so we use llm_fallback_confidence as the unmodified signal.
+    # This guard fires only when llm_fallback ran (not None) and was truly vague.
+    vague_threshold = config.get("vague_query_confidence_threshold", 0.4)
+    _quick_entities = state.get("entities") or {}
+    _has_any_entity = bool(_quick_entities and any(v for v in _quick_entities.values()))
+    if (
+        domain == "claim_history_search"
+        and not state.get("intent_reclassified", False)
+        and llm_fallback_confidence is not None
+        and llm_fallback_confidence < vague_threshold   # deeply uncertain — not just below gate
+        and not _has_any_entity                         # no claim number or other entity extracted
+    ):
+        logger.info(
+            f"❓ Genuinely vague CHS query: llm_fallback={llm_fallback_confidence:.2f} "
+            f"< vague_threshold={vague_threshold} with no extractable entities "
+            f"→ Clarification (cannot determine intent or member context)"
+        )
+        return "clarification"
+
     # TEMPORARY: Check if LLM judge path is disabled (for testing)
     disable_llm_judge = settings.temporarily_disable_llm_judge_path_for_testing
-    
-    confidence = state.get("confidence", 0.0)
     intent = state.get("intent", "")  # ✅ Get intent from state
     needs_clarification = state.get("needs_clarification", False)
     is_complex = state.get("is_complex", False)
@@ -207,8 +263,23 @@ def confidence_check_router(state: AgentState) -> Literal["clarification", "buil
                 return "llm_judge"
 
         # RULE 2: Low confidence → LLM Judge (if enabled) OR Clarification (if disabled)
+        # Skip if multidomain LLM fallback already ran inside the classifier with
+        # sufficient confidence (>= llm_fb_threshold). In that case the LLM has
+        # already re-evaluated the intent; routing to llm_judge would run it twice.
         if confidence < threshold:
-            if disable_llm_judge:
+            llm_already_confident = (
+                llm_fallback_confidence is not None
+                and llm_fallback_confidence >= llm_fb_threshold
+            )
+            if llm_already_confident:
+                logger.info(
+                    f"ℹ️ Low ensemble confidence ({confidence:.2f}) but multidomain "
+                    f"LLM fallback already ran with sufficient confidence "
+                    f"({llm_fallback_confidence:.2f} >= {llm_fb_threshold}) — "
+                    f"skipping llm_judge, proceeding to entity check"
+                )
+                # Fall through to RULE 3 / RULE 4 (entity-based routing)
+            elif disable_llm_judge:
                 logger.info(f"⚠️ Low confidence ({confidence:.2f}) < {threshold} -> Clarification (LLM judge path temporarily disabled for testing)")
                 logger.info("   Reason: LLM judge path is disabled - routing to clarification instead")
                 return "clarification"
@@ -348,26 +419,49 @@ async def confidence_checker_node(state: AgentState) -> Dict[str, Any]:
         # CALCULATE MISSING SLOTS (for clarification node)
         # ONLY checks for claim_number and sequence - these are the ONLY two entities
         # ========================================================================
-        required_entities_list = state.get("required_entities_list") or []  # Handle None explicitly
+        required_entities_list = list(state.get("required_entities_list") or [])  # copy, don't mutate state
         entities = state.get("entities") or {}
         missing_slots = []
-        
+
+        # ── CHS safety: sequence is NEVER required for claim_history_search ──────
+        # api_routing_config sets required_entities=["claim_number","sequence"] for
+        # ALL cap_api intents.  When the classifier misidentifies a CHS query as a
+        # cap_api intent (e.g. DrugLast→fill_date_info) and the is_claim_history
+        # normalisation in the intent agent didn't fire, missing_slots ends up with
+        # "sequence", producing a wrong clarification asking for a sequence number
+        # that the claims-history pipeline never needs.  Guard against this here by
+        # checking the canonical INTENT_TO_DOMAIN mapping regardless of what the
+        # intent agent produced.
+        _current_intent = state.get("intent", "")
+        _current_domain = state.get("domain", "")
+        try:
+            from multidomain_intent_detection.config import INTENT_TO_DOMAIN as _I2D
+            _resolved_domain = _I2D.get(_current_intent, _current_domain)
+        except Exception:
+            _resolved_domain = _current_domain
+        if _resolved_domain == "claim_history_search" and "sequence" in required_entities_list:
+            required_entities_list = [e for e in required_entities_list if e != "sequence"]
+            logger.info(
+                f"🔧 CHS intent '{_current_intent}': removed 'sequence' from required_entities "
+                f"(claim_history_search never requires a sequence number)"
+            )
+
         # ONLY these two entities matter - claim_number and sequence
         # All other required_entities are ignored
         ENTITY_MAP = {
             "claim_number": "claim_ids",
             "sequence": "claim_sequences"
         }
-        
+
         for req_entity in required_entities_list:
             # ONLY check claim_number and sequence - skip anything else
             if req_entity not in ENTITY_MAP:
                 continue
-            
+
             entity_key = ENTITY_MAP[req_entity]
             if entity_key not in entities or not entities[entity_key] or (isinstance(entities[entity_key], list) and len(entities[entity_key]) == 0):
                 missing_slots.append(req_entity)
-        
+
         if missing_slots:
             logger.info(f"⚠️ Missing required entities: {missing_slots}")
         

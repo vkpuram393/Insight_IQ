@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 class ChatRequest(BaseModel):
     text: str
     session_id: Optional[str] = None
+    session_uuid: Optional[str] = None      # UI-provided stable session ID for persistent history (per MyClaims login)
     user_info: Optional[Dict[str, Any]] = None
     claim_id: Optional[str] = None          # UI claim context (first query of session only)
     claim_sequence: Optional[str] = None    # UI sequence context (first query of session only)
@@ -42,9 +43,20 @@ class RecommendationChip(BaseModel):
     text: str                         # Display text for the chip
     action: Optional[str] = None      # Intent/action to trigger when clicked
 
+class IntentStageResult(BaseModel):
+    intent: Optional[str] = None
+    confidence: Optional[float] = None
+    raw_confidence: Optional[float] = None
+
+class IntentResolutionTrail(BaseModel):
+    ensemble: Optional[IntentStageResult] = None      # always populated when multidomain classifier ran
+    llm_fallback: Optional[IntentStageResult] = None  # populated only when internal LLM fallback was invoked
+    clarification: Optional[IntentStageResult] = None # populated only when clarification node was triggered
+
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    session_uuid: Optional[str] = None      # Echoed back: UI-provided stable session ID (user_session)
     response_id: Optional[str] = None  # ✅ UUID for feedback tracking
     intent: Optional[str] = None
     confidence: Optional[float] = None
@@ -52,8 +64,104 @@ class ChatResponse(BaseModel):
     recommendations: Optional[List[RecommendationChip]] = None  # ✅ Recommendation chips
     needs_clarification: bool = False
     clarifying_question: Optional[str] = None  # DEPRECATED: Use 'response' field instead. Kept for backward compatibility and internal tracing only.
+    intent_resolution_trail: Optional[IntentResolutionTrail] = None  # per-stage classification trail
     metadata: Optional[Dict[str, Any]] = None
     timestamp: str
+    # ── Rendering fields ──
+    render_format: str = "text"
+    html_content: Optional[str] = None
+    css_content: Optional[str] = None
+    answer_header: Optional[str] = None
+    render_dsl: Optional[Dict[str, Any]] = None
+    render_mode: Optional[str] = None
+
+
+def process_rendering(state_or_event_data: dict) -> dict:
+    """Post-graph HTML rendering. NEVER raises — returns render_format='text' on any failure."""
+    try:
+        # Kill switch: set ENABLE_RENDERING_AGENT=false to force text-only mode.
+        if not settings.enable_rendering_agent:
+            return {"render_format": "text", "render_dsl": None}
+
+        from agents.post_processing.myclaims_rendering_agent import MyclaimsRenderingAgent
+        from agents.post_processing.rendering_themes import NO_RENDER_INTENTS
+
+        intent = state_or_event_data.get("intent", "")
+        tool_results = (
+            state_or_event_data.get("tool_results")
+            or state_or_event_data.get("_tool_results")
+        )
+        entities = (
+            state_or_event_data.get("entities")
+            or state_or_event_data.get("_entities")
+            or {}
+        )
+        needs_clarification = state_or_event_data.get("needs_clarification", False)
+
+        if hasattr(tool_results, "dict"):
+            tool_results = tool_results.dict()
+
+        # Unmask tool_results so the rendering agent displays real values, not PII tokens.
+        pii_masking = state_or_event_data.get("metadata", {}).get("response_pii_masking", {})
+        token_mapping = pii_masking.get("tool_metadata", {}).get("token_mapping", {})
+        if token_mapping and isinstance(tool_results, dict):
+            try:
+                import json as _json
+                from services.pii_protection import get_pii_service
+                _pii = get_pii_service()
+                tool_results_str = _json.dumps(tool_results)
+                tool_results_str = _pii.unmask_pii_phi(tool_results_str, token_mapping)
+                tool_results = _json.loads(tool_results_str)
+            except Exception as _ue:
+                logger.warning(f"process_rendering: tool_results unmask failed (continuing with masked): {_ue}")
+
+        if (
+            intent in NO_RENDER_INTENTS
+            or needs_clarification
+            or not tool_results
+            or getattr(tool_results.get("status", ""), "value", tool_results.get("status", "")).lower() != "success"
+        ):
+            return {"render_format": "text", "render_dsl": None}
+
+        render_dsl_validated = None
+        raw_dsl = state_or_event_data.get("render_dsl")
+        render_mode = state_or_event_data.get("render_mode")
+        response_text = state_or_event_data.get("response") or state_or_event_data.get("final_response") or ""
+        logger.debug("render_dsl from state: type=%s truthy=%s", type(raw_dsl).__name__, bool(raw_dsl))
+        if raw_dsl and isinstance(raw_dsl, dict) and tool_results:
+            try:
+                from agents.post_processing.render_dsl import validate_render_dsl
+                validated = validate_render_dsl(raw_dsl)
+                if validated:
+                    render_dsl_validated = validated.to_dict()
+                    logger.info("render_dsl validated: layout=%s sections=%d",
+                                render_dsl_validated.get("layout"), len(render_dsl_validated.get("sections", [])))
+                else:
+                    logger.warning("render_dsl validation returned None — sections pruned. raw_dsl=%s", raw_dsl)
+            except Exception as _de:
+                logger.warning(f"render_dsl validation failed (non-fatal): {_de}")
+
+        result = MyclaimsRenderingAgent().execute(
+            intent=intent,
+            tool_results=tool_results,
+            entities=entities,
+            render_dsl=render_dsl_validated,
+            render_mode=render_mode,
+            response_text=response_text,
+        )
+
+        return {
+            "render_format": result.render_format,
+            "html_content": result.html_content,
+            "css_content": result.css_content,
+            "answer_header": result.answer_header,
+            "render_dsl": render_dsl_validated,
+            "render_mode": render_mode,
+        }
+    except Exception as e:
+        logger.warning(f"Rendering agent failed (silent fallback): {e}")
+        return {"render_format": "text", "render_dsl": None}
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
@@ -63,12 +171,51 @@ async def chat(request: ChatRequest, http_request: Request):
     📍 BREAKPOINT: Set here (line 33) to debug incoming requests
     """
     session_id = request.session_id or str(uuid.uuid4())
+    user_session = request.session_uuid          # UI stable session ID for persistent history; None if not provided
     user_id = request.user_info.get("user_id") if request.user_info else None
-    
+
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
-    user_info["auth_token"] = http_request.headers.get("Authorization", "")
-    
+
+    # ── DIAGNOSTIC LOGS (QA token-flow debug) ─────────────────────────────
+    _body_keys     = list((request.user_info or {}).keys())
+    _body_token    = (request.user_info or {}).get("auth_token", "")
+    _header_token  = http_request.headers.get("Authorization", "")
+    _body_apikey   = (request.user_info or {}).get("x_api_key", "")
+    _header_apikey = http_request.headers.get("x-api-key", "") or http_request.headers.get("x_api_key", "")
+    logger.info("[AUTH-DEBUG] /chat user_info body keys      : %s", _body_keys)
+    logger.info("[AUTH-DEBUG] /chat auth_token  body present : %s | prefix: %s",
+                bool(_body_token), (_body_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /chat auth_token header present: %s | prefix: %s",
+                bool(_header_token), (_header_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /chat x_api_key   body present : %s", bool(_body_apikey))
+    logger.info("[AUTH-DEBUG] /chat x_api_key header present : %s", bool(_header_apikey))
+    # ── END DIAGNOSTIC LOGS ───────────────────────────────────────────────
+
+    # Prefer token from request body (survives APIGEE header stripping in deployed envs);
+    # fall back to Authorization header (used in local dev / direct calls).
+    user_info["auth_token"] = (
+        user_info.get("auth_token")
+        or http_request.headers.get("Authorization", "")
+    )
+    # Capture additional API headers required by downstream claims-search API
+    user_info["x_api_key"] = (
+        user_info.get("x_api_key")
+        or http_request.headers.get("x-api-key")
+        or http_request.headers.get("x_api_key", "")
+    )
+    user_info["x_clientrefid"] = (
+        user_info.get("x_clientrefid")
+        or http_request.headers.get("x-clientrefid")
+        or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
+    )
+
+    _resolved_token = user_info.get("auth_token", "")
+    logger.info("[AUTH-DEBUG] /chat auth_token RESOLVED      : %s | prefix: %s",
+                "body" if _resolved_token and _resolved_token == _body_token else
+                "header" if _resolved_token else "EMPTY",
+                (_resolved_token or "")[:20] or "(empty)")
+
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
@@ -94,7 +241,8 @@ async def chat(request: ChatRequest, http_request: Request):
             final_state = await run_graph(
                 text=request.text,
                 session_id=session_id,
-                user_info=user_info
+                user_info=user_info,
+                user_session=user_session
             )
 
         if not isinstance(final_state, dict):
@@ -132,9 +280,49 @@ async def chat(request: ChatRequest, http_request: Request):
                 ) for rec in raw_recommendations if rec.get("text")
             ]
 
+        # Build intent resolution trail — one entry per classifier stage, null for stages not reached
+        _ensemble_intent = final_state.get("ensemble_intent")
+        _ensemble_confidence = final_state.get("ensemble_confidence")
+        _ensemble_stage = (
+            IntentStageResult(
+                intent=_ensemble_intent,
+                confidence=_ensemble_confidence,
+                raw_confidence=None,
+            )
+            if (_ensemble_intent is not None or _ensemble_confidence is not None)
+            else None
+        )
+        _llm_fb_confidence = final_state.get("llm_fallback_confidence")
+        _llm_fallback_stage = (
+            IntentStageResult(
+                intent=final_state.get("llm_fallback_intent"),
+                confidence=_llm_fb_confidence,
+                raw_confidence=None,
+            )
+            if _llm_fb_confidence is not None  # presence signals LLM fallback was called
+            else None
+        )
+        _clarification_stage = None
+        if final_state.get("needs_clarification"):
+            _ctx = final_state.get("clarification_context") or {}
+            _clarification_stage = IntentStageResult(
+                intent=_ctx.get("intent"),
+                confidence=_ctx.get("confidence"),
+                raw_confidence=None,
+            )
+        _trail = IntentResolutionTrail(
+            ensemble=_ensemble_stage,
+            llm_fallback=_llm_fallback_stage,
+            clarification=_clarification_stage,
+        )
+
+        # Run rendering agent on final state
+        rendering = process_rendering(final_state)
+
         return ChatResponse(
             response=response_text,  # ✅ Always contains the answer or clarification question
             session_id=session_id,
+            session_uuid=final_state.get("user_session"),  # Echo back stable session ID
             response_id=final_state.get("response_id"),  # ✅ Include response_id for feedback
             intent=intent,
             confidence=confidence,
@@ -142,8 +330,15 @@ async def chat(request: ChatRequest, http_request: Request):
             recommendations=recommendations,  # ✅ Include recommendation chips
             needs_clarification=final_state.get("needs_clarification", False),  # ✅ If True, 'response' contains a question
             clarifying_question=None,  # DEPRECATED: Always null. Use 'response' + 'needs_clarification' instead. Kept for tracing/backward compatibility only.
+            intent_resolution_trail=_trail,
             metadata=metadata,
-            timestamp=datetime.now(timezone.utc).isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            render_format=rendering.get("render_format", "text"),
+            html_content=rendering.get("html_content"),
+            css_content=rendering.get("css_content"),
+            answer_header=rendering.get("answer_header"),
+            render_dsl=rendering.get("render_dsl"),
+            render_mode=rendering.get("render_mode") or final_state.get("render_mode"),
         )
     except HTTPException:
         raise
@@ -209,12 +404,51 @@ async def chat_stream(request: ChatRequest, http_request: Request):
         StreamingResponse with text/event-stream content type
     """
     session_id = request.session_id or str(uuid.uuid4())
+    user_session = request.session_uuid          # UI stable session ID for persistent history; None if not provided
     user_id = request.user_info.get("user_id") if request.user_info else None
-    
+
     # Capture auth token and add to user_info for downstream use
     user_info = request.user_info.copy() if request.user_info else {}
-    user_info["auth_token"] = http_request.headers.get("Authorization", "")
-    
+
+    # ── DIAGNOSTIC LOGS (QA token-flow debug) ─────────────────────────────
+    _body_keys     = list((request.user_info or {}).keys())
+    _body_token    = (request.user_info or {}).get("auth_token", "")
+    _header_token  = http_request.headers.get("Authorization", "")
+    _body_apikey   = (request.user_info or {}).get("x_api_key", "")
+    _header_apikey = http_request.headers.get("x-api-key", "") or http_request.headers.get("x_api_key", "")
+    logger.info("[AUTH-DEBUG] /stream user_info body keys      : %s", _body_keys)
+    logger.info("[AUTH-DEBUG] /stream auth_token  body present : %s | prefix: %s",
+                bool(_body_token), (_body_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /stream auth_token header present: %s | prefix: %s",
+                bool(_header_token), (_header_token or "")[:20] or "(empty)")
+    logger.info("[AUTH-DEBUG] /stream x_api_key   body present : %s", bool(_body_apikey))
+    logger.info("[AUTH-DEBUG] /stream x_api_key header present : %s", bool(_header_apikey))
+    # ── END DIAGNOSTIC LOGS ───────────────────────────────────────────────
+
+    # Prefer token from request body (survives APIGEE header stripping in deployed envs);
+    # fall back to Authorization header (used in local dev / direct calls).
+    user_info["auth_token"] = (
+        user_info.get("auth_token")
+        or http_request.headers.get("Authorization", "")
+    )
+    # Capture additional API headers required by downstream claims-search API
+    user_info["x_api_key"] = (
+        user_info.get("x_api_key")
+        or http_request.headers.get("x-api-key")
+        or http_request.headers.get("x_api_key", "")
+    )
+    user_info["x_clientrefid"] = (
+        user_info.get("x_clientrefid")
+        or http_request.headers.get("x-clientrefid")
+        or http_request.headers.get("x_clientrefid", str(uuid.uuid4()))
+    )
+
+    _resolved_token = user_info.get("auth_token", "")
+    logger.info("[AUTH-DEBUG] /stream auth_token RESOLVED      : %s | prefix: %s",
+                "body" if _resolved_token and _resolved_token == _body_token else
+                "header" if _resolved_token else "EMPTY",
+                (_resolved_token or "")[:20] or "(empty)")
+
     # Extract user info from JWT for compliance audit logging (email, name, etc.)
     jwt_user_info = extract_user_info_from_jwt(user_info.get("auth_token", ""))
     user_info.update(jwt_user_info)
@@ -237,24 +471,31 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     async def event_generator() -> AsyncIterator[str]:
         """
         Generate SSE events from graph execution
-        
+
         SSE Format:
             event: <event_type>\n
             data: <json_data>\n\n
         """
         try:
             start_time = datetime.now(timezone.utc)
-            
+
             # Stream events from graph execution
             async for event in run_graph_stream(
                 text=request.text,
                 session_id=session_id,
-                user_info=user_info
+                user_info=user_info,
+                user_session=user_session
             ):
                 event_type = event.get("type")
                 event_data = event.get("data")
                 event_metadata = event.get("metadata", {})
-                
+
+                # Rendering: enrich complete event with HTML table, strip internal fields
+                if event_type == "complete" and event_data:
+                    rendering = process_rendering(event_data)
+                    event_data = {k: v for k, v in event_data.items() if not k.startswith("_")}
+                    event_data.update(rendering)
+
                 # Format as SSE event
                 # Note: SSE requires "event:" and "data:" lines, ending with double newline
                 sse_message = f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"

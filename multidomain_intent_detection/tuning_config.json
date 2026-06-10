@@ -1,0 +1,71 @@
+{
+  "_description": "All tunable parameters for intent detection. Edit this file instead of code.",
+  "_usage": [
+    "1. Edit parameters below",
+    "2. Run: python -m multidomain_intent_detection.training",
+    "3. Validate: python -m multidomain_intent_detection.batch_test",
+    "4. Or auto-tune: python -m multidomain_intent_detection.auto_tuner"
+  ],
+
+  "pipeline": {
+    "pca_dims": null,
+    "pca_search_range": [50, 75, 100, 150, 200, 250, 300, 400, 500],
+    "pca_search_enabled": true,
+    "knn_k": 7,
+    "temperature_min": 0.3,
+    "temperature_max": 4.0,
+    "temperature_floor": 0.3
+  },
+
+  "classifiers": {
+    "svm": {
+      "C": 10,
+      "kernel": "rbf",
+      "gamma": "scale"
+    },
+    "logreg": {
+      "C": 10,
+      "max_iter": 3000,
+      "solver": "lbfgs"
+    },
+    "knn": {
+      "weights": "distance",
+      "metric": "cosine"
+    },
+    "extra_trees": {
+      "n_estimators": 300,
+      "max_depth": 30,
+      "min_samples_leaf": 2
+    }
+  },
+
+  "confidence_penalties": {
+    "disagreement_max_penalty": 0.30,
+    "disagreement_per_unique": 0.08,
+    "confusion_pair_penalty": 0.10
+  },
+
+   "gating": {
+    "confidence_threshold": 0.90,
+    "margin_threshold": 0.05,
+    "confusion_prone_confidence": 0.55,
+    "confusion_prone_margin": 0.20,
+    "confusion_pair_confidence": 0.60,
+    "confusion_pair_margin": 0.25
+  },
+
+  "weight_search": {
+    "step": 0.05,
+    "svm_range": [0.10, 0.55],
+    "logreg_range": [0.10, 0.55],
+    "knn_range": [0.05, 0.40],
+    "et_range": [0.05, 0.40]
+  },
+
+  "production": {
+    "min_confidence_for_production": 0.80,
+    "needs_clarification_threshold": 0.40,
+    "use_llm_fallback": true,
+    "max_query_length": 5000
+  }
+}

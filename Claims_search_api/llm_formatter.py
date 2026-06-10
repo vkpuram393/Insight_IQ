@@ -15,16 +15,8 @@ import json
 from typing import Any, Dict, List, Optional
 
 from Claims_search_api.response_trimmer import trim_api_response, trim_single_claim_response
-from Claims_search_api.search import (
-    filter_claims_by_drug_name,
-    filter_claims_by_reject_code,
-    filter_claims_by_status,
-    filter_claims_by_field,
-    get_last_claim_for_field_value,
-    filter_claims_by_month,
-    filter_claims_by_date_range,
-    generalized_claims_query,
-)
+from Claims_search_api.filter_extractor import extract_filter_spec, apply_filter_spec
+from Claims_search_api.search import generalized_claims_query
 
 
 # ---------------------------------------------------------------------------
@@ -36,18 +28,32 @@ def prefilter_claims_by_query(
     user_query: str,
 ) -> List[Dict[str, Any]]:
     """
-    Use the generalized search logic from search.py to narrow down claims
-    based on the user query.  Falls back to returning all claims if no
-    specific filter matches.
+    Narrow down claims to those relevant to the user query.
+
+    Strategy (LLM-first, regex fallback):
+      1. extract_filter_spec() asks the LLM to parse the query into a
+         structured FilterSpec (~200 prompt tokens, temperature=0).
+         The 70 K-line payload is never sent to this LLM call.
+      2. apply_filter_spec() applies every filter deterministically in
+         Python using AND logic — all non-None fields must match.
+      3. If the LLM call fails or returns no results, fall back to the
+         regex-based generalized_claims_query() so nothing is lost.
     """
     if not user_query or not claims:
         return claims
 
+    try:
+        spec = extract_filter_spec(user_query)
+        if not spec.is_empty():
+            filtered = apply_filter_spec(claims, spec)
+            if filtered:
+                return filtered
+    except Exception:
+        pass  # extraction error — fall through to regex fallback
+
+    # Regex fallback: preserves existing behaviour for edge cases
     filtered = generalized_claims_query(claims, user_query)
-
-    # generalized_claims_query may return [None] for no-match scenarios
     filtered = [c for c in (filtered or []) if c is not None]
-
     return filtered if filtered else claims
 
 
@@ -276,7 +282,7 @@ def format_claims_for_llm(
 
     # Step 1: Trim
     if is_member_history:
-        trimmed = trim_api_response(api_response)
+        trimmed = trim_api_response(api_response, max_claims=max_claims)
     else:
         trimmed = trim_single_claim_response(api_response)
 
@@ -286,7 +292,7 @@ def format_claims_for_llm(
         filtered_raw = prefilter_claims_by_query(raw_claims, user_query)
         # Re-trim only the filtered claims
         filtered_response = {**api_response, "claims": filtered_raw}
-        trimmed = trim_api_response(filtered_response)
+        trimmed = trim_api_response(filtered_response, max_claims=max_claims)
 
     claims = trimmed.get("claims", [])[:max_claims]
     total = trimmed.get("totalCount", len(claims))
@@ -323,7 +329,7 @@ def format_claims_as_compact_json(
         return json.dumps({"error": "No claims data available."})
 
     if is_member_history:
-        trimmed = trim_api_response(api_response)
+        trimmed = trim_api_response(api_response, max_claims=max_claims)
     else:
         trimmed = trim_single_claim_response(api_response)
 
@@ -331,7 +337,7 @@ def format_claims_as_compact_json(
     if user_query and is_member_history:
         filtered_raw = prefilter_claims_by_query(raw_claims, user_query)
         filtered_response = {**api_response, "claims": filtered_raw}
-        trimmed = trim_api_response(filtered_response)
+        trimmed = trim_api_response(filtered_response, max_claims=max_claims)
 
     trimmed["claims"] = trimmed.get("claims", [])[:max_claims]
     trimmed["totalCount"] = len(trimmed["claims"])

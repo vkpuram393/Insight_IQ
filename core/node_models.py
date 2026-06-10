@@ -310,6 +310,7 @@ class SafetyViolationType(str, Enum):
     MALICIOUS_INPUT = "malicious_input"
     EXCESSIVE_LENGTH = "excessive_length"
     INAPPROPRIATE_CONTENT = "inappropriate_content"
+    PROMPT_INJECTION = "prompt_injection"
     NONE = "none"
 
 

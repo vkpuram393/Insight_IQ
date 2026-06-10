@@ -25,8 +25,10 @@ from nodes import (
 )
 from agents import intent_agent_node, response_agent_node
 from tools import call_claims_tool_node
-from Claims_search_api.claims_search_node import call_claims_search_node
-from Claims_search_api.intent_router import route_after_build_context
+from Claims_search_api.claims_search_node_v2 import (
+    call_claims_search_node_v2 as call_claims_search_node,
+)
+from Claims_search_api.intent_router import is_claims_search_query
 from config.config import settings
 from core.logger import get_logger
 
@@ -107,6 +109,21 @@ def route_after_update_memory(state: AgentState) -> str:
     return "cache_response"
 
 # Workflow builder -----------------------------------------------------------
+
+def _route_after_build_context(state: AgentState) -> str:
+    """
+    After build_context, route to the correct claims pipeline.
+
+    CHS (member-history) queries are served by call_claims_search (LLM-driven
+    full-history lookup). All other high-confidence queries with entities go to
+    call_claims_tool (single-claim API).
+    """
+    if is_claims_search_query(state):
+        logger.info("🔀 Routing to call_claims_search (member-history pipeline)")
+        return "call_claims_search"
+    logger.info("🔀 Routing to call_claims_tool (single-claim pipeline)")
+    return "call_claims_tool"
+
 
 def _build_workflow() -> StateGraph:
     """
@@ -212,17 +229,16 @@ def _build_workflow() -> StateGraph:
     # Clarification → Response Safety PII Precheck → Response Agent (LLM generates follow-up question)
     workflow.add_edge("clarification", "response_safety_pii_precheck")
     
-    # Build Context → Route to appropriate tool
-    # Claims search queries go to call_claims_search; standard queries go to call_claims_tool
+    # Build Context → Claims routing fork (CHS member-history vs single-claim)
     workflow.add_conditional_edges(
         "build_context",
-        route_after_build_context,
+        _route_after_build_context,
         {
-            "call_claims_search": "call_claims_search",
             "call_claims_tool": "call_claims_tool",
-        }
+            "call_claims_search": "call_claims_search",
+        },
     )
-    
+
     # Tool Call → Response Safety PII Precheck → Response Agent → Response Safety PII Postcheck
     workflow.add_edge("call_claims_tool", "response_safety_pii_precheck")
     workflow.add_edge("call_claims_search", "response_safety_pii_precheck")
@@ -326,18 +342,81 @@ async def cleanup_old_checkpoints(days: int = 7):
 
 # Execution ------------------------------------------------------------------
 
-async def run_graph(text: str, session_id: str, user_info: dict = None):
+async def _seed_redis_from_history(session_id: str, user_session: Optional[str]) -> None:
+    """Pre-populate Redis with MongoDB conversation history when chatbot reopens.
+
+    Called BEFORE ainvoke/astream so context_node finds real history in Redis.
+    Non-fatal — Redis seeding failure must not block user requests.
+    Idempotent — skips seeding if Redis already has messages for this session.
+
+    Args:
+        session_id:   Per-chatbot-open ephemeral ID (used as Redis key prefix).
+        user_session: Per-login stable ID (MongoDB _id). None = skip seeding.
+    """
+    if not user_session:
+        return  # No stable session ID — cannot look up history
+
+    try:
+        from memory import MemoryStoreFactory
+        from persistence import PersistenceStoreFactory
+
+        memory_store = MemoryStoreFactory.get_instance(settings.memory_store_type)
+
+        # Idempotency guard: skip if Redis already has messages for this session
+        existing = await memory_store.get_session_history(session_id)
+        if existing:
+            logger.debug(f"🌱 Redis already seeded for session {session_id} — skipping")
+            return
+
+        # Fetch persistent conversation history from MongoDB
+        persistence_store = PersistenceStoreFactory.get_instance(settings.persistence_store_type)
+        conv_doc = await persistence_store.get_conversation_history(
+            session_id=session_id,
+            user_session=user_session
+        )
+        if not conv_doc:
+            logger.debug(f"🌱 No MongoDB history for user_session={user_session} — fresh session")
+            return
+
+        # Seed Redis with the most recent messages up to conversation_history_limit
+        messages = conv_doc.get("conversation_history", [])
+        seeded = 0
+        for msg in messages[-settings.conversation_history_limit:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if content:
+                await memory_store.append_to_session(
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    max_messages=settings.conversation_history_limit
+                )
+                seeded += 1
+
+        logger.info(
+            f"🌱 Redis seeded: {seeded} messages from MongoDB "
+            f"for session {session_id} (user_session={user_session})"
+        )
+
+    except Exception as e:
+        # Non-fatal: seeding failure must not block user requests
+        logger.warning(f"⚠️ Redis seeding failed (non-fatal): {e}")
+
+
+async def run_graph(text: str, session_id: str, user_info: dict = None, user_session: Optional[str] = None):
     from state.schema import create_initial_state
     await init_graph()
-    initial_state = create_initial_state(text, session_id, user_info)
+    await _seed_redis_from_history(session_id, user_session)
+    initial_state = create_initial_state(text, session_id, user_info, user_session=user_session)
     config = {"configurable": {"thread_id": session_id}}
     final_state = await _graph_compiled.ainvoke(initial_state, config)  # type: ignore
     return final_state
 
 async def run_graph_stream(
-    text: str, 
-    session_id: str, 
-    user_info: dict = None
+    text: str,
+    session_id: str,
+    user_info: dict = None,
+    user_session: Optional[str] = None
 ):
     """
     Execute graph and stream events in real-time.
@@ -391,10 +470,11 @@ async def run_graph_stream(
     from datetime import datetime, timezone
     
     await init_graph()
-    
-    initial_state = create_initial_state(text, session_id, user_info)
+    await _seed_redis_from_history(session_id, user_session)
+
+    initial_state = create_initial_state(text, session_id, user_info, user_session=user_session)
     config = {"configurable": {"thread_id": session_id}}
-    
+
     try:
         logger.info(f"🌊 Starting streaming execution for session {session_id}")
         
@@ -527,11 +607,17 @@ async def run_graph_stream(
             "type": "complete",
             "data": {
                 "response": final_response,
+                "user_session": current_state.get("user_session"),  # Issue 3 fix: stable session ID for UI
+                "response_id": current_state.get("response_id"),    # For feedback tracking
                 "intent": current_state.get("intent"),
                 "confidence": current_state.get("confidence"),
                 "needs_clarification": current_state.get("needs_clarification", False),
                 "clarifying_question": current_state.get("clarifying_question"),
-                "recommendations": current_state.get("recommendations", []),  # ✅ Include recommendation chips
+                "recommendations": current_state.get("recommendations", []),
+                "_tool_results": current_state.get("tool_results"),
+                "_entities": current_state.get("entities"),
+                "render_dsl": current_state.get("render_dsl"),
+                "render_mode": current_state.get("render_mode"),
                 "metadata": current_state.get("metadata", {})
             },
             "metadata": {
