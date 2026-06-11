@@ -1,9 +1,9 @@
 """
-Rendering Themes — domain constants for MyClaims HTML rendering.
+Rendering Themes — generic rendering infrastructure constants.
 
-Uses a BLOCKLIST (NO_RENDER_INTENTS) instead of an allowlist so that any
-new intent from the LLM judge or keyword classifier that produces successful
-tool_results is automatically rendered without code changes.
+Domain-specific intelligence (code maps, field remaps, null rules) lives in
+claims_rendering_config.py. This file contains only rendering-engine constants
+that are domain-agnostic or intent-to-title mappings.
 """
 
 # Intents that are guaranteed to NEVER produce renderable API data.
@@ -16,28 +16,9 @@ NO_RENDER_INTENTS = frozenset({
     "unknown",
 })
 
-# Tier 1 — always render a full table regardless of LLM decision or question phrasing.
-# Only intents whose data structure is invariantly multi-column regardless of question.
-MUST_RENDER_INTENTS = frozenset({
-    "pricing_info",       # always 5-column cost breakdown
-    "cob_info",           # always primary/secondary/final pivot
-    "deductible_info",    # always accumulator rows
-    "copay_info",         # always tier → copay amount
-    "claim_list",         # always multiple claim rows
-    "rejection_reasons",  # always code + reason pairs
-    "compound_info",      # always ingredient rows
-    "medicare_part_d",    # always TrOOP stage rows
-})
-# Moved to LLM-decides tier (structure varies by data/question):
-#   approval_info, prior_auth_info, mail_order_info, rx_details, government_claim_type,
-#   claim_summary, date_range_search, expensive_claims, reversal_info, audit_info,
-#   reimbursement_info, settlement_info
-
-# Tier 2 — output format is decided purely by data shape inside _pick_visual_mode():
-#   multiple rows or sections      → html_table
-#   single row, ≥6 visible columns → html_table  (too complex for prose)
-#   single row, <6 visible columns → text        (LLM prose sufficient)
-# No intent names live here — the LLM decides render_mode and data shape decides format.
+# Output format is decided by the LLM's render_mode choice and then validated by
+# _pick_visual_mode() which always renders as table when render_mode="table".
+# The LLM uses the universal row-count rule: table only when answer has 2+ rows.
 
 # Valid values for render_mode in the LLM JSON envelope.
 VALID_RENDER_MODES = frozenset({"text_only", "table"})
@@ -73,18 +54,32 @@ TABLE_TITLES = {
     "government_claim_type":"Government Claim Details",
     "mail_order_info":      "Mail Order Details",
     "prior_auth_info":      "Prior Authorization Details",
-}
-
-# Single-char status codes from the API -> human-readable label.
-STATUS_CODE_MAP = {
-    "P": "Paid",
-    "R": "Rejected",
-    "D": "Denied",
-    "V": "Reversed",
-    "A": "Adjusted",
-    "C": "Cancelled",
-    "E": "Error",
-    "X": "Voided",
+    # ── claim_history_search domain (multi-claim, member-history) ──────────
+    "DateRange":             "Recent Claims",
+    "date_range_claims":     "Claims by Date Range",
+    "DrugList":              "Member Medication List",
+    "DrugLast":              "Most Recent Fill",
+    "Refills":               "Refill Activity",
+    "DaysSupply":            "Days Supply",
+    "PriorAuth":             "Prior Authorization Claims",
+    "Diagnosis":             "Diagnosis Codes",
+    "Settlement":            "Settlement Codes",
+    "PharmType":             "Pharmacy Type",
+    "Plan":                  "Plan-filtered Claims",
+    "Pharmacy":              "Pharmacy History",
+    "Prescriber":            "Prescriber History",
+    "Pricing":               "Cost & Pricing",
+    "Status":                "Claims by Status",
+    "RejectCode":            "Rejected Claims",
+    "Month":                 "Claims by Month",
+    "ClaimNum":              "Claim Lookup",
+    "NDC":                   "NDC-filtered Claims",
+    "Manufacturer":          "Manufacturer Claims",
+    "Generic":               "Generic Drug Claims",
+    "Brand":                 "Brand Drug Claims",
+    "fill_date_info":        "Fill Date Lookup",
+    "drug_interaction_info": "DUR / Drug Interactions",
+    "multi_claim_summary":   "Member Claims Summary",
 }
 
 # CSS class prefix — all generated HTML is scoped under .mc-poc
@@ -125,15 +120,75 @@ INTENT_DESCRIPTIONS = {
     "government_claim_type":"User wants government claim type information — show claim type, coverage details",
     "mail_order_info":      "User wants mail order details — show pharmacy type, days supply, refill info",
     "prior_auth_info":      "User wants prior authorization details — show auth number, status, dates",
+    # ── claim_history_search domain (multi-claim, member-history) ──────────
+    "DateRange":            "User wants claims within a rolling recent window (last N days/weeks/months)",
+    "date_range_claims":    "User wants claims within an explicit from-to date range",
+    "DrugList":             "User wants the full medication list across all of the member's claims",
+    "DrugLast":             "User wants the most recent fill for a specific drug",
+    "Refills":              "User wants refill activity / counts / overdue refills",
+    "DaysSupply":           "User wants claims filtered by days-supply duration",
+    "PriorAuth":            "User wants claims that required prior authorization",
+    "Diagnosis":            "User wants claims filtered by diagnosis / ICD code",
+    "Settlement":           "User wants claims filtered by settlement code",
+    "PharmType":            "User wants claims filtered by pharmacy type (retail / mail order / specialty)",
+    "Plan":                 "User wants claims filtered by plan / carrier",
+    "Pharmacy":             "User wants pharmacy history across claims",
+    "Prescriber":           "User wants prescriber history across claims",
+    "Pricing":              "User wants cost / pricing across claims (totals, patient pay, plan pay)",
+    "Status":               "User wants claims filtered by status (paid / rejected / reversed)",
+    "RejectCode":           "User wants rejected claims with reject codes and reasons",
+    "Month":                "User wants claims filtered by month name",
+    "ClaimNum":             "User wants to look up by claim number",
+    "NDC":                  "User wants claims filtered by NDC",
+    "Manufacturer":         "User wants claims filtered by drug manufacturer",
+    "Generic":              "User wants generic drug claims",
+    "Brand":                "User wants brand-name drug claims",
+    "fill_date_info":       "User wants the fill date for a claim",
+    "drug_interaction_info":"User wants DUR / drug-interaction details across claims",
+    "multi_claim_summary":  "User wants a cross-claim summary or aggregate over the member's history",
 }
 
 # Valid format type identifiers the LLM may return in column definitions.
 # Any format not in this set is silently defaulted to "text".
+# Domain-specific null-handling variants:
+#   stcob_currency — STCOB pricing fields: null renders as $0.00 (not —)
+#   med_d_currency — Medicare Part D financial fields: null renders as $0.00
 VALID_FORMAT_TYPES = frozenset({
     "text",
     "date",
     "currency",
+    "stcob_currency",
+    "med_d_currency",
     "status_badge",
     "reject_codes",
     "title",
 })
+
+# ---------------------------------------------------------------------------
+# DEPRECATED back-compat aliases for the v3 tier model.
+#
+# In rendering-agent-v4 the rendering engine no longer consults a
+# MUST_RENDER allowlist or a STATUS_CODE_MAP — the LLM`s render_mode
+# choice is honoured directly and per-domain status codes live in
+# claims_rendering_config.py / claim_history_rendering_config.py.
+#
+# These aliases are kept ONLY so the existing test suite
+# (tests/test_rendering_scenarios.py) and any external scripts that import
+# them continue to load. New code must NOT use them.
+# ---------------------------------------------------------------------------
+MUST_RENDER_INTENTS = frozenset({
+    "pricing_info",
+    "cob_info",
+    "deductible_info",
+    "copay_info",
+    "claim_list",
+    "rejection_reasons",
+    "compound_info",
+    "medicare_part_d",
+})
+
+# v3 single-char status codes — use claims_rendering_config.CLAIM_STATUS_CODES
+# (or the per-domain config) for new code. Kept here only for legacy imports.
+from agents.post_processing.claims_rendering_config import (
+    CLAIM_STATUS_CODES as STATUS_CODE_MAP,
+)

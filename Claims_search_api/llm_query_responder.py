@@ -396,6 +396,103 @@ Rules:
 """
 
 
+_RENDER_DSL_CONTRACT = """
+================================================================
+OUTPUT CONTRACT — STRICT JSON ENVELOPE + OPTIONAL RENDER DSL
+================================================================
+
+You MUST respond with a single JSON object FOLLOWED OPTIONALLY by a render
+block. No other text is allowed before, between, or after these two parts.
+
+JSON envelope (REQUIRED, render_mode MUST be the FIRST key):
+
+{
+    "render_mode": "<text_only | table>",
+    "response": "Your complete prose answer following the SINGLE-CLAIM /
+                 MULTI-CLAIM / AGGREGATE-BREAKDOWN guidelines above.",
+    "recommendations": [
+        {"text": "Short follow-up suggestion 1", "action": "intent_name_1"},
+        {"text": "Short follow-up suggestion 2", "action": "intent_name_2"}
+    ]
+}
+
+UNIVERSAL ROW-COUNT RULE (same as the claims domain):
+  • Will the response data form 2+ DISTINCT ROWS?
+        YES → render_mode = "table"   (also append the RENDER block)
+        NO  → render_mode = "text_only" (no RENDER block)
+
+  Examples that MUST be table:
+    • List of multiple matching claims (drug history, recent claims,
+      reject codes across history, prior-auth claims, refills list)
+    • Aggregate breakdown by category (e.g. counts per pharmacy type)
+
+  Examples that MUST be text_only:
+    • Single specific event ("when was X taken last?", "what was the
+      last fill for Y?", "how many refills remain?")
+    • No-match graceful answers (Rule 6)
+    • Out-of-scope or attribute-not-tracked answers (Rule 9)
+
+NEVER write ASCII or markdown table syntax (`|`, `---`) inside the
+"response" field. Tables MUST go through the render_mode = "table" +
+===RENDER_START=== mechanism. The response text remains plain prose.
+
+RENDER STRUCTURE BLOCK (REQUIRED only when render_mode = "table"):
+
+Append on a NEW line, with no other text between the JSON and this block:
+
+===RENDER_START===
+{"layout":"table","title":"...","sections":[{"id":"main_table","type":"table","columns":[{"header":"Human Label","field":"slimClaimKey","format":"<type>"}]}]}
+===RENDER_END===
+
+Each column object: {"header":"Display Label","field":"slim_claim_key","format":"text|date|currency|status_badge|reject_codes|title"}
+
+CLAIM-HISTORY AUTHORITATIVE FIELD NAMES (use these exact keys for the
+"field" attribute — they are the slim-claim shape produced by
+prepare_claim_history_data; do NOT invent names or include dots):
+
+  Identification           : claimNumber, claimSequenceNumber
+  Status                   : claimStatus (single char), claimStatusDescription
+  Drug                     : productName (display as title), productNdc, gpi,
+                             genericIndicator, manufacturer
+  Dates                    : fillDate (format: date), addDate, submitDate,
+                             reversalDate
+  Prescription             : rxNumber, refillNumber, daysSupplied, quantity,
+                             prescriberFirstName, prescriberLastName,
+                             prescriberID, pharmacyName, pharmacyCity,
+                             pharmacyState, pharmacyType
+  Pricing                  : patientPay, clientPay, drugCostApproved,
+                             dispensingFeeApproved, amountDueApproved
+                             (format: currency)
+  Prior Auth / Overrides   : paIndicator, type, typeDescription, reasonCode,
+                             reasonDescription, priorAuthorizationUsed,
+                             smartPriorAuthorizationUsed
+  Messages                 : rejectCodes (format: reject_codes),
+                             approvedMessages, settlementCodes
+
+COLUMN SELECTION GUIDANCE:
+  • Maximum 8 columns; first 4 are the most informative (the user sees
+    them in the compact preview card).
+  • Order by relevance to the user's question.
+  • Headers are human-readable labels (e.g. "Claim Number",
+    "Fill Date", "Drug Name", "Status", "Pharmacy"). Do NOT expose raw
+    field names as headers.
+
+DATA-UNAVAILABLE EXCEPTION:
+  If you decided render_mode = "table" but the data genuinely does not
+  contain the expected fields (e.g. user asked for prior-auth claims but
+  no claim has priorAuthorization), set render_mode = "text_only" and
+  answer in prose using the no-match Rule 6 template. Do NOT emit an
+  empty render block.
+
+INVALID OUTPUTS:
+  ✗ render_mode = "table" with NO render block following the JSON
+  ✗ render_mode = "table" for a single-record answer
+  ✗ ASCII / markdown table syntax inside the "response" string
+  ✗ Markdown code fences anywhere in the output
+  ✗ Any text before the JSON or after the RENDER block
+"""
+
+
 _USER_TEMPLATE = """CURRENT DATE: {current_date}
 
 USER QUESTION:
@@ -410,7 +507,17 @@ CLAIMS ({num_claims} total, newest first):
 Answer the question now, following the guidelines above.
 • Use SINGLE-CLAIM ANSWER style when the user asks about one specific event.
 • Use MULTI-CLAIM ANSWER style when the user asks for multiple claims.
-Write your complete answer in plain conversational text. Do not use code fences."""
+• Use AGGREGATE BREAKDOWN ANSWER style when the user asks for a category breakdown.
+
+OUTPUT FORMAT REMINDER:
+  1. Output the JSON envelope first (render_mode = first key, then
+     response, then recommendations). No markdown fences.
+  2. If render_mode == "table", append the ===RENDER_START===...
+     ===RENDER_END=== block on a new line. No other text after.
+  3. If render_mode == "text_only", stop after the JSON envelope.
+  4. The "response" field carries your complete prose answer; never
+     rely on the table for completeness, never write ASCII tables
+     inside it."""
 
 
 def build_claim_history_prompt(
@@ -423,6 +530,8 @@ def build_claim_history_prompt(
     current_date = date.today().strftime("%Y-%m-%d")
     return (
         _SYSTEM_INSTRUCTIONS
+        + "\n\n"
+        + _RENDER_DSL_CONTRACT
         + "\n\n"
         + _USER_TEMPLATE.format(
             current_date=current_date,

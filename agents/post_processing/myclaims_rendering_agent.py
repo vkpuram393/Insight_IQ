@@ -23,22 +23,28 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agents.post_processing.rendering_models import RenderingResult
 from agents.post_processing.rendering_themes import (
-    STATUS_CODE_MAP, TABLE_TITLES, CSS_SCOPE, NO_RENDER_INTENTS,
-    DEFAULT_TABLE_TITLE, MUST_RENDER_INTENTS,
-    VALID_RENDER_MODES, VALID_FORMAT_TYPES,
+    TABLE_TITLES, CSS_SCOPE, NO_RENDER_INTENTS,
+    DEFAULT_TABLE_TITLE, VALID_RENDER_MODES, VALID_FORMAT_TYPES,
+)
+from agents.post_processing.claims_rendering_config import (
+    FIELD_REMAP as _FIELD_REMAP,
+    CLAIM_STATUS_CODES as _CLAIM_STATUS_CODES,
+    NULL_AS_ZERO_CURRENCY_FORMATS as _NULL_AS_ZERO_CURRENCY_FORMATS,
+    BLOCKED_FIELDS as _BLOCKED_FIELDS,
+)
+# Domain-config dispatcher — lets the rendering engine pick the correct
+# per-domain field-remap / status-codes / null-rules / blocked-fields for
+# claims, claim_history_search, and any future domains (member, overrides, ...).
+# Defaults to the claims-domain config so legacy call sites stay byte-equivalent.
+from agents.post_processing.domain_configs import (
+    get_config as _get_domain_config,
+    resolve_domain as _resolve_domain,
 )
 from core.logger import get_logger
 
 logger = get_logger(__name__)
 
 _MAX_ROWS = 500
-
-_ASCII_TABLE_RE = re.compile(r'^\s*\|.+\|\s*$', re.MULTILINE)
-
-
-def _has_ascii_table(text: str) -> bool:
-    """Return True if text contains 2+ pipe-delimited table rows."""
-    return len(_ASCII_TABLE_RE.findall(text)) >= 2
 
 
 _HEADER_CONTEXT_MAP = {
@@ -49,60 +55,6 @@ _HEADER_CONTEXT_MAP = {
     "drug":       "drug",
     "benefit":    "benefit",
     "linked":     "linkedclaim",
-}
-
-_BLOCKED_FIELDS = frozenset({
-    "description43Name",   # field does not exist in any API response
-})
-
-# Field aliases the LLM commonly writes that differ from the real flat API key names.
-# Applied in _extract_section() BEFORE the blocked-fields filter so columns that
-# would otherwise be empty are silently corrected and render with real data.
-_FIELD_REMAP: Dict[str, str] = {
-    # Fill-date aliases — LLM carries "date2" from response-text data paths into DSL
-    "date2":                    "dateOfFill",
-    "fillDate2":                "dateOfFill",
-    "filldate2":                "dateOfFill",
-    "fillDate":                 "dateOfFill",
-    # DOB alias — "date8" appears in response text as the DOB path alias
-    "date8":                    "dateOfBirth",
-    # Reject-code aliases — LLM invents "code"/"rejectCode"; real key is below
-    "code":                     "responseRejectCode",
-    "rejectCode":               "responseRejectCode",
-    "reject_code":              "responseRejectCode",
-    "rejectionCode":            "responseRejectCode",
-    # Status aliases — LLM writes claimStatusDescription or claimStatus instead of statusDescription
-    "status":                   "statusDescription",
-    "claimStatus":              "statusDescription",
-    "claimStatusDescription":   "statusDescription",
-    "approvalStatus":           "statusDescription",
-    "adjudicationStatus":       "statusDescription",
-    # Drug-name aliases
-    "drugName":                 "drugLabelName",
-    "productName":              "drugLabelName",
-    "medicationName":           "drugLabelName",
-    "drug":                     "drugLabelName",
-    # Member/beneficiary name aliases
-    "memberName":               "lastNameFirstName",
-    "beneficiaryName":          "lastNameFirstName",
-    "patientName":              "lastNameFirstName",
-    "name":                     "lastNameFirstName",
-    # DOB aliases
-    "dob":                      "dateOfBirth",
-    "birthDate":                "dateOfBirth",
-    "dateOfBirth":              "dateOfBirth",   # already correct — no-op safety
-    # Member ID aliases
-    "id":                       "memberId",
-    "memberID":                 "memberId",
-    "cardholderID":             "memberId",
-    # NDC aliases
-    "ndc":                      "submittedProductId",
-    "ndcNumber":                "submittedProductId",
-    # Common dot-path fragments that survive the dot-stripping step
-    "message":                  "settlementMessage",
-    # Claim number alias (some LLM outputs)
-    "claim":                    "claimNumber",
-    "claimId":                  "claimNumber",
 }
 
 _RE_DATE_8DIGIT = re.compile(r"^\d{8}$")
@@ -123,8 +75,21 @@ class MyclaimsRenderingAgent:
         render_dsl: Optional[Dict[str, Any]] = None,
         render_mode: Optional[str] = None,
         response_text: Optional[str] = None,
+        domain: Optional[str] = None,
     ) -> RenderingResult:
         t0 = time.perf_counter()
+        # Resolve the per-domain config ONCE per request and stash on the instance.
+        # Default ("claims") preserves byte-equivalent behaviour for the existing
+        # claims-domain pipeline. Multi-domain callers may pass `domain` explicitly,
+        # otherwise the resolver inspects tool_results to detect claim_history_search.
+        try:
+            resolved_domain = _resolve_domain(intent, tool_results, domain)
+            self._cfg = _get_domain_config(resolved_domain)
+            self._domain = resolved_domain
+        except Exception as _cfg_exc:
+            logger.warning("rendering: domain config resolve failed (%s) — falling back to claims", _cfg_exc)
+            self._cfg = _get_domain_config("claims")
+            self._domain = "claims"
         try:
             result = self._execute(intent, tool_results, entities, render_dsl, render_mode, response_text)
         except Exception as exc:
@@ -147,16 +112,7 @@ class MyclaimsRenderingAgent:
 
         tool_name = str(tool_results.get("tool_name") or "unknown")
 
-        # ASCII safety net: if LLM wrote a pipe-table in response but render_dsl is present → override
-        if render_mode == "text_only" and response_text and render_dsl:
-            if _has_ascii_table(response_text):
-                logger.info(
-                    "rendering: ASCII table detected in response_text — "
-                    "overriding render_mode to table intent=%s", intent
-                )
-                render_mode = "table"
-
-        # Gate 3: Skip rendering? (text_only signal + tier safety nets)
+        # Gate 3: Skip rendering? (text_only signal + escape hatch)
         if self._should_skip_rendering(render_mode, render_dsl, intent):
             logger.info(
                 "rendering: text_only — intent=%s render_mode=%s",
@@ -295,7 +251,7 @@ class MyclaimsRenderingAgent:
         # Step 2 — remap known LLM alias field names to real API key names
         for col in columns:
             raw = col.get("field") or col.get("path", "")
-            corrected = _FIELD_REMAP.get(raw)
+            corrected = self._cfg.FIELD_REMAP.get(raw)
             if corrected:
                 col["field"] = corrected
                 logger.debug(
@@ -306,7 +262,7 @@ class MyclaimsRenderingAgent:
         # Step 3 — remove genuinely useless fields after remapping
         columns = [
             c for c in columns
-            if (c.get("field") or c.get("path", "")) not in _BLOCKED_FIELDS
+            if (c.get("field") or c.get("path", "")) not in self._cfg.BLOCKED_FIELDS
         ]
         if not columns:
             return [], None
@@ -453,7 +409,10 @@ class MyclaimsRenderingAgent:
                     h = ic.get("header", "")
                     f = ic.get("field", "")
                     if h and f:
-                        id_vals[h] = self._find_field_value(record, f)
+                        val = self._find_field_value(record, f)
+                        if val is None:
+                            val = self._find_field_value(tool_results, f)
+                        id_vals[h] = val
 
                 for g in groups:
                     row: Dict[str, Any] = {}
@@ -851,11 +810,15 @@ class MyclaimsRenderingAgent:
             value = ", ".join(str(v) for v in value if v is not None and str(v).strip())
 
         if value is None or str(value).strip() == "":
+            # Domain-specific null rule: STCOB and Med D financial fields show $0.00, not —
+            # Sources: claims_rendering_config.NULL_AS_ZERO_CURRENCY_FORMATS
+            if format_type in self._cfg.NULL_AS_ZERO_CURRENCY_FORMATS:
+                return html.escape("$0.00")
             return f'<span class="{p}-missing-value">—</span>'
 
         s = str(value).strip()
 
-        if format_type == "currency":
+        if format_type in ("currency", "stcob_currency", "med_d_currency"):
             return html.escape(self._fmt_currency(s) or s)
 
         if format_type == "date":
@@ -865,7 +828,7 @@ class MyclaimsRenderingAgent:
             return html.escape(s.title())
 
         if format_type == "status_badge":
-            resolved = STATUS_CODE_MAP.get(s.upper(), s)
+            resolved = self._cfg.CLAIM_STATUS_CODES.get(s.upper(), s)
             status_cls = resolved.lower().replace("/", "-").replace(" ", "-")
             return (
                 f'<span class="{p}-status-badge {p}-status-{status_cls}">'
@@ -957,22 +920,20 @@ class MyclaimsRenderingAgent:
     ) -> bool:
         """Return True when rendering should be skipped (text-only response).
 
-        Three tiers:
-          Escape hatch  — LLM signalled data genuinely absent via suppress_table.
-          Tier 1        — MUST_RENDER intent: always table unless escape hatch fires.
-          Tier 2        — LLM decides: trust render_mode.
+        Two paths:
+          Escape hatch — LLM signalled data genuinely absent via suppress_table.
+          LLM decision — trust render_mode directly.
         """
-        # Escape hatch checked FIRST — overrides even MUST_RENDER when data is genuinely absent
+        # Escape hatch: LLM signals data is genuinely absent for this intent
         if render_dsl and render_dsl.get("suppress_table"):
             logger.info("rendering: suppress_table escape hatch — text only intent=%s", intent)
             return True
 
-        if intent in MUST_RENDER_INTENTS:
-            return False        # Tier 1: always table, never suppress
-
+        # LLM chose text-only
         if render_mode == "text_only":
-            return True         # Tier 2: LLM chose text-only
+            return True
 
+        # No DSL provided — nothing to render
         if render_mode is None and not render_dsl:
             logger.info(
                 "rendering: render_mode=None and no render_dsl — defaulting to text intent=%s",
@@ -987,36 +948,14 @@ class MyclaimsRenderingAgent:
         section_results: List[Tuple[List[dict], List, str]],
         intent: str,
     ) -> str:
-        """Decide text/table from actual extracted data shape — fully deterministic.
+        """Always return table when called.
 
-        Priority:
-          1. No sections / no rows     → table (safe default; _execute guards fallback)
-          2. Multiple sections         → always table
-          3. Multiple rows             → always table
-          4. Single row                → always text (LLM prose is sufficient)
-
-        The MULTIPLE-ROWS RULE applies universally, including MUST_RENDER intents.
-        MUST_RENDER's role is in _should_skip_rendering() — it ensures the pipeline
-        runs even when LLM says text_only. Final format is always row-count driven.
-        Card format has been removed — outputs are text or html_table only.
+        This method is only reached when the LLM explicitly chose render_mode="table"
+        and extraction succeeded. The LLM's decision to show a table must be respected
+        regardless of row count — suppressing 1-row tables caused stub-only responses
+        when the LLM expected the table to carry the data.
         """
-        if not section_results:
-            return "table"
-
-        if len(section_results) > 1:
-            return "table"
-
-        rows, visible, _ = section_results[0]
-
-        if not rows:
-            return "table"
-
-        if len(rows) > 1:
-            return "table"
-
-        # Single row → always text regardless of column count.
-        # Multiple rows are required for a table to add value over prose.
-        return "text"
+        return "table"
 
     # CSS is handled by the frontend — no styles are generated here.
 

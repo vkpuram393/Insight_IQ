@@ -238,8 +238,33 @@ async def call_claims_search_node_v2(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # ------------------------------------------------------------------
+    # 5b. Build compact masked-text summary for the LLM prompt (so
+    #     _format_tool_results() returns this rather than dumping the
+    #     entire `claims` array). Mirrors the v1 node behaviour.
+    # ------------------------------------------------------------------
+    try:
+        from Claims_search_api.llm_formatter import format_claims_for_llm
+        llm_context = format_claims_for_llm(
+            {**api_response, "claims": prepared["slim_claims"],
+             "totalCount": prepared.get("total_claims", 0)},
+            user_query=None,                # already filtered upstream
+            is_member_history=True,
+            max_claims=DEFAULT_MAX_CLAIMS,
+        )
+    except Exception as _fmt_exc:
+        logger.warning(
+            "[ClaimsSearchV2] format_claims_for_llm failed (%s) — using fallback text",
+            _fmt_exc,
+        )
+        llm_context = (
+            f"Member claim history: {prepared.get('total_claims', 0)} claims; "
+            f"{prepared.get('used_claims', 0)} sent to the LLM."
+        )
+
+    # ------------------------------------------------------------------
     # 6. Return tool_results with prepared data — response_agent will
-    #    build the prompt and call Gemini.
+    #    build the prompt and call Gemini; rendering_agent will use
+    #    data.claims (slim list) for table extraction.
     # ------------------------------------------------------------------
     return {
         "tool_results": {
@@ -249,10 +274,24 @@ async def call_claims_search_node_v2(state: Dict[str, Any]) -> Dict[str, Any]:
             "error": "",
             "data": {
                 "is_claim_history_search": True,
-                "claims": [],
+                # `claims` is now visible to the rendering agent so
+                # MyclaimsRenderingAgent._find_records() can walk the
+                # slim records and extract rows for the HTML table.
+                # PII surface is unchanged because _slim_claim() already
+                # whitelists fields and the response LLM still consumes
+                # the masked `_masked_response` summary (not this list).
+                "claims": prepared["slim_claims"],
                 "totalCount": total_count,
                 "filteredCount": filtered_count,
                 "memberInfo": member_info,
+                # _masked_response is the compact text the response LLM
+                # sees via _format_tool_results(). Including it here
+                # gives v2 parity with the v1 node and prevents the LLM
+                # from receiving the full claims array.
+                "_masked_response": llm_context,
+                # Underscore-prefixed mirrors retained for back-compat
+                # with response_agent's existing is_claim_history branch
+                # which reads these keys directly.
                 "_slim_claims": prepared["slim_claims"],
                 "_member_summary": prepared["member_summary"],
             },

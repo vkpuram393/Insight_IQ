@@ -3902,7 +3902,7 @@ you MUST output render_mode="table" AND include the ===RENDER_START=== render bl
   "What is the pricing breakdown?"     → render_mode="table" + render block
   ⚠ NEVER use text_only for these — they always have multi-column structure that requires tabular layout.
 
-⚠ DATA UNAVAILABLE EXCEPTION — for MUST_RENDER intents only:
+⚠ DATA UNAVAILABLE EXCEPTION — for ALWAYS-TABLE intents only:
 If the claim's API data genuinely lacks the information for this intent
 (e.g., compound intent but claim has no compound ingredients, rejection intent
 but claim is Paid with no reject codes, pricing intent but claim is reversed),
@@ -3983,7 +3983,7 @@ Example: {{"suppress_table": true, "layout": "table", "sections": [...]}}
 
 ⚠ DSL REMINDER — there are exactly three valid output states:
   1. render_mode="table" + ===RENDER_START=== DSL block  → structured table rendered
-  2. render_mode="table" + suppress_table:true in DSL    → data absent, text shown (MUST_RENDER escape hatch)
+  2. render_mode="table" + suppress_table:true in DSL    → data absent, text shown (ALWAYS-TABLE escape hatch)
   3. render_mode="text_only" + no DSL                   → LLM-decides text response
   INVALID: render_mode="table" with NO DSL block written — this always produces broken output.
   If you chose "table" you MUST write the DSL block. If data is absent, use suppress_table:true instead.
@@ -4580,9 +4580,13 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             recommendations_enabled = False  # Never generate recommendations during clarification
         elif is_claim_history:
             # build_claim_history_prompt embeds its own system instructions in the
-            # user prompt, so no separate system prompt is needed here.
+            # user prompt (including the rendering-DSL contract). The downstream
+            # _extract_render_dsl() + _parse_response_with_recommendations() calls
+            # therefore handle CHS responses identically to claims-domain responses:
+            # they pull render_mode + render_dsl out of the structured envelope and
+            # the rendering agent receives a valid DSL to extract rows from.
             system_prompt = None
-            logger.info("📝 Claim-history mode: prompt built by build_claim_history_prompt()")
+            logger.info("📝 Claim-history mode: prompt built by build_claim_history_prompt() with render-DSL contract")
             recommendations_enabled = settings.enable_recommendations
         else:
             system_prompt = agent._get_system_prompt()
