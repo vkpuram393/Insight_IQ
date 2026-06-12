@@ -4697,34 +4697,6 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             response_text, recommendations, render_mode_from_llm = agent._parse_response_with_recommendations(response_text, intent)
             logger.info(f"💡 Parsed {len(recommendations)} recommendations from response, render_mode={render_mode_from_llm}")
         
-        # Safety net: strip table lead-in phrases and trailing colons.
-        # The SELF-SUFFICIENT RESPONSE RULE in the prompt prevents this in most cases;
-        # this is a last-resort fallback for when the LLM still writes a table prelude.
-        _LEAD_IN_RE = re.compile(
-            r'[,\s]+(and\s+)?(here (is|are|follows)|below (is|are)|'
-            r'the following (is|are)|see (the )?(table|below|details?))[^.]*:?\s*$',
-            re.IGNORECASE,
-        )
-        if response_text:
-            _cleaned = _LEAD_IN_RE.sub('', response_text.rstrip().rstrip(':').rstrip())
-            if _cleaned and _cleaned != response_text.rstrip().rstrip(':').rstrip():
-                logger.warning(
-                    "rendering: stripped lead-in phrase from response_text intent=%s",
-                    state.get("intent", "unknown"),
-                )
-                _cleaned = _cleaned.rstrip().rstrip(',').rstrip()
-                response_text = _cleaned + ('' if _cleaned.endswith('.') else '.')
-            elif response_text.rstrip().endswith(':'):
-                _no_colon = response_text.rstrip()[:-1].rstrip()
-                _last_period = _no_colon.rfind('. ')
-                response_text = (
-                    _no_colon[:_last_period + 1].strip() if _last_period > 0 else _no_colon
-                )
-                logger.warning(
-                    "rendering: stripped trailing colon from response_text intent=%s",
-                    state.get("intent", "unknown"),
-                )
-
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()
         remaining_tokens = re.findall(r'\[[A-Z_]+_[A-Za-z0-9]+\]', response_text or "")
