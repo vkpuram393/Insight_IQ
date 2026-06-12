@@ -44,6 +44,38 @@ logger = get_logger(__name__)
 BLOCKED_RECOMMENDATION_ACTIONS = frozenset({"claim_list"})
 
 # ============================================================================
+# DISABLED RENDERING OVERRIDE
+# ============================================================================
+# When settings.enable_rendering_agent=False, this override is appended to the
+# LLM prompt so the model produces a complete prose answer in the "response"
+# field (since no HTML table will be rendered). Without this override, the LLM
+# follows the standard prompt and produces a brief prose header + a render_dsl
+# block — but in disabled mode the block is discarded by process_rendering(),
+# leaving the user with only the brief header.
+_DISABLED_RENDERING_OVERRIDE = """
+
+========================================================================
+RUNTIME OVERRIDE — RENDERING DISABLED (HIGHEST PRIORITY — OVERRIDES ALL PRIOR RENDER INSTRUCTIONS)
+========================================================================
+The rendering agent is currently OFF. The user will see ONLY the "response"
+field text — no table, no HTML, nothing else will be rendered.
+
+You MUST:
+  1. Set render_mode = "text_only" in the JSON envelope (NEVER "table").
+  2. Do NOT emit any ===RENDER_START===...===RENDER_END=== block.
+  3. Put the ENTIRE answer — every value, every row, every detail — in
+     the "response" field as readable prose with bullet points (•) for
+     multi-row data. Use clear human-readable labels.
+  4. Completeness is mandatory: for list/table-style data, format as a
+     bulleted list inside "response" so the user reading only that text
+     gets the full answer.
+
+This override supersedes any earlier instruction about render_mode="table"
+or ===RENDER_START=== blocks. Ignore those rules for this response.
+========================================================================
+"""
+
+# ============================================================================
 # RESPONSE AGENT CLASS
 # ============================================================================
 
@@ -4600,13 +4632,24 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
                 system_prompt += recommendation_instruction
                 logger.info(f"💡 Recommendations enabled - added instruction to prompt (intent: {intent})")
 
+            # Kill-switch override: when rendering agent is OFF, instruct LLM to
+            # put the entire answer in the prose "response" field (no DSL block).
+            if not settings.enable_rendering_agent:
+                system_prompt += _DISABLED_RENDERING_OVERRIDE
+                logger.info("🔌 Rendering disabled — appended OVERRIDE to system prompt")
+
         logger.debug(f"📋 System prompt: {len(system_prompt) if system_prompt else 0} characters")
 
         # Build user prompt — claim history uses its own dedicated prompt builder
         # that serialises slim_claims directly; all other paths use _build_user_prompt.
         if not needs_clarification and is_claim_history and slim_claims:
             user_query = state.get("text", "")
-            user_prompt = build_claim_history_prompt(user_query, slim_claims, member_summary)
+            user_prompt = build_claim_history_prompt(
+                user_query,
+                slim_claims,
+                member_summary,
+                rendering_disabled=not settings.enable_rendering_agent,
+            )
         else:
             user_prompt = agent._build_user_prompt(state)
         logger.debug(f"📋 User prompt: {len(user_prompt)} characters")
@@ -4692,10 +4735,17 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # =====================================================================
         render_mode_from_llm = None
         recommendations = []
-        if recommendations_enabled and not needs_clarification:
+        if not needs_clarification:
+            # Always unwrap the JSON envelope so the user-facing "response" prose
+            # is extracted, even when recommendations are disabled. Previously this
+            # was gated on recommendations_enabled — if recommendations were off,
+            # the raw JSON envelope leaked into response_text. The downstream
+            # recommendation filtering/dedup logic still keys off recommendations_enabled.
             intent = state.get("intent", "unknown")
             response_text, recommendations, render_mode_from_llm = agent._parse_response_with_recommendations(response_text, intent)
-            logger.info(f"💡 Parsed {len(recommendations)} recommendations from response, render_mode={render_mode_from_llm}")
+            logger.info(f"💡 Parsed JSON envelope: {len(recommendations)} recommendations, render_mode={render_mode_from_llm}")
+            if not recommendations_enabled:
+                recommendations = []  # discard but keep the envelope unwrap
         
         # FIX: Monitor for remaining token-like patterns (helps debugging)
         # These will be cleaned up by postcheck's cleanup_remaining_tokens()

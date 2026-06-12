@@ -520,15 +520,38 @@ OUTPUT FORMAT REMINDER:
      inside it."""
 
 
+_DISABLED_RENDERING_OVERRIDE_CHS = """
+
+========================================================================
+RUNTIME OVERRIDE — RENDERING DISABLED (HIGHEST PRIORITY)
+========================================================================
+The rendering agent is OFF. The user will see ONLY the "response" prose.
+
+You MUST:
+  1. Set render_mode = "text_only" (NEVER "table").
+  2. Do NOT emit ===RENDER_START===/===RENDER_END=== blocks.
+  3. Put EVERY claim row with all relevant fields directly in the "response"
+     field as a bulleted list with human-readable labels — e.g.
+     "• Claim 12345 (seq 001) — Status: Paid — Fill Date: 2024-01-15 — ..."
+  4. Completeness is mandatory. The MULTI-CLAIM ANSWER and AGGREGATE
+     BREAKDOWN guidelines still apply, but everything goes inside "response".
+
+This overrides all earlier instructions about render_mode="table" or
+===RENDER_START=== blocks. Ignore those for this response.
+========================================================================
+"""
+
+
 def build_claim_history_prompt(
     user_query: str,
     slim_claims: List[Dict[str, Any]],
     member_summary: Dict[str, Any],
+    rendering_disabled: bool = False,
 ) -> str:
     claims_json = json.dumps(slim_claims, indent=1, default=str)
     member_json = json.dumps(member_summary, default=str) if member_summary else "{}"
     current_date = date.today().strftime("%Y-%m-%d")
-    return (
+    prompt = (
         _SYSTEM_INSTRUCTIONS
         + "\n\n"
         + _RENDER_DSL_CONTRACT
@@ -541,6 +564,9 @@ def build_claim_history_prompt(
             claims_json=claims_json,
         )
     )
+    if rendering_disabled:
+        prompt += _DISABLED_RENDERING_OVERRIDE_CHS
+    return prompt
 
 
 # ---------------------------------------------------------------------------
