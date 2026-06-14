@@ -1,0 +1,423 @@
+Prompt,Intent,domain
+What is the approval status of claim 132435151040074 sequence 001?,approval_info,benefits_api
+Is claim 180571470939000 sequence 001 approved or denied?,rejection_reasons,cap_api
+Approval summary for claim 201503823714118 sequence 001.,approval_info,benefits_api
+Check the approval reason for claim 201752592251000 sequence 001.,approval_info,benefits_api
+"Was claim 201990819198000 sequence 001 approved? If so, what were the approval messages?",approval_info,benefits_api
+List the plan overrides that led to approval of claim 211263773300000 sequence 004.,approval_info,benefits_api
+What BPG configuration was used to approve claim 220133725669000 sequence 001?,approval_info,benefits_api
+Claim 220992183436835 sequence 002 approval details.,approval_info,benefits_api
+Did claim 221172865083001 sequence 001 pass adjudication? Show the approval logic.,approval_info,benefits_api
+What override codes were applied to approve claim 221663541811000 sequence 001?,rejection_reasons,cap_api
+Approval status and messages for claim 222492018072002 sequence 001.,approval_info,benefits_api
+Explain the approval decision for claim 222492117457002 sequence 001.,approval_info,benefits_api
+What plan options led to approval on claim 230624075311000 sequence 002?,approval_info,benefits_api
+Lookup approval information for claim 231865207544000 sequence 001.,approval_info,benefits_api
+Show the approval codes associated with claim 231912348363000 sequence 002.,approval_info,benefits_api
+Claim 240051073172000 sequence 001: approval or rejection?,rejection_reasons,cap_api
+What were the accumulation overrides on approved claim 240063508485000 sequence 001?,beneficiary_info,benefits_api
+Adjudication outcome and approval details for claim 240063519295000 sequence 001.,claim_status,cap_api
+Pull the approval summary and override details for claim 240094966940000 sequence 001.,approval_info,benefits_api
+What is the transition fill status of claim 130041467416065 sequence 001?,approval_info,benefits_api
+Is claim 132435151040074 sequence 001 a transition fill?,approval_info,benefits_api
+Transition fill details for claim 150692388845000 sequence 001.,approval_info,benefits_api
+Was a TF applied to claim 160060096136030 sequence 001?,approval_info,benefits_api
+Check if transition fill was triggered for claim 180571470939000 sequence 001.,approval_info,benefits_api
+What type of transition fill was applied to claim 191406379285000 sequence 001?,approval_info,benefits_api
+Claim 201503823714118 sequence 001 TF eligibility status.,approval_info,benefits_api
+Transition fill configuration for claim 201752592251000 sequence 001.,approval_info,benefits_api
+Did this member qualify for transition fill on claim 201990819198000 sequence 001?,approval_info,benefits_api
+TF override details for claim 211263773300000 sequence 004.,approval_info,benefits_api
+What plan configuration overrides affected claim 220133725669000 sequence 001?,approval_info,benefits_api
+Adjudication pathway for claim 220992183436835 sequence 002.,approval_info,benefits_api
+Transition fill approval information for claim 221172865083001 sequence 001.,approval_info,benefits_api
+Was claim 221663541811000 sequence 001 processed under a TF exception?,approval_info,benefits_api
+Claim 221775171449000 sequence 003: transition fill type and eligibility.,approval_info,benefits_api
+Show TF status for claim 222492018072002 sequence 001.,approval_info,benefits_api
+List all plan overrides on claim 222492117457002 sequence 001.,approval_info,benefits_api
+Check transition fill override details for claim 230381673488000 sequence 001.,approval_info,benefits_api
+TF type applied to claim 230624075311000 sequence 002.,approval_info,benefits_api
+Plan configuration that affected TF on claim 231181462825000 sequence 001.,approval_info,benefits_api
+What is the audit trail for claim 130041467416065 sequence 001?,audit_info,benefits_api
+When was claim 132435151040074 sequence 001 first created?,audit_info,benefits_api
+Audit log for claim 150692388845000 sequence 001.,audit_info,benefits_api
+Show the change history of claim 160060096136030 sequence 001.,audit_info,benefits_api
+What modifications were made to claim 180571470939000 sequence 001?,reversal_info,cap_api
+When was claim 191406379285000 sequence 001 last updated?,claim_status,cap_api
+Claim 201503823714118 sequence 001 add date and change date.,fill_date_info,claim_history_search
+Who last modified claim 201752592251000 sequence 001 and when?,audit_info,benefits_api
+List all audit entries for claim 201990819198000 sequence 001.,audit_info,benefits_api
+What is the creation timestamp of claim 211263773300000 sequence 004?,audit_info,benefits_api
+Modification record for claim 220133725669000 sequence 001.,audit_info,benefits_api
+Claim 220992183436835 sequence 002: edit history and change log.,audit_info,benefits_api
+When was claim 221172865083001 sequence 001 added to the system?,audit_info,benefits_api
+Full audit report for claim 221663541811000 sequence 001.,audit_info,benefits_api
+What is the audit add time for claim 221775171449000 sequence 003?,audit_info,benefits_api
+History of changes on claim 222492018072002 sequence 001.,audit_info,benefits_api
+Claim 222492117457002 sequence 001 audit summary.,audit_info,benefits_api
+Audit information including add date and change date for claim 230381673488000 sequence 001.,audit_info,benefits_api
+Show the modification details for claim 230624075311000 sequence 002.,audit_info,benefits_api
+Claim audit record for 231181462825000 sequence 001.,audit_info,benefits_api
+What is the member's benefit phase for claim 130041467416065 sequence 001?,beneficiary_info,benefits_api
+Member coverage details for claim 150692388845000 sequence 001.,beneficiary_info,benefits_api
+Benefit type and coverage tier for claim 180571470939000 sequence 001.,beneficiary_info,benefits_api
+Is the member eligible for benefits on claim 191406379285000 sequence 001?,beneficiary_info,benefits_api
+What benefit phase is the member in for claim 201503823714118 sequence 001?,beneficiary_info,benefits_api
+Member plan details for claim 201752592251000 sequence 001.,beneficiary_info,benefits_api
+Accumulation status for the member on claim 201990819198000 sequence 001.,beneficiary_info,benefits_api
+Does medical dollar accumulation apply to claim 211263773300000 sequence 004?,beneficiary_info,benefits_api
+Member's coverage classification for claim 220992183436835 sequence 002.,beneficiary_info,benefits_api
+Claim 221663541811000 sequence 001: member's insurance coverage type.,beneficiary_info,benefits_api
+Member eligibility information for claim 222492018072002 sequence 001.,beneficiary_info,benefits_api
+What plan is the member enrolled in for claim 222492117457002 sequence 001?,beneficiary_info,benefits_api
+Benefit plan configuration for claim 230381673488000 sequence 001.,beneficiary_info,benefits_api
+Member accumulation rules for claim 230624075311000 sequence 002.,beneficiary_info,benefits_api
+Coverage details and benefit phase for claim 231181462825000 sequence 001.,beneficiary_info,benefits_api
+What is the current status of claim 130041467416065 sequence 001?,claim_status,cap_api
+Claim summary for 132435151040074 sequence 001.,claim_status,cap_api
+Full details of claim 150692388845000 sequence 001.,claim_status,cap_api
+What happened on claim 160060096136030 sequence 001?,claim_status,cap_api
+Processing status of claim 180571470939000 sequence 001.,claim_status,cap_api
+Adjudication outcome for claim 191406379285000 sequence 001.,claim_status,cap_api
+Complete claim record for 201503823714118 sequence 001.,claim_status,cap_api
+Breakdown of claim 201752592251000 sequence 001.,claim_status,cap_api
+Status update for claim 201990819198000 sequence 001.,claim_status,cap_api
+Comprehensive summary of claim 211263773300000 sequence 004.,approval_info,benefits_api
+"Is claim 220133725669000 sequence 001 paid, rejected, or pending?",claim_status,cap_api
+Claim 220992183436835 sequence 002 status and processing details.,claim_status,cap_api
+Claim 221663541811000 sequence 001 overview.,claim_status,cap_api
+Show the full record for claim 221775171449000 sequence 003.,claim_status,cap_api
+Adjudication details for claim 222492018072002 sequence 001.,claim_status,cap_api
+Claim 222492117457002 sequence 001: status and outcome.,claim_status,cap_api
+Quick status check on claim 230381673488000 sequence 001.,claim_status,cap_api
+What was the result of processing claim 230624075311000 sequence 002?,claim_status,cap_api
+Claim details and status for 231181462825000 sequence 001.,claim_status,cap_api
+Does claim 132435151040074 sequence 001 have coordination of benefits?,cob_info,cap_api
+COB summary for claim 150692388845000 sequence 001.,cob_info,cap_api
+What other insurance information exists for claim 211263773300000 sequence 004?,cob_info,cap_api
+Is there a secondary payer on claim 242055403386000 sequence 001?,cob_info,cap_api
+Coordination of benefits details for claim 242831720377166 sequence 002.,cob_info,cap_api
+COB pricing breakdown for claim 242831738080166 sequence 001.,cob_info,cap_api
+How did other insurance affect claim 243102333796000 sequence 003?,cob_info,cap_api
+Secondary insurance details for claim 243122443413000 sequence 001.,cob_info,cap_api
+COB calculation for claim 252611736720000 sequence 002.,cob_info,cap_api
+Coordination details for claim 252952886196000 sequence 001.,cob_info,cap_api
+Other payer information for claim 253091241600000 sequence 001.,cob_info,cap_api
+Dual coverage details for claim 253136857840000 sequence 001.,cob_info,cap_api
+COB setup for claim 132435151040074 sequence 001.,cob_info,cap_api
+Secondary payer information for claim 150692388845000 sequence 001.,cob_info,cap_api
+COB report for claim 211263773300000 sequence 004.,cob_info,cap_api
+Impact of other insurance on claim 242055403386000 sequence 001.,cob_info,cap_api
+COB adjudication details for claim 242831720377166 sequence 002.,claim_status,cap_api
+Primary and secondary insurance breakdown for claim 242831738080166 sequence 001.,cob_info,cap_api
+COB configuration for claim 243102333796000 sequence 003.,cob_info,cap_api
+Coordination pricing summary for claim 243122443413000 sequence 001.,pricing_info,cap_api
+Is claim 130041467416065 sequence 001 for a compound medication?,compound_info,claim_history_search
+Compound details for claim 132435151040074 sequence 001.,compound_info,claim_history_search
+What is the compound code on claim 150692388845000 sequence 001?,compound_info,claim_history_search
+Ingredient breakdown for compound claim 160060096136030 sequence 001.,compound_info,claim_history_search
+MIC information for claim 180571470939000 sequence 001.,compound_info,claim_history_search
+Compound ingredient costs for claim 191406379285000 sequence 001.,compound_info,claim_history_search
+Is this a compounded prescription? Claim 201503823714118 sequence 001.,compound_info,claim_history_search
+Funded and unfunded costs for compound claim 201752592251000 sequence 001.,compound_info,claim_history_search
+Ingredient list for compound claim 201990819198000 sequence 001.,compound_info,claim_history_search
+Compound drug details for claim 211263773300000 sequence 004.,compound_info,claim_history_search
+MIC cost breakdown for claim 220133725669000 sequence 001.,cob_info,cap_api
+Individual ingredient pricing for claim 220992183436835 sequence 002.,compound_info,claim_history_search
+Compound formulation details for claim 221172865083001 sequence 001.,compound_info,claim_history_search
+Compound medication summary for claim 221663541811000 sequence 001.,compound_info,claim_history_search
+MIC details and ingredient breakdown for claim 221775171449000 sequence 003.,compound_info,claim_history_search
+Compound pricing information for claim 222492018072002 sequence 001.,compound_info,claim_history_search
+Ingredient cost report for claim 222492117457002 sequence 001.,pricing_info,cap_api
+Compound claim details for 230624075311000 sequence 002.,compound_info,claim_history_search
+MIC summary for claim 231181462825000 sequence 001.,compound_info,claim_history_search
+Claim history for the member on claim 132435151040074 sequence 001.,audit_info,benefits_api
+Member's claim history for the drug on claim 220133725669000 sequence 001.,date_range_claims,claim_history_search
+Claim list for this year related to 221775171449000 sequence 003.,date_range_claims,claim_history_search
+Claim history for this member and drug for 222492117457002 sequence 001.,date_range_claims,claim_history_search
+Member prescription history for 231181462825000 sequence 001.,date_range_claims,claim_history_search
+Brand vs generic information for claim 191406379285000 sequence 001.,drug_info,claim_history_search
+What drug was dispensed on claim 130041467416065 sequence 001?,drug_info,claim_history_search
+Drug name and NDC for claim 132435151040074 sequence 001.,drug_info,claim_history_search
+Medication details for claim 150692388845000 sequence 001.,drug_info,claim_history_search
+Formulary status of the drug on claim 160060096136030 sequence 001.,drug_info,claim_history_search
+What is the GPI number for claim 180571470939000 sequence 001?,claim_status,cap_api
+Drug classification for claim 191406379285000 sequence 001.,drug_info,claim_history_search
+Drug setup used in RxClaim for claim 201503823714118 sequence 001.,drug_info,claim_history_search
+Drug category details for claim 201752592251000 sequence 001.,drug_info,claim_history_search
+Formulary position for the medication on claim 201990819198000 sequence 001.,drug_info,claim_history_search
+Drug type and classification for claim 211263773300000 sequence 004.,drug_info,claim_history_search
+GPI and therapeutic class for claim 220133725669000 sequence 001.,drug_info,claim_history_search
+Drug status assigned by RxClaim for claim 220992183436835 sequence 002.,drug_info,claim_history_search
+Medication tier information for claim 221172865083001 sequence 001.,drug_info,claim_history_search
+Drug configuration from claim 221663541811000 sequence 001.,drug_info,claim_history_search
+Formulary report for the drug on claim 221775171449000 sequence 003.,drug_info,claim_history_search
+Drug classification details for claim 222492018072002 sequence 001.,drug_info,claim_history_search
+Medication status for claim 222492117457002 sequence 001.,drug_info,claim_history_search
+Drug tier and formulary placement for claim 230381673488000 sequence 001.,drug_info,claim_history_search
+Product name and product ID for claim 230624075311000 sequence 002.,rx_details,cap_api
+What medication was prescribed on claim 231181462825000 sequence 001?,drug_info,claim_history_search
+What DUR edits were triggered on claim 191406379285000 sequence 001?,drug_interaction_info,claim_history_search
+Drug utilization review details for claim 201503823714118 sequence 001.,drug_interaction_info,claim_history_search
+DUR outcomes for claim 221663541811000 sequence 001.,drug_interaction_info,claim_history_search
+Were there any drug interaction alerts on claim 222492018072002 sequence 001?,compound_info,claim_history_search
+Which DUR edits applied to claim 222492117457002 sequence 001?,drug_interaction_info,claim_history_search
+Drug interaction warnings for claim 240104527633005 sequence 001.,drug_interaction_info,claim_history_search
+DUR edit results for claim 241774768475148 sequence 003.,drug_interaction_info,claim_history_search
+Utilization review information for claim 243122443413000 sequence 001.,drug_interaction_info,claim_history_search
+DUR report for claim 251283241791195 sequence 001.,drug_interaction_info,claim_history_search
+Drug interaction outcomes for claim 252045320000000 sequence 001.,drug_interaction_info,claim_history_search
+Clinical edits triggered on claim 252453396162000 sequence 001.,drug_interaction_info,claim_history_search
+DUR override details for claim 253361498968006 sequence 017.,drug_interaction_info,claim_history_search
+Utilization review results for claim 260054207073000 sequence 001.,drug_interaction_info,claim_history_search
+Interaction screening outcomes for claim 260682712742000 sequence 001.,drug_interaction_info,claim_history_search
+DUR edit codes for claim 191406379285000 sequence 001.,drug_interaction_info,claim_history_search
+Drug utilization details for claim 201503823714118 sequence 001.,drug_interaction_info,claim_history_search
+Interaction alert summary for claim 221663541811000 sequence 001.,drug_interaction_info,claim_history_search
+Clinical screening results for claim 222492018072002 sequence 001.,drug_interaction_info,claim_history_search
+DUR processing details for claim 222492117457002 sequence 001.,claim_status,cap_api
+Drug interaction report for claim 240104527633005 sequence 001.,drug_interaction_info,claim_history_search
+When was claim 130041467416065 sequence 001 filled?,fill_date_info,claim_history_search
+Fill date for claim 132435151040074 sequence 001.,fill_date_info,claim_history_search
+What is the date of service for claim 150692388845000 sequence 001?,fill_date_info,claim_history_search
+Dispense date for claim 160060096136030 sequence 001.,fill_date_info,claim_history_search
+When was the medication dispensed on claim 180571470939000 sequence 001?,fill_date_info,claim_history_search
+Date the prescription was filled for claim 191406379285000 sequence 001.,fill_date_info,claim_history_search
+Fill date details for claim 201503823714118 sequence 001.,fill_date_info,claim_history_search
+Dispensing date for claim 201752592251000 sequence 001.,fill_date_info,claim_history_search
+Date of service for claim 201990819198000 sequence 001.,fill_date_info,claim_history_search
+Fill date information for claim 211263773300000 sequence 004.,fill_date_info,claim_history_search
+When did the pharmacy fill claim 220133725669000 sequence 001?,pharmacy_info,cap_api
+Date the medication was picked up for claim 220992183436835 sequence 002.,fill_date_info,claim_history_search
+Dispensing date for claim 221172865083001 sequence 001.,fill_date_info,claim_history_search
+Fill date and time for claim 221663541811000 sequence 001.,fill_date_info,claim_history_search
+Service date for claim 221775171449000 sequence 003.,fill_date_info,claim_history_search
+When was claim 222492018072002 sequence 001 dispensed?,fill_date_info,claim_history_search
+Fill timestamp for claim 222492117457002 sequence 001.,fill_date_info,claim_history_search
+Prescription fill date for claim 230381673488000 sequence 001.,fill_date_info,claim_history_search
+Date of fill for claim 230624075311000 sequence 002.,fill_date_info,claim_history_search
+Claim 231181462825000 sequence 001: when was this filled?,fill_date_info,claim_history_search
+Are there generic alternatives for the drug on claim 130041467416065 sequence 001?,generic_availability,cap_api
+Generic substitutes available for claim 132435151040074 sequence 001.,generic_availability,cap_api
+What generic options exist for claim 160060096136030 sequence 001?,generic_availability,cap_api
+Alternative medications for claim 180571470939000 sequence 001.,generic_availability,cap_api
+What generic drugs are available for claim 191406379285000 sequence 001?,generic_availability,cap_api
+Therapeutic alternatives for claim 201503823714118 sequence 001.,generic_availability,cap_api
+Substitute drug list for claim 201752592251000 sequence 001.,generic_availability,cap_api
+Generic availability information for claim 201990819198000 sequence 001.,generic_availability,cap_api
+Alternative medication options for claim 211263773300000 sequence 004.,generic_availability,cap_api
+Formulary alternatives for the drug on claim 220133725669000 sequence 001.,generic_availability,cap_api
+Generic substitutes for claim 220992183436835 sequence 002.,generic_availability,cap_api
+Cheaper drug options for claim 221172865083001 sequence 001.,generic_availability,cap_api
+Available generic medications for claim 221663541811000 sequence 001.,generic_availability,cap_api
+Therapeutic equivalent drugs for claim 222492018072002 sequence 001.,generic_availability,cap_api
+Substitute options for claim 222492117457002 sequence 001.,generic_availability,cap_api
+Generic alternative details for claim 230381673488000 sequence 001.,generic_availability,cap_api
+Formulary-approved alternatives for claim 231181462825000 sequence 001.,generic_availability,cap_api
+Generic medication options for claim 231515053947011 sequence 001.,generic_availability,cap_api
+Substitute drug information for claim 231865207544000 sequence 001.,generic_availability,cap_api
+Hello,out_of_scope,general
+Hi there,greeting,general
+Good morning,greeting,general
+Good afternoon,greeting,general
+Good evening,greeting,general
+Hey,greeting,general
+Greetings,greeting,general
+Hi,greeting,general
+Welcome,out_of_scope,general
+Hello there,greeting,general
+Good day,greeting,general
+Howdy,greeting,general
+Hey there,greeting,general
+What's up,out_of_scope,general
+Morning,greeting,general
+Afternoon,greeting,general
+Evening,greeting,general
+Hiya,out_of_scope,general
+"Hello, how are you?",out_of_scope,general
+"Hi, good to see you",out_of_scope,general
+How do I submit a claim correctly for claim 130041467416065 sequence 001?,rejection_reasons,cap_api
+Steps to avoid claim rejection for claim 132435151040074 sequence 001.,rejection_reasons,cap_api
+Guidance on filing claims like claim 160060096136030 sequence 001.,help,general
+Guidelines for avoiding rejections for claim 201990819198000 sequence 001.,rejection_reasons,cap_api
+Best practices for claim submission for claim 211263773300000 sequence 004.,out_of_scope,general
+Claim submission help for 221663541811000 sequence 001.,claim_status,cap_api
+Instructions to prevent denials for claim 221775171449000 sequence 003.,rejection_reasons,cap_api
+Help for proper claim filing for claim 230624075311000 sequence 002.,help,general
+Part D summary for claim 201752592251000 sequence 001.,claim_status,cap_api
+MEDD pricing summary for claim 221663541811000 sequence 001.,pricing_info,cap_api
+Part D pricing breakdown for claim 230624075311000 sequence 002.,pricing_info,cap_api
+All claim records in the system for claim 150692388845000 sequence 001.,multi_claim_summary,cap_api
+All claim records for claim 222492018072002 sequence 001.,claim_status,cap_api
+What is the weather today?,out_of_scope,general
+Tell me a joke.,out_of_scope,general
+Who won the Super Bowl?,out_of_scope,general
+What is the capital of France?,out_of_scope,general
+How do I cook pasta?,out_of_scope,general
+What time is it?,out_of_scope,general
+Who is the president?,out_of_scope,general
+What movies are playing?,out_of_scope,general
+How do I fix my car?,rejection_reasons,cap_api
+What is the stock price of Apple?,out_of_scope,general
+Tell me about history.,multi_claim_summary,cap_api
+What are good restaurants nearby?,out_of_scope,general
+How does gravity work?,out_of_scope,general
+What is the meaning of life?,out_of_scope,general
+Show me sports scores.,out_of_scope,general
+What is machine learning?,out_of_scope,general
+How do I learn Python?,out_of_scope,general
+What books should I read?,out_of_scope,general
+What is the best vacation spot?,out_of_scope,general
+How do I change a tire?,reversal_info,cap_api
+Which pharmacy dispensed claim 130041467416065 sequence 001?,pharmacy_info,cap_api
+Pharmacy details for claim 132435151040074 sequence 001.,pharmacy_info,cap_api
+Where was the prescription filled for claim 150692388845000 sequence 001?,pharmacy_info,cap_api
+Dispensing pharmacy for claim 160060096136030 sequence 001.,pharmacy_info,cap_api
+Pharmacy location information for claim 191406379285000 sequence 001.,pharmacy_info,cap_api
+Dispensing pharmacy details for claim 201503823714118 sequence 001.,pharmacy_info,cap_api
+Store location where claim 201752592251000 sequence 001 was filled.,pharmacy_info,cap_api
+Pharmacy name and address for claim 201990819198000 sequence 001.,pharmacy_info,cap_api
+Dispensing location for claim 211263773300000 sequence 004.,pharmacy_info,cap_api
+Where did the member get this prescription? Claim 220133725669000 sequence 001.,pharmacy_info,cap_api
+Dispensing pharmacy location for claim 221172865083001 sequence 001.,pharmacy_info,cap_api
+Store information for claim 221663541811000 sequence 001.,claim_status,cap_api
+Pharmacy report for claim 221775171449000 sequence 003.,pharmacy_info,cap_api
+Where was the medication dispensed for claim 222492018072002 sequence 001?,pharmacy_info,cap_api
+Pharmacy details for claim 222492117457002 sequence 001.,pharmacy_info,cap_api
+Filling pharmacy information for claim 230381673488000 sequence 001.,pharmacy_info,cap_api
+Pharmacy city and state for claim 230624075311000 sequence 002.,pharmacy_info,cap_api
+Which pharmacy filled claim 231181462825000 sequence 001?,pharmacy_info,cap_api
+Who prescribed the medication on claim 130041467416065 sequence 001?,drug_info,claim_history_search
+Prescriber details for claim 132435151040074 sequence 001.,rx_details,cap_api
+Physician information for claim 150692388845000 sequence 001.,rx_details,cap_api
+Doctor's name for claim 160060096136030 sequence 001.,rx_details,cap_api
+Which physician wrote the prescription for claim 180571470939000 sequence 001?,drug_info,claim_history_search
+Prescriber NPI for claim 191406379285000 sequence 001.,rx_details,cap_api
+Prescriber information for claim 201752592251000 sequence 001.,rx_details,cap_api
+Physician report for claim 201990819198000 sequence 001.,drug_interaction_info,claim_history_search
+Prescriber's name and credentials for claim 220133725669000 sequence 001.,rx_details,cap_api
+Who ordered the medication on claim 221172865083001 sequence 001?,pharmacy_info,cap_api
+Prescribing physician information for claim 221663541811000 sequence 001.,rx_details,cap_api
+Prescriber NPI and name for claim 221775171449000 sequence 003.,drug_info,claim_history_search
+Doctor's details for claim 222492018072002 sequence 001.,rx_details,cap_api
+Prescribing physician for claim 230381673488000 sequence 001.,drug_info,claim_history_search
+Ordering provider information for claim 230624075311000 sequence 002.,pharmacy_info,cap_api
+Prescriber name for claim 231181462825000 sequence 001.,rx_details,cap_api
+Pricing breakdown for claim 240060164045000 sequence 001.,pricing_info,cap_api
+Copay calculation for claim 242831738080166 sequence 001.,pricing_info,cap_api
+Ingredient cost and fees for claim 252460261210000 sequence 001.,pricing_info,cap_api
+Pricing schedule used for claim 252621948076000 sequence 001.,pricing_info,cap_api
+Patient pay details for claim 240051073172000 sequence 001.,pricing_info,cap_api
+Final out-of-pocket amount for claim 240060164045000 sequence 001.,pricing_info,cap_api
+All pricing components for claim 242831738080166 sequence 001.,pricing_info,cap_api
+Co-pay modifier impact on claim 252460261210000 sequence 001.,pricing_info,cap_api
+Pricing summary for claim 240051073172000 sequence 001.,pricing_info,cap_api
+Cost of claim 240060164045000 sequence 001.,pricing_info,cap_api
+How much was paid on claim 242831738080166 sequence 001?,reimbursement_info,cap_api
+Pricing details for claim 252460261210000 sequence 001.,pricing_info,cap_api
+Final copay amount for claim 240051073172000 sequence 001.,pricing_info,cap_api
+Pricing information for claim 240060164045000 sequence 001.,pricing_info,cap_api
+Approved ingredient cost for claim 242831738080166 sequence 001.,compound_info,claim_history_search
+PA summary for claim 251271743818195 sequence 001.,claim_status,cap_api
+PA approval details for claim 253603736282009 sequence 001.,approval_info,benefits_api
+PA type and approval for claim 201990819198000 sequence 001.,approval_info,benefits_api
+Authorization details for claim 220133725669000 sequence 001.,approval_info,benefits_api
+Reimbursement details for claim 130041467416065 sequence 001.,reimbursement_info,cap_api
+What was reimbursed on claim 132435151040074 sequence 001?,reimbursement_info,cap_api
+Payment information for claim 150692388845000 sequence 001.,reimbursement_info,cap_api
+Reimbursement amount for claim 160060096136030 sequence 001.,reimbursement_info,cap_api
+What was paid on claim 180571470939000 sequence 001?,reimbursement_info,cap_api
+Reimbursement breakdown for claim 191406379285000 sequence 001.,reimbursement_info,cap_api
+Payment details for claim 201503823714118 sequence 001.,reimbursement_info,cap_api
+Payment summary for claim 201990819198000 sequence 001.,reimbursement_info,cap_api
+Reimbursed amount for claim 211263773300000 sequence 004.,reimbursement_info,cap_api
+Payment calculation for claim 220133725669000 sequence 001.,reimbursement_info,cap_api
+Reimbursement rationale for claim 220992183436835 sequence 002.,reimbursement_info,cap_api
+Why was this amount reimbursed on claim 221172865083001 sequence 001?,reimbursement_info,cap_api
+Payment details for paper claim 221663541811000 sequence 001.,reimbursement_info,cap_api
+Reimbursement report for claim 221775171449000 sequence 003.,reimbursement_info,cap_api
+Payment information for claim 222492018072002 sequence 001.,reimbursement_info,cap_api
+Reimbursement summary for claim 222492117457002 sequence 001.,approval_info,benefits_api
+What was the pharmacy paid for claim 230381673488000 sequence 001?,pharmacy_info,cap_api
+Reimbursement calculation for claim 230624075311000 sequence 002.,reimbursement_info,cap_api
+Payment breakdown for claim 231181462825000 sequence 001.,reimbursement_info,cap_api
+Why was claim 130041467416065 sequence 001 rejected?,rejection_reasons,cap_api
+Rejection reasons for claim 150692388845000 sequence 001.,rejection_reasons,cap_api
+What edits caused claim 160060096136030 sequence 001 to reject?,rejection_reasons,cap_api
+Rejection details for claim 191406379285000 sequence 001.,rejection_reasons,cap_api
+List of rejection codes for claim 221775171449000 sequence 003.,rejection_reasons,cap_api
+Why was claim 230381673488000 sequence 001 denied?,rejection_reasons,cap_api
+Rejection explanation for claim 241770599260003 sequence 001.,rejection_reasons,cap_api
+Failed edits for claim 241771076695002 sequence 001.,rejection_reasons,cap_api
+Reason codes for the rejection of claim 242005504278000 sequence 001.,rejection_reasons,cap_api
+Rejection rationale for claim 242055403386000 sequence 001.,rejection_reasons,cap_api
+Specific edits that led to rejection of claim 242772404022000 sequence 003.,rejection_reasons,cap_api
+Denial reasons for claim 243102333796000 sequence 003.,rejection_reasons,cap_api
+Claim 243122443413000 sequence 001 rejection breakdown.,rejection_reasons,cap_api
+Which edits triggered the rejection for claim 251283249876195 sequence 001?,rejection_reasons,cap_api
+Details on why claim 252611736720000 sequence 002 was not accepted.,rejection_reasons,cap_api
+Rejection information for claim 252964403388000 sequence 001.,rejection_reasons,cap_api
+Failed edit codes for claim 252965483598001 sequence 001.,rejection_reasons,cap_api
+Summary of rejection reasons for claim 130041467416065 sequence 001.,rejection_reasons,cap_api
+What can be done to fix rejected claim 150692388845000 sequence 001?,rejection_reasons,cap_api
+How to resolve rejected claim 160060096136030 sequence 001?,rejection_reasons,cap_api
+Was claim 231181462825000 sequence 001 reversed?,claim_status,cap_api
+Reversal details for claim 240060164045000 sequence 001.,reversal_info,cap_api
+Adjustments made to claim 242831720377166 sequence 002.,reversal_info,cap_api
+R&R information for claim 242905816136000 sequence 001.,claim_status,cap_api
+Manual adjustment details for claim 251838615925008 sequence 001.,audit_info,benefits_api
+Is claim 253136857840000 sequence 001 a reversal?,reversal_info,cap_api
+Reversal and resubmission details for claim 253361498968006 sequence 017.,reversal_info,cap_api
+Adjustment information for claim 253491357048008 sequence 001.,reversal_info,cap_api
+R&R report for claim 253603736282009 sequence 001.,reversal_info,cap_api
+Claim modifications for claim 260021649904000 sequence 005.,reversal_info,cap_api
+Reversal status for claim 260054207073000 sequence 001.,reversal_info,cap_api
+Adjustment details for claim 260061828565000 sequence 001.,reversal_info,cap_api
+Manual changes on claim 231181462825000 sequence 001.,audit_info,benefits_api
+Reversal information for claim 240060164045000 sequence 001.,reversal_info,cap_api
+Modification details for claim 242831720377166 sequence 002.,audit_info,benefits_api
+R&R status for claim 242905816136000 sequence 001.,claim_status,cap_api
+Adjustment summary for claim 251838615925008 sequence 001.,reversal_info,cap_api
+Claim 253136857840000 sequence 001 reversal details.,reversal_info,cap_api
+Resubmissions for claim 253361498968006 sequence 017.,rejection_reasons,cap_api
+Reversal report for claim 253491357048008 sequence 001.,reversal_info,cap_api
+What is the RX number for claim 130041467416065 sequence 001?,rx_details,cap_api
+Prescription details for claim 132435151040074 sequence 001.,rx_details,cap_api
+Quantity dispensed on claim 150692388845000 sequence 001.,rx_details,cap_api
+Days supply for claim 160060096136030 sequence 001.,rx_details,cap_api
+Fill number for claim 180571470939000 sequence 001.,fill_date_info,claim_history_search
+RX details for claim 191406379285000 sequence 001.,rx_details,cap_api
+Prescription number for claim 201503823714118 sequence 001.,rx_details,cap_api
+Quantity and days supply for claim 201752592251000 sequence 001.,rx_details,cap_api
+RX information for claim 201990819198000 sequence 001.,rx_details,cap_api
+Prescription fill details for claim 211263773300000 sequence 004.,rx_details,cap_api
+RX number and fill count for claim 220133725669000 sequence 001.,rx_details,cap_api
+Dispensing quantity for claim 220992183436835 sequence 002.,rx_details,cap_api
+Days supply for this prescription for claim 221172865083001 sequence 001.,rx_details,cap_api
+Fill number information for claim 221663541811000 sequence 001.,approval_info,benefits_api
+RX details for claim 221775171449000 sequence 003.,rx_details,cap_api
+Prescription strength and quantity for claim 222492018072002 sequence 001.,rx_details,cap_api
+Prescription summary for claim 222492117457002 sequence 001.,rx_details,cap_api
+RX number for claim 230381673488000 sequence 001.,rx_details,cap_api
+Fill details for claim 230624075311000 sequence 002.,claim_status,cap_api
+Prescription information for claim 231181462825000 sequence 001.,rx_details,cap_api
+What are the settlement codes for claim 130041467416065 sequence 001?,settlement_info,cap_api
+Pharmacy response for claim 150692388845000 sequence 001.,settlement_info,cap_api
+Settlement information sent to the pharmacy for claim 160060096136030 sequence 001.,settlement_info,cap_api
+Feedback codes for claim 180571470939000 sequence 001.,settlement_info,cap_api
+What was sent back to the pharmacy for claim 191406379285000 sequence 001?,settlement_info,cap_api
+Settlement details for claim 220133725669000 sequence 001.,claim_status,cap_api
+Pharmacy response codes for claim 220992183436835 sequence 002.,settlement_info,cap_api
+Settlement information for claim 222492018072002 sequence 001.,claim_status,cap_api
+Settlement report for claim 222492117457002 sequence 001.,claim_status,cap_api
+Response sent to the pharmacy for claim 230381673488000 sequence 001.,settlement_info,cap_api
+Settlement codes for claim 241770599260003 sequence 001.,settlement_info,cap_api
+Pharmacy feedback for claim 241771076695002 sequence 001.,settlement_info,cap_api
+Settlement status for claim 241774768475148 sequence 003.,claim_status,cap_api
+Response codes for claim 242005504278000 sequence 001.,rejection_reasons,cap_api
+Settlement details for claim 242055403386000 sequence 001.,claim_status,cap_api
+Pharmacy response for claim 242772404022000 sequence 003.,settlement_info,cap_api
+Settlement summary for claim 242831720377166 sequence 002.,claim_status,cap_api
+Codes sent to the pharmacy for claim 242831738080166 sequence 001.,settlement_info,cap_api
+Settlement feedback for claim 243122443413000 sequence 001.,claim_status,cap_api
+Response information for claim 250023213779000 sequence 001.,claim_status,cap_api
