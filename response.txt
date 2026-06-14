@@ -1,0 +1,987 @@
+QUESTION:
+{Give me a summary of this PA – I envision that this would go over the “most frequently used” values and summarize the PA.  It does not need to go over each attribute just the ones that really impact processing. I would work with the team to highlight the fields we want in the summary. 
+Will this PA override a Reject 75 PA Required?  (this would already be covered by PA Summary but they may ask a specific question)
+Will this PA override a Reject 70 Non-Formulary? (this would already be covered by PA Summary)
+Will this PA override a Reject 70 Plan Exclusion? (this would already be covered by PA Summary)
+What does (insert field name) do?  We have “popup” help on many fields, but not all. Can we have the AI point to a copy of the highspot article and glean the answer from that?
+Does this copay influence price?  If so how?  - there are several fields in play here
+Will this PA override a Reject 76 Plan Limits Exceeded? (this would already be covered by PA Summary)
+What Drugs will this PA cover?  - this is a tough one because there are GPI List, NDC Lists, and wildcarded GPIs.  Not only would this be a new domain, it could return a lot of data if we are not careful
+How many claims used this PA?  - Another brand-new service – so not sure it belongs in the AI
+ }
+
+ {What does Ignore PA Status do ?
+It tells the claim what drug status to be used should it use the one on the drug present in plan or on PA
+How can I override contingent therapy ?
+Flip bypass contingent therapy flag to “Y”
+How can I override Smart PA ?
+Flip bypass Smart PA flag to “Y” or enter the criteria number associated with Smart PA if required.
+What fields are applicable to override for this reason code ?
+This will be complex answer not sure if this fits
+How can I make the claim pay as part -B ?
+Use the override reason “MB”
+How can I override the ESRD reject?
+Use the override reason “ES”
+How can I skip the deductible for the member?
+Flip skip DED flag to “Y”
+How can I send the PA expiration date on a claim?
+Fly send expiration date flag to “Y”
+How can I setup a TF letter tag for a PA?
+Choose the TF letter type when utilizing  TF override reason.
+How can I setup a claim to process a different copay using a PA?
+Setup the specific copay schedule on the override.
+What PA I am supposed to enter for overriding the reject situation on this claim /no:?
+Utilize suggest override feature to guide you for an appropriate PA and add them once you validate and approve it meets your required intent.
+}
+
+
+
+{
+    "priorAuthorizations": [
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^100000001",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "100000001",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "OD",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T03:54:22",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000002",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000002",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "OM",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:01:09",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000003",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000003",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "PA",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:10:09",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000004",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000004",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "MB",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:18:18",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^11000000004",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "11000000004",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "MB",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:22:06",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000005",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000005",
+            "authorizedDrugType": "N",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "HS",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:29:31",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000007",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000007",
+            "authorizedDrugType": "G",
+            "authorizedDrugNumber": "88402020002010",
+            "reasonCode": "OM",
+            "drugDescription": "SODIUM FLUORIDE RINSE 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T04:42:02",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000009",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000009",
+            "authorizedDrugType": "G",
+            "authorizedDrugNumber": "88402020002010",
+            "reasonCode": "MB",
+            "drugDescription": "SODIUM FLUORIDE RINSE 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T06:20:05",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000010",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000010",
+            "authorizedDrugType": "G",
+            "authorizedDrugNumber": "88402020002010",
+            "reasonCode": "HS",
+            "drugDescription": "SODIUM FLUORIDE RINSE 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T06:21:35",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000011",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000011",
+            "authorizedDrugType": "M",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "PN",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T06:30:43",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000012",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000012",
+            "authorizedDrugType": "M",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "2A",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T06:35:43",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000013",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000013",
+            "authorizedDrugType": "M",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "2B",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:00:42",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000014",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000014",
+            "authorizedDrugType": "M",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "2C",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:08:57",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000015",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000015",
+            "authorizedDrugType": "M",
+            "authorizedDrugNumber": "41167009428",
+            "reasonCode": "2M",
+            "drugDescription": "ACT FLUORIDE SOL 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:11:23",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000016",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000016",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "OD",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:21:23",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000017",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000017",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "OM",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:26:54",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000018",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000018",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "PA",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:37:41",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000019",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000019",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "MB",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:37:41",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000020",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000020",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "HS",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:44:54",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^1000000020A",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "1000000020A",
+            "authorizedDrugType": "1",
+            "authorizedDrugNumber": "TESTPA",
+            "reasonCode": "HS",
+            "drugDescription": "LIST",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:47:05",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000021",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000021",
+            "authorizedDrugType": "2",
+            "authorizedDrugNumber": "TESTPAGPI",
+            "reasonCode": "OD",
+            "drugDescription": "76DZYJDSF",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T07:56:01",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000022",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000022",
+            "authorizedDrugType": "2",
+            "authorizedDrugNumber": "TESTPAGPI",
+            "reasonCode": "OM",
+            "drugDescription": "76DZYJDSF",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T08:09:11",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000023",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000023",
+            "authorizedDrugType": "2",
+            "authorizedDrugNumber": "TESTPAGPI",
+            "reasonCode": "PA",
+            "drugDescription": "76DZYJDSF",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T08:09:11",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000025",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000025",
+            "authorizedDrugType": "2",
+            "authorizedDrugNumber": "TESTPAGPI",
+            "reasonCode": "HS",
+            "drugDescription": "76DZYJDSF",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T08:18:26",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000024",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000024",
+            "authorizedDrugType": "2",
+            "authorizedDrugNumber": "TESTPAGPI",
+            "reasonCode": "MB",
+            "drugDescription": "76DZYJDSF",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T08:20:47",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000006",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000006",
+            "authorizedDrugType": "G",
+            "authorizedDrugNumber": "88402020002010",
+            "reasonCode": "OD",
+            "drugDescription": "SODIUM FLUORIDE RINSE 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T09:05:36",
+            "agentCode": "A",
+            "incidentId": "",
+            "ignoreStatusCode": "Y",
+            "overrideSpecialtyPrescriptionRejectIndicator": false,
+            "clinicalAdministrationCode": "",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        },
+        {
+            "priorAuthorizationIdentifier": {
+                "idSource": "6006",
+                "idType": "beneficieries",
+                "idValue": "1400^^42023ACC01^^42023GRP04^^420PAMBR102^^10000000008",
+                "resourceId": "6006~1400^^42023ACC01^^42023GRP04^^420PAMBR102"
+            },
+            "priorAuthorizationNumber": "10000000008",
+            "authorizedDrugType": "G",
+            "authorizedDrugNumber": "88402020002010",
+            "reasonCode": "PA",
+            "drugDescription": "SODIUM FLUORIDE RINSE 0.05%",
+            "effectivePeriod": {
+                "dateBegin": "20250101",
+                "dateEnd": "20391231"
+            },
+            "modifyDateTime": "2025-10-31T09:06:22",
+            "agentCode": "C",
+            "incidentId": "",
+            "ignoreStatusCode": "N",
+            "overrideSpecialtyPrescriptionRejectIndicator": true,
+            "clinicalAdministrationCode": "C",
+            "transformCare": {
+                "type": " "
+            },
+            "followMeLogicIndicator": false,
+            "member": {
+                "universalId": "",
+                "carrierId": "1400",
+                "accountId": "42023ACC01",
+                "groupId": "42023GRP04",
+                "memberId": "420PAMBR102",
+                "personCode": "001"
+            }
+        }
+    ]
+}
