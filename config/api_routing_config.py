@@ -532,6 +532,65 @@ for _ch_intent in _CLAIM_HISTORY_INTENTS:
     INTENT_API_ROUTING.setdefault(_ch_intent, dict(_CLAIM_HISTORY_SEARCH_BASE))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# OVERRIDE_DOMAIN — Prior Authorization (PA) lookup
+#
+# All 16 PA intents share the same routing config: claim_number is the only
+# required entity (Step 1 resolves it to a member CAGM, then Step 2 fetches
+# PA records). Endpoint resolved at call time from settings.overrides_api_path.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Use settings if available, else hardcode the SIT1 default. Done once at module
+# load so callers can rely on a stable api_endpoint string.
+try:
+    from config.config import settings as _settings  # noqa: WPS433 (intentional late-bind)
+    _OVERRIDES_ENDPOINT = (
+        getattr(_settings, "overrides_api_base_url", "https://internal-sit1-apix.cvshealth.com").rstrip("/")
+        + getattr(_settings, "overrides_api_path", "/pss/myclaims/override/exp/v1/priorauth/search")
+    )
+except Exception:
+    _OVERRIDES_ENDPOINT = (
+        "https://internal-sit1-apix.cvshealth.com"
+        "/pss/myclaims/override/exp/v1/priorauth/search"
+    )
+
+
+_OVERRIDE_DOMAIN_BASE = {
+    "api_endpoint":      _OVERRIDES_ENDPOINT,
+    "method":            "POST",
+    "required_entities": ["claim_number"],   # claim_id is mandatory per user spec
+    "optional_entities": [],
+    "response_fields":   [],                  # Trimmed in Overrides_api.response_trimmer
+    "fallback_api":      None,
+    "domain":            "override_domain",
+    "description":       "Prior Authorization (PA) record lookup and field analysis",
+    "tool_name":         "overrides_v1",
+    "requires_llm":      True,
+}
+
+_OVERRIDE_INTENTS = [
+    "pa_summary",
+    "pa_override_reject",
+    "pa_field_help",
+    "pa_copay_pricing",
+    "pa_drug_coverage",
+    "pa_claim_usage",
+    "pa_reason_code",
+    "pa_effective_dates",
+    "pa_agent_code",
+    "pa_ignore_status",
+    "pa_specialty_rx_override",
+    "pa_clinical_admin_code",
+    "pa_transform_care",
+    "pa_follow_me_logic",
+    "pa_drug_type_indicator",
+    "pa_modification_history",
+]
+
+for _pa_intent in _OVERRIDE_INTENTS:
+    INTENT_API_ROUTING.setdefault(_pa_intent, dict(_OVERRIDE_DOMAIN_BASE))
+
+
 # Required Headers for CVS API
 REQUIRED_HEADERS = {
     "x-correlation-id": "W3C Trace Context identifier",
@@ -564,6 +623,11 @@ def get_domain_for_intent(intent: str) -> str:
 def is_claim_history_search_intent(intent: str) -> bool:
     """True if the intent should be routed to the claims-search pipeline."""
     return get_domain_for_intent(intent) == "claim_history_search"
+
+
+def is_override_domain_intent(intent: str) -> bool:
+    """True if the intent should be routed to the Overrides_api pipeline (PA lookup)."""
+    return get_domain_for_intent(intent) == "override_domain"
 
 
 def requires_api(intent: str) -> bool:

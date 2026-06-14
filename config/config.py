@@ -176,6 +176,21 @@ class Settings(BaseSettings):
     # When False: Returns actual errors to users - production behavior
     # Note: Fallback is NEVER used for client errors (400 "claim not found") - those always return errors
 
+    # =========================================================================
+    # OVERRIDES (PRIOR AUTHORIZATION) DOMAIN
+    # =========================================================================
+    # Settings for the Overrides_api/ module (PA lookup).
+    # Step 1 reuses claim_list_api above; Step 2 hits the URL below.
+    overrides_api_base_url: str = "https://internal-sit1-apix.cvshealth.com"  # ⚠️ Overridden by OVERRIDES_API_BASE_URL env var
+    overrides_api_path: str = "/pss/myclaims/override/exp/v1/priorauth/search"  # ⚠️ Overridden by OVERRIDES_API_PATH env var
+    overrides_api_x_api_key: str = ""  # ⚠️ Overridden by OVERRIDES_API_X_API_KEY env var (per-environment Vault secret)
+    overrides_id_source: str = "6003"  # ⚠️ Overridden by OVERRIDES_ID_SOURCE env var
+    overrides_order_by: int = 4  # ⚠️ Overridden by OVERRIDES_ORDER_BY env var
+    overrides_enable_follow_me_logic: bool = True  # ⚠️ Overridden by OVERRIDES_ENABLE_FOLLOW_ME_LOGIC env var
+    overrides_api_timeout_seconds: int = 30  # ⚠️ Overridden by OVERRIDES_API_TIMEOUT_SECONDS env var
+    overrides_api_cache_ttl_seconds: int = 900  # ⚠️ Overridden by OVERRIDES_API_CACHE_TTL_SECONDS env var
+    # PA records change less often than CHS history; 15 min is the conservative default.
+
     # Streaming Configuration
     enable_streaming: bool = True  # Master switch for streaming feature
     streaming_chunk_size: int = 50  # Characters per chunk when streaming response

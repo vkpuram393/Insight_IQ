@@ -28,6 +28,10 @@ from persistence import PersistenceStoreFactory
 from services.llm_connection import client as gemini_client, GenerateRequest, _generate_core
 from tools.claims_api import normalize_entities
 from Claims_search_api.llm_query_responder import build_claim_history_prompt
+from Overrides_api.llm_query_responder import (
+    build_override_prompt,
+    format_overrides_text_fallback,
+)
 from agents.post_processing.rendering_themes import VALID_RENDER_MODES
 import uuid
 
@@ -4605,11 +4609,32 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         slim_claims = tool_data.get("_slim_claims") or []
         member_summary = tool_data.get("_member_summary") or {}
 
+        # === Override domain (Prior Authorization) detection ==================
+        # Mirrors the is_claim_history block above. Three signals — domain_mapping
+        # (richest), state["domain"] string compare, and the tool_results data
+        # flag is_override_search written by Overrides_api.overrides_node.
+        _domain_mapping = state.get("domain_mapping") or {}
+        is_override = (
+            bool(tool_data.get("is_override_search"))
+            or (state.get("domain") == "override_domain")
+            or (isinstance(_domain_mapping, dict) and _domain_mapping.get("domain") == "override_domain")
+        )
+        slim_pa_records = tool_data.get("_slim_pa_records") or []
+        # Override domain reuses _member_summary; no separate slot.
+        if is_override and not member_summary:
+            member_summary = tool_data.get("_member_summary") or {}
+
         # Get appropriate system prompt based on mode
         if needs_clarification:
             system_prompt = agent._get_followup_system_prompt()
             logger.info("📝 Using follow-up question system prompt")
             recommendations_enabled = False  # Never generate recommendations during clarification
+        elif is_override:
+            # build_override_prompt embeds its own system instructions + render-DSL
+            # contract in the user prompt — same pattern as claim-history mode.
+            system_prompt = None
+            logger.info("📝 Override-domain (PA) mode: prompt built by build_override_prompt() with render-DSL contract")
+            recommendations_enabled = settings.enable_recommendations
         elif is_claim_history:
             # build_claim_history_prompt embeds its own system instructions in the
             # user prompt (including the rendering-DSL contract). The downstream
@@ -4640,9 +4665,18 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
 
         logger.debug(f"📋 System prompt: {len(system_prompt) if system_prompt else 0} characters")
 
-        # Build user prompt — claim history uses its own dedicated prompt builder
-        # that serialises slim_claims directly; all other paths use _build_user_prompt.
-        if not needs_clarification and is_claim_history and slim_claims:
+        # Build user prompt — claim history & override domain use their own
+        # dedicated prompt builders that serialise the slim records directly;
+        # all other paths use _build_user_prompt.
+        if not needs_clarification and is_override and slim_pa_records:
+            user_query = state.get("text", "")
+            user_prompt = build_override_prompt(
+                user_query=user_query,
+                slim_pa_records=slim_pa_records,
+                member_summary=member_summary,
+                rendering_disabled=not settings.enable_rendering_agent,
+            )
+        elif not needs_clarification and is_claim_history and slim_claims:
             user_query = state.get("text", "")
             user_prompt = build_claim_history_prompt(
                 user_query,
@@ -4656,13 +4690,26 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         logger.debug(f"📋 Intent: {state.get('intent', 'unknown')}")
 
         # Generate response using Gemini
-        if not needs_clarification and is_claim_history and not slim_claims:
+        if not needs_clarification and is_override and not slim_pa_records:
+            # No PA records — skip LLM, return static message.
+            logger.info("📭 Override domain: no PA records, returning static message")
+            response_text = (
+                '{"render_mode": "text_only", '
+                '"summary": "No Prior Authorization records found."}'
+                "\n\nNo Prior Authorization records were found for the provided "
+                "claim number. If you expected to see PA records, please contact "
+                "member services."
+            )
+            llm_metadata = {}
+        elif not needs_clarification and is_claim_history and not slim_claims:
             # No matching claims — skip LLM and return a static message immediately.
             logger.info("📭 Claim history: no claims found, returning static message")
             response_text = "No claims were found for the provided claim number."
             llm_metadata = {}
         else:
-            if not needs_clarification and is_claim_history:
+            if not needs_clarification and is_override:
+                logger.info(f"🔮 Generating override-domain (PA) response ({len(slim_pa_records)} records)...")
+            elif not needs_clarification and is_claim_history:
                 logger.info(f"🔮 Generating claim-history response ({len(slim_claims)} claims)...")
             elif needs_clarification:
                 logger.info("🔮 Generating follow-up question with Gemini...")
@@ -4672,7 +4719,30 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
             # Run in executor to avoid blocking (Gemini client is sync)
             # Using get_running_loop() - recommended for Python 3.10+ inside async functions
             loop = asyncio.get_running_loop()
-            response_text, llm_metadata = await loop.run_in_executor(None, agent.generate_response, system_prompt, user_prompt)
+            try:
+                response_text, llm_metadata = await loop.run_in_executor(
+                    None, agent.generate_response, system_prompt, user_prompt
+                )
+            except Exception as _llm_exc:
+                # Override-domain LLM-fallback path: when Gemini fails (timeout,
+                # safety filter, parse error), produce a deterministic answer
+                # from slim_pa_records. Latency ~1ms vs ~1500ms for the LLM,
+                # and the user gets usable data instead of an opaque error.
+                if not needs_clarification and is_override and slim_pa_records:
+                    logger.error(
+                        "[OverridesLLM-Fallback] Gemini failed (%s) — using "
+                        "format_overrides_text_fallback. Records=%d",
+                        _llm_exc, len(slim_pa_records),
+                    )
+                    response_text = format_overrides_text_fallback(
+                        slim_pa_records, member_summary,
+                    )
+                    llm_metadata = {
+                        "llm_fallback_used": "overrides",
+                        "fallback_reason":   f"{type(_llm_exc).__name__}: {_llm_exc}",
+                    }
+                else:
+                    raise
         
         # =====================================================================
         # Issue 1: Log truncation warnings for observability

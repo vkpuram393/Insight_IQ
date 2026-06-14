@@ -126,10 +126,45 @@ async def extended_intent_agent_node(state: AgentState) -> Dict[str, Any]:
             _llm_fallback_intent = None
         _ensemble_confidence = intent_result.get("confidence")  # always the post-calibration ensemble score
 
+        # ── domain_mapping: generic routing artifact for downstream nodes ────
+        # Centralizes the (intent, domain, route_target, render_config) tuple so
+        # nodes don't have to reconstruct it from scattered state checks.
+        _resolved_domain = intent_result.get("domain") or api_config.get("domain") or None
+        _DOMAIN_ROUTING_TABLE = {
+            "claim_history_search": {
+                "route_target":     "call_claims_search",
+                "render_config":    "claim_history_search",
+                "tool_result_flag": "is_claim_history_search",
+            },
+            "override_domain": {
+                "route_target":     "call_overrides_tool",
+                "render_config":    "override_domain",
+                "tool_result_flag": "is_override_search",
+            },
+            "cap_api": {
+                "route_target":     "call_claims_tool",
+                "render_config":    "claims",
+                "tool_result_flag": None,
+            },
+        }
+        _routing_extras = _DOMAIN_ROUTING_TABLE.get(_resolved_domain or "", {
+            "route_target":     None,
+            "render_config":    None,
+            "tool_result_flag": None,
+        })
+        domain_mapping = {
+            "intent":           intent,
+            "domain":           _resolved_domain,
+            "route_target":     _routing_extras.get("route_target"),
+            "render_config":    _routing_extras.get("render_config"),
+            "tool_result_flag": _routing_extras.get("tool_result_flag"),
+        }
+
         result = {
             "intent": intent,
             "confidence": confidence,
-            "domain": intent_result.get("domain"),           # Populated by multidomain classifier; None otherwise
+            "domain": _resolved_domain,                       # Populated by multidomain classifier or routing config; None otherwise
+            "domain_mapping": domain_mapping,                 # NEW: generic routing artifact (see state.schema.AgentState)
             "llm_fallback_confidence": intent_result.get("llm_fallback_confidence"),  # None when ensemble was used directly
             "ensemble_intent": _ensemble_intent,                  # Ensemble's pick pre-LLM-fallback
             "ensemble_confidence": _ensemble_confidence,           # Ensemble post-calibration score

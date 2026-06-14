@@ -52,7 +52,17 @@ logger = logging.getLogger(__name__)
 # ── Temporarily disabled domains ──────────────────────────────────────────────
 # Intents belonging to any domain in this set are excluded from both training
 # and evaluation. Set to set() to re-enable all domains.
-DISABLED_DOMAINS: set = {"benefits_api", "member_domain", "override_domain"}
+#
+# CHANGELOG:
+#   - "override_domain" removed: PA intents are now plumbed end-to-end through
+#     Overrides_api/. After this change you MUST re-run training:
+#         python -m multidomain_intent_detection.training
+#     to regenerate artifacts/v3_pipeline.pkl with the 16 pa_* intents
+#     included in the ensemble. Until you do, the classifier won't emit
+#     domain == "override_domain" for any user query and the entire downstream
+#     wiring stays dormant (the regex fallback in Overrides_api.intent_router
+#     is the only path that works without retraining).
+DISABLED_DOMAINS: set = {"benefits_api", "member_domain"}
 
 # Set True to skip ensemble-only evaluation (Step 5) and go straight to LLM eval.
 SKIP_ENSEMBLE_EVAL: bool = False
@@ -560,8 +570,8 @@ def train_and_evaluate():
     print(f"  {X.shape[0]} samples × {X.shape[1]} dims, {len(labels)} classes")
 
     
-    # best_dim = search_pca(X, y, labels)
-    best_dim = 150
+    best_dim = search_pca(X, y, labels)
+    # best_dim = 150
     print(f"\nStep 3 — PCA dimension fixed at {best_dim} (skipping search)...")
 
     print(f"\nStep 4 — Training final ensemble (PCA-{best_dim})...")

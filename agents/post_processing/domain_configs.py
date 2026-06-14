@@ -7,8 +7,8 @@ maps, null-as-zero rules, blocked fields) lives in a per-domain module:
 
     claims_rendering_config.py            -> "claims" (default)
     claim_history_rendering_config.py     -> "claim_history_search"
+    overrides_rendering_config.py         -> "override_domain"   (Prior Authorization)
     member_rendering_config.py            -> FUTURE
-    overrides_rendering_config.py         -> FUTURE
 
 `get_config(domain)` returns the right module. Unknown domains fall back
 to the "claims" config so legacy / new intents that haven't been
@@ -23,10 +23,12 @@ from typing import Any, Optional
 
 from agents.post_processing import claims_rendering_config as _claims_cfg
 from agents.post_processing import claim_history_rendering_config as _chs_cfg
+from agents.post_processing import overrides_rendering_config as _overrides_cfg
 
 _REGISTRY = {
     "claims":               _claims_cfg,
     "claim_history_search": _chs_cfg,
+    "override_domain":      _overrides_cfg,   # NEW: Prior Authorization (PA) lookup
 }
 
 
@@ -50,18 +52,26 @@ def resolve_domain(
 
     Priority:
       1. Explicit *state_domain* if present (multidomain classifier output).
-      2. tool_results.data.is_claim_history_search flag (CHS pipeline).
-      3. tool_name == "claims_search" / "claims_search_v2"        (CHS).
-      4. Default: "claims".
+      2. tool_results.data.is_override_search flag             (Overrides — PA lookup).
+      3. tool_name == "overrides_v1"                            (Overrides).
+      4. tool_results.data.is_claim_history_search flag         (CHS pipeline).
+      5. tool_name == "claims_search" / "claims_search_v2"      (CHS).
+      6. Default: "claims".
     """
     if state_domain:
         return str(state_domain).strip() or "claims"
 
     if isinstance(tool_results, dict):
         data = tool_results.get("data") if isinstance(tool_results.get("data"), dict) else {}
+        # Check Overrides BEFORE CHS — an Overrides API response can incidentally
+        # carry claim metadata that would otherwise match the CHS heuristics.
+        if isinstance(data, dict) and data.get("is_override_search"):
+            return "override_domain"
+        tool_name = str(tool_results.get("tool_name") or "")
+        if tool_name in ("overrides_v1", "overrides"):
+            return "override_domain"
         if isinstance(data, dict) and data.get("is_claim_history_search"):
             return "claim_history_search"
-        tool_name = str(tool_results.get("tool_name") or "")
         if tool_name in ("claims_search", "claims_search_v2"):
             return "claim_history_search"
 

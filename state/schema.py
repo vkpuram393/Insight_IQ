@@ -66,6 +66,17 @@ class AgentState(TypedDict):
     user_info: Dict[str, Any]                    # User metadata
     uuid: Optional[str]                          # Request UUID from orchestrator
     domain: Optional[str]                        # Domain (e.g., "claims", "prescriptions")
+    domain_mapping: Optional[Dict[str, Any]]     # Generic routing artifact set by extended_intent_agent_node.
+                                                 # Shape: {
+                                                 #     "intent":           str,                # the chosen intent
+                                                 #     "domain":           str,                # e.g. "override_domain"
+                                                 #     "route_target":     str,                # e.g. "call_overrides_tool"
+                                                 #     "render_config":    str,                # which post_processing config
+                                                 #     "tool_result_flag": Optional[str],      # e.g. "is_override_search"
+                                                 # }
+                                                 # Downstream nodes (LangGraph routing, response_agent dispatch,
+                                                 # rendering registry) should prefer this dict over scattered
+                                                 # state["domain"] string compares.
 
     # === INTENT & ENTITIES (from intent_agent) ===
     intent: Optional[str]                        # What user wants
@@ -172,6 +183,7 @@ def create_initial_state(
         user_info=user_info or {},
         uuid=None,
         domain=None,
+        domain_mapping=None,
         intent=None,
         confidence=None,
         llm_fallback_confidence=None,
