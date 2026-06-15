@@ -4692,23 +4692,12 @@ async def response_agent_node(state: AgentState) -> Dict[str, Any]:
         # Generate response using Gemini
         if not needs_clarification and is_override and not slim_pa_records:
             # No PA records — skip LLM, return static message.
-            # Surface the specific error from the override node if available
-            # (e.g. "Could not resolve member", "Missing authorization token").
-            _tool_results_wrapper = state.get("tool_results") or {}
-            _override_error = _tool_results_wrapper.get("error", "")
-            if _override_error:
-                logger.info("📭 Override domain: API error — %s", _override_error)
-                _override_msg = _override_error
-            else:
-                logger.info("📭 Override domain: no PA records, returning static message")
-                _override_msg = (
-                    "No Prior Authorization records were found for the provided "
-                    "claim number. If you expected to see PA records, please contact "
-                    "member services."
-                )
+            logger.info("📭 Override domain: no PA records, returning static message")
             response_text = json.dumps({
                 "render_mode": "text_only",
-                "response": _override_msg,
+                "response": "No Prior Authorization records were found for the provided "
+                            "claim number. If you expected to see PA records, please contact "
+                            "member services.",
                 "recommendations": [],
             })
             llm_metadata = {}

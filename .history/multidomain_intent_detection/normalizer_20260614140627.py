@@ -69,8 +69,7 @@ _ENTITY_MEMBER_ID = re.compile(r'\bmember\s+(?:ID\s+)?(\d{6,12})\b', re.IGNORECA
 _ENTITY_REJECT_CODE = re.compile(r'\breject\s*(?:code)?\s+(\d{1,3}|[A-Z]{2})\b', re.IGNORECASE)
 _ENTITY_SETTLEMENT_CODE = re.compile(r'\bsettlement\s+(?:code\s+)?(\d{1,4})\b', re.IGNORECASE)
 _ENTITY_PA_REASON_CODE = re.compile(
-    r'\b(?:reason\s+code|override\s+reason|PA\s+reason(?:\s+code)?)\s+'
-    r'(?:to\s+)?'
+    r'\b(?:reason\s+code|override\s+reason|PA\s+reason)\s+'
     r'(U1|LC|OD|OA|US|U3|MB|ES|HS|PN|OM|PA|2A|2B|2C)\b',
     re.IGNORECASE,
 )
@@ -124,10 +123,6 @@ def extract_entities(text: str) -> Dict[str, Optional[str]]:
     m = _ENTITY_SETTLEMENT_CODE.search(text)
     if m:
         entities["settlement_code"] = m.group(1)
-
-    m = _ENTITY_PA_REASON_CODE.search(text)
-    if m:
-        entities["pa_reason_code"] = m.group(1).upper()
 
     date_matches = _ENTITY_DATE_RANGE.findall(text)
     if date_matches:

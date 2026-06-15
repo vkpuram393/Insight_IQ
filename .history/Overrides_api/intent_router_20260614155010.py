@@ -64,7 +64,7 @@ _OVERRIDE_PATTERNS = [
 
 def is_override_domain_intent(intent: str) -> bool:
     """Return True if the given intent name belongs to the override domain."""
-    return bool(intent) and intent in OVERRIDE_INTENTS
+    return bool(intent) and intent.lower().strip() in OVERRIDE_INTENTS
 
 
 def is_overrides_query(state: Dict[str, Any]) -> bool:

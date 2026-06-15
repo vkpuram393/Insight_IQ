@@ -2055,11 +2055,6 @@ class embeddingVars:
         "PA summary for this member's override record",
         "Show the PA record details for this member",
         "PA summary for override record",
-        "Can you give me a quick rundown of what this PA does?",
-        "What should I know about this PA?",
-        "Break down what this PA does for me.",
-        "What does this PA do? Give me the highlights.",
-        "I just pulled up this PA — what am I looking at?",
     ],
 
     "pa_override_reject": [
@@ -2109,13 +2104,6 @@ class embeddingVars:
         "What does the agent code field mean on a PA?",
         "Help me understand this PA field",
         "Explain what effectiveBeginDate means on a PA",
-        "Why would I set this field on a PA?",
-        "When do I use this field on a PA override?",
-        "I don't get what this field is for — can you explain?",
-        "What happens if I change this field on the PA?",
-        "Is this field important? What does it control?",
-        "What is the point of this field on the PA record?",
-        "I see this field on the PA but I don't know what it does.",
     ],
 
     "pa_copay_pricing": [

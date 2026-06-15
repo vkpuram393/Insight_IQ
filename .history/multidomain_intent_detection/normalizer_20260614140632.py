@@ -69,8 +69,7 @@ _ENTITY_MEMBER_ID = re.compile(r'\bmember\s+(?:ID\s+)?(\d{6,12})\b', re.IGNORECA
 _ENTITY_REJECT_CODE = re.compile(r'\breject\s*(?:code)?\s+(\d{1,3}|[A-Z]{2})\b', re.IGNORECASE)
 _ENTITY_SETTLEMENT_CODE = re.compile(r'\bsettlement\s+(?:code\s+)?(\d{1,4})\b', re.IGNORECASE)
 _ENTITY_PA_REASON_CODE = re.compile(
-    r'\b(?:reason\s+code|override\s+reason|PA\s+reason(?:\s+code)?)\s+'
-    r'(?:to\s+)?'
+    r'\b(?:reason\s+code|override\s+reason|PA\s+reason)\s+'
     r'(U1|LC|OD|OA|US|U3|MB|ES|HS|PN|OM|PA|2A|2B|2C)\b',
     re.IGNORECASE,
 )

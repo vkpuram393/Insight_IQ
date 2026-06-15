@@ -95,111 +95,57 @@ PII / MASKED TOKEN RULES
 # ─────────────────────────────────────────────────────────────────────────────
 
 _RENDER_DSL_CONTRACT = """\
-================================================================
-OUTPUT CONTRACT — STRICT JSON ENVELOPE + OPTIONAL RENDER DSL
-================================================================
+RESPONSE FORMAT CONTRACT
+========================
+Your response MUST start with a valid JSON object on the FIRST line:
 
-You MUST respond with a single JSON object FOLLOWED OPTIONALLY by a render
-block. No other text is allowed before, between, or after these two parts.
+{"render_mode": "<text_only|table>", "summary": "<one-sentence summary>"}
 
-JSON envelope (REQUIRED, render_mode MUST be the FIRST key):
-
-{
-    "render_mode": "<text_only | table>",
-    "response": "Your complete prose answer about the PA records.",
-    "recommendations": [
-        {"text": "Short follow-up suggestion 1", "action": "pa_summary"},
-        {"text": "Short follow-up suggestion 2", "action": "pa_reason_code"}
-    ]
-}
-
-UNIVERSAL ROW-COUNT RULE:
-  • Will the response data form 2+ DISTINCT PA RECORDS?
-        YES → render_mode = "table"   (also append the RENDER block)
-        NO  → render_mode = "text_only" (no RENDER block)
-
-  Examples that MUST be table:
-    • List of all PA records for a member
-    • Comparing multiple PA records (e.g. by reason code, drug, dates)
-    • Summary of all overrides
-
-  Examples that MUST be text_only:
-    • Single PA record detail or field explanation
-    • No-match or no-records answers
-    • Explaining a specific field value (e.g. what does reason code OD mean)
-
-NEVER write ASCII or markdown table syntax (`|`, `---`) inside the
-"response" field. Tables MUST go through the render_mode = "table" +
-===RENDER_START=== mechanism. The response text remains plain prose.
-
-RENDER STRUCTURE BLOCK (REQUIRED only when render_mode = "table"):
-
-Append on a NEW line, with no other text between the JSON and this block:
+If render_mode is "table", immediately follow with:
 
 ===RENDER_START===
-{"layout":"table","title":"Prior Authorization Records","sections":[{"id":"pa_table","type":"table","columns":[{"header":"Human Label","field":"slimPaKey","format":"<type>"}]}]}
+<table>
+  <thead>
+    <tr><th>...</th>...</tr>
+  </thead>
+  <tbody>
+    <tr><td>...</td>...</tr>
+  </tbody>
+</table>
 ===RENDER_END===
 
-Each column object: {"header":"Display Label","field":"slim_pa_key","format":"text|date"}
+Rules
+-----
+- Use "table" only when there are 2+ PA records AND rendering is enabled.
+- Use "text_only" for single-record answers, field explanations, or when
+  rendering is disabled.
+- The first line must be a valid JSON object — no leading whitespace, no
+  prose before it.
+- Do not include markdown fences inside the RENDER block.
 
-PA-DOMAIN AUTHORITATIVE FIELD NAMES (use these exact keys for the
-"field" attribute — they are the slim-PA shape produced by
-prepare_overrides_data; do NOT invent names):
-
-  Identification           : paReferenceNumber, incidentId
-  Drug                     : drugName, drugTypeIndicator, drugTypeLabel,
-                             authorizedDrugNumber, ndc, gpi, drugListId
-  Reason                   : reasonCode
-  Dates                    : effectiveDate (format: date),
-                             terminationDate (format: date),
-                             lastModifiedDateTime (format: date)
-  Agent & Status           : agentCode, ignoreStatus
-  Flags                    : specialtyRxOverrideIndicator,
-                             clinicalAdminCode, followMeIndicator,
-                             transformCarePlanIndicator
-
-COLUMN SELECTION GUIDANCE:
-  • Maximum 8 columns; first 4 are the most informative.
-  • Order by relevance to the user's question.
-  • Headers are human-readable labels (e.g. "PA Reference #",
-    "Drug", "Reason Code", "Effective Date"). Do NOT expose raw
-    field names as headers.
-  • Default column set when no specific field is asked about:
-    "PA Reference #", "Drug", "Reason Code", "Effective Date",
-    "End Date", "Agent", "Last Modified"
-
-DATA-UNAVAILABLE EXCEPTION:
-  If you decided render_mode = "table" but the data genuinely does not
-  contain expected fields, set render_mode = "text_only" and answer in
-  prose. Do NOT emit an empty render block.
-
-INVALID OUTPUTS:
-  ✗ render_mode = "table" with NO render block following the JSON
-  ✗ render_mode = "table" for a single-record answer
-  ✗ ASCII / markdown table syntax inside the "response" string
-  ✗ Markdown code fences anywhere in the output
-  ✗ Any text before the JSON or after the RENDER block
+Authoritative table column names (use these in <th> labels):
+- "PA Reference #"   (paReferenceNumber)
+- "Drug"             (drugName)
+- "Drug Type"        (drugTypeLabel — e.g. NDC, GPI, Drug List)
+- "Drug ID"          (ndc OR gpi OR drugListId, whichever is present)
+- "Reason Code"      (reasonCode)
+- "Effective Date"   (effectiveDate)
+- "End Date"         (terminationDate)
+- "Agent"            (agentCode)
+- "Ignore Status"    (ignoreStatus)
+- "Specialty Rx"     (specialtyRxOverrideIndicator — Yes/No)
+- "Last Modified"    (lastModifiedDateTime)
 """
 
 
 _DISABLED_RENDERING_OVERRIDE = """\
-
 ========================================================================
 RUNTIME OVERRIDE — RENDERING DISABLED (HIGHEST PRIORITY)
 ========================================================================
-The rendering agent is OFF. The user will see ONLY the "response" prose.
-
-You MUST:
-  1. Set render_mode = "text_only" (NEVER "table").
-  2. Do NOT emit ===RENDER_START===/===RENDER_END=== blocks.
-  3. Put EVERY PA record with all relevant fields directly in the "response"
-     field as a bulleted list with human-readable labels — e.g.
-     "• PA #100000001 — Drug: ACT FLUORIDE — Reason: OD — Effective: 2025-01-01 - 2039-12-31"
-  4. Completeness is mandatory. List ALL PA records inside "response".
-
-This overrides all earlier instructions about render_mode="table" or
-===RENDER_START=== blocks. Ignore those for this response.
-========================================================================
+Rendering is disabled for this session.
+- Set "render_mode" to "text_only" in the JSON envelope.
+- Do NOT emit ===RENDER_START===/===RENDER_END=== blocks.
+- Present all data as plain prose or a simple text list.
 """
 
 
@@ -222,16 +168,6 @@ PRIOR AUTHORIZATION RECORDS ({record_count} record{plural}):
 Answer the user's question based ONLY on the PA records above. If the records
 are empty, say so plainly: "No Prior Authorization records were found for this
 claim." Follow the behavioral rules and the response format contract.
-
-OUTPUT FORMAT REMINDER:
-  1. Output the JSON envelope first (render_mode = first key, then
-     response, then recommendations). No markdown fences.
-  2. If render_mode == "table", append the ===RENDER_START===...
-     ===RENDER_END=== block on a new line. No other text after.
-  3. If render_mode == "text_only", stop after the JSON envelope.
-  4. The "response" field carries your complete prose answer; never
-     rely on the table for completeness, never write ASCII tables
-     inside it.
 """
 
 
@@ -316,32 +252,27 @@ def format_overrides_text_fallback(
     Provides a usable response with no LLM dependency. Latency ~1ms.
     """
     if not slim_pa_records:
-        envelope = {
-            "render_mode": "text_only",
-            "response": "No Prior Authorization records were found for this claim. "
-                        "If you expected to see records, please contact member services.",
-            "recommendations": [],
-        }
-        return json.dumps(envelope)
+        envelope = {"render_mode": "text_only",
+                    "summary": "No Prior Authorization records found."}
+        return (json.dumps(envelope) +
+                "\n\nNo Prior Authorization records were found for this claim. "
+                "If you expected to see records, please contact member services.")
 
     lines = [f"Found {len(slim_pa_records)} Prior Authorization record(s):"]
     for i, rec in enumerate(slim_pa_records, 1):
         ref     = rec.get("paReferenceNumber", "—")
         drug    = rec.get("drugName", "—")
-        reason  = rec.get("reasonCode", "—")
+        status  = rec.get("paStatusDescription") or rec.get("paStatusCode", "—")
         eff     = rec.get("effectiveDate", "—")
         end     = rec.get("terminationDate", "—")
-        agent   = rec.get("agentCode", "")
-        agent_s = f" | Agent: {agent}" if agent else ""
-        lines.append(f"  {i}. PA #{ref}: {drug} | Reason: {reason} | "
-                     f"Effective: {eff} - {end}{agent_s}")
+        decision = rec.get("overrideDescription") or rec.get("rejectReasonDescription") or ""
+        decision = f" — {decision}" if decision else ""
+        lines.append(f"  {i}. PA #{ref}: {drug} | Status: {status} | "
+                     f"Effective: {eff} - {end}{decision}")
     body = "\n".join(lines)
-    envelope = {
-        "render_mode": "text_only",
-        "response": body,
-        "recommendations": [],
-    }
-    return json.dumps(envelope)
+    envelope = {"render_mode": "text_only",
+                "summary": f"Found {len(slim_pa_records)} PA record(s)."}
+    return json.dumps(envelope) + "\n\n" + body
 
 
 def answer_overrides_query(

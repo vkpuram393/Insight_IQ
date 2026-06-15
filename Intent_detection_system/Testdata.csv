@@ -421,3 +421,53 @@ Settlement summary for claim 242831720377166 sequence 002.,claim_status,cap_api
 Codes sent to the pharmacy for claim 242831738080166 sequence 001.,settlement_info,cap_api
 Settlement feedback for claim 243122443413000 sequence 001.,claim_status,cap_api
 Response information for claim 250023213779000 sequence 001.,claim_status,cap_api
+How can I override contingent therapy on this PA?,pa_contingent_therapy_override,override_domain
+Steps to bypass the contingent therapy requirement for this PA override.,pa_contingent_therapy_override,override_domain
+I need to flip the bypass contingent therapy flag to Y on this PA.,pa_contingent_therapy_override,override_domain
+How do I turn off the contingent therapy check for this PA?,pa_contingent_therapy_override,override_domain
+Bypass contingent therapy for this member using PA override.,pa_contingent_therapy_override,override_domain
+How can I override Smart PA processing?,pa_smart_pa_override,override_domain
+Flip bypass Smart PA flag to Y for this PA.,pa_smart_pa_override,override_domain
+I need to enter the Smart PA criteria number on this override.,pa_smart_pa_override,override_domain
+How to bypass Smart PA on this prior authorization?,pa_smart_pa_override,override_domain
+Set bypass Smart PA to Y on this PA.,pa_smart_pa_override,override_domain
+How can I make the claim pay as Part-B?,pa_part_b_override,override_domain
+Set the override reason to MB for Part-B payment.,pa_part_b_override,override_domain
+Which PA reason code makes the claim pay Part-B?,pa_part_b_override,override_domain
+How do I use override reason MB to pay as Medicare Part B?,pa_part_b_override,override_domain
+Override claim to Part B using PA reason code.,pa_part_b_override,override_domain
+How can I override the ESRD reject?,pa_esrd_override,override_domain
+Use override reason ES to override ESRD reject.,pa_esrd_override,override_domain
+What PA reason code overrides the ESRD edit?,pa_esrd_override,override_domain
+Steps to override ESRD rejection on this claim.,pa_esrd_override,override_domain
+How to bypass the ESRD reject using a PA override?,pa_esrd_override,override_domain
+How can I skip the deductible for the member?,pa_skip_deductible,override_domain
+Flip skip DED flag to Y on this PA.,pa_skip_deductible,override_domain
+I need to waive the deductible for this member via PA override.,pa_skip_deductible,override_domain
+Steps to skip deductible using a PA override.,pa_skip_deductible,override_domain
+How to set up a PA to skip deductible?,pa_skip_deductible,override_domain
+How can I send the PA expiration date on a claim?,pa_send_expiration,override_domain
+Flip send expiration date flag to Y.,pa_send_expiration,override_domain
+How to configure PA to send the expiration date?,pa_send_expiration,override_domain
+Turn on send expiration date on this PA override.,pa_send_expiration,override_domain
+Steps to include PA expiration date on claim processing.,pa_send_expiration,override_domain
+How can I setup a TF letter tag for a PA?,pa_tf_letter_setup,override_domain
+How do I configure a Transition Fill letter tag?,pa_tf_letter_setup,override_domain
+Which TF letter type should I use on this PA?,pa_tf_letter_setup,override_domain
+Steps to add a TF letter tag to a PA override.,pa_tf_letter_setup,override_domain
+Set up Transition Fill letter on this prior authorization.,pa_tf_letter_setup,override_domain
+How can I setup a claim to process a different copay using a PA?,pa_copay_setup,override_domain
+Setup the specific copay schedule on the override.,pa_copay_setup,override_domain
+How to set up a different copay schedule using PA?,pa_copay_setup,override_domain
+Steps to set up a different copay on a PA.,pa_copay_setup,override_domain
+Configure copay override schedule on this PA.,pa_copay_setup,override_domain
+What PA should I enter to override the reject on this claim?,pa_suggest_override,override_domain
+Suggest an override for the reject situation on this claim.,pa_suggest_override,override_domain
+Which PA do I need to override this reject?,pa_suggest_override,override_domain
+I need to find the right PA to override this rejection.,pa_suggest_override,override_domain
+Recommend a PA to override the reject on this claim.,pa_suggest_override,override_domain
+What fields are applicable for this PA reason code?,pa_reason_code_fields,override_domain
+Which fields are required for override reason code OD?,pa_reason_code_fields,override_domain
+What fields do I need to fill out for reason code U1?,pa_reason_code_fields,override_domain
+Show me the applicable fields for this PA override reason.,pa_reason_code_fields,override_domain
+What override fields are needed for reason code MB?,pa_reason_code_fields,override_domain

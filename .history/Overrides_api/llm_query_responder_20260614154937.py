@@ -222,16 +222,6 @@ PRIOR AUTHORIZATION RECORDS ({record_count} record{plural}):
 Answer the user's question based ONLY on the PA records above. If the records
 are empty, say so plainly: "No Prior Authorization records were found for this
 claim." Follow the behavioral rules and the response format contract.
-
-OUTPUT FORMAT REMINDER:
-  1. Output the JSON envelope first (render_mode = first key, then
-     response, then recommendations). No markdown fences.
-  2. If render_mode == "table", append the ===RENDER_START===...
-     ===RENDER_END=== block on a new line. No other text after.
-  3. If render_mode == "text_only", stop after the JSON envelope.
-  4. The "response" field carries your complete prose answer; never
-     rely on the table for completeness, never write ASCII tables
-     inside it.
 """
 
 
@@ -316,13 +306,11 @@ def format_overrides_text_fallback(
     Provides a usable response with no LLM dependency. Latency ~1ms.
     """
     if not slim_pa_records:
-        envelope = {
-            "render_mode": "text_only",
-            "response": "No Prior Authorization records were found for this claim. "
-                        "If you expected to see records, please contact member services.",
-            "recommendations": [],
-        }
-        return json.dumps(envelope)
+        envelope = {"render_mode": "text_only",
+                    "summary": "No Prior Authorization records found."}
+        return (json.dumps(envelope) +
+                "\n\nNo Prior Authorization records were found for this claim. "
+                "If you expected to see records, please contact member services.")
 
     lines = [f"Found {len(slim_pa_records)} Prior Authorization record(s):"]
     for i, rec in enumerate(slim_pa_records, 1):
@@ -336,12 +324,9 @@ def format_overrides_text_fallback(
         lines.append(f"  {i}. PA #{ref}: {drug} | Reason: {reason} | "
                      f"Effective: {eff} - {end}{agent_s}")
     body = "\n".join(lines)
-    envelope = {
-        "render_mode": "text_only",
-        "response": body,
-        "recommendations": [],
-    }
-    return json.dumps(envelope)
+    envelope = {"render_mode": "text_only",
+                "summary": f"Found {len(slim_pa_records)} PA record(s)."}
+    return json.dumps(envelope) + "\n\n" + body
 
 
 def answer_overrides_query(

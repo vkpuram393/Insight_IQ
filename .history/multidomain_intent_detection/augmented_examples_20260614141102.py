@@ -1171,9 +1171,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
 
     # ══════════════════════════════════════════════════════════════════════
     # 6. OVERRIDE_DOMAIN ANCHORS (PA configuration and management)
-    #    Real-world conversational phrasing — informal, problem-focused,
-    #    action-oriented language that mirrors how business users actually
-    #    talk about PA overrides in daily operations.
     # ══════════════════════════════════════════════════════════════════════
 
     "pa_summary": [
@@ -1182,22 +1179,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Show the most important fields on this PA.",
         "Display a high-level overview of this prior authorization.",
         "Provide the PA summary including effective dates and drug coverage.",
-        # Real-world conversational additions
-        "Can you give me a quick rundown of what this PA does?",
-        "I need to understand the key points on this PA — what's the summary?",
-        "Run through this PA for me — what's important to know?",
-        "What's the bottom line on this prior authorization?",
-        "Summarize what this PA is supposed to accomplish.",
-        "I need a one-minute overview of this PA.",
-        "What should I know about this PA?",
-        "Break down what this PA does for me.",
-        "Can you sum this up? I need the PA highlights.",
-        "Quick summary of this override record please.",
-        "Just the important stuff on this PA — not every field.",
-        "What does this PA do? Give me the TLDR.",
-        "Tell me about this PA — what are the key settings?",
-        "Walk me through this PA override configuration.",
-        "I just pulled up this PA — what am I looking at?",
     ],
     "pa_override_reject": [
         "Will this PA override a reject 75 PA required?",
@@ -1205,22 +1186,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Will this prior authorization bypass a reject 70 non-formulary?",
         "Does this PA override reject 70 plan exclusion?",
         "Show me which reject codes this PA can override.",
-        # Real-world conversational additions — reject code + description patterns
-        "Will this PA fix the reject 75?",
-        "Can this PA bypass reject 70 for non-formulary issues?",
-        "Does this PA handle reject 76 — plan limits exceeded?",
-        "What if the reject is 70 plan exclusion, will this PA help?",
-        "Show me: if reject is 75 (PA required), does this PA fix it?",
-        "The claim hit reject 75, will this PA clear it?",
-        "Will this PA override the 70 non-formulary?",
-        "Can I use this PA to get past reject 76?",
-        "Does this PA cover reject 70 when it's plan exclusion?",
-        "I got a 75 reject on the claim — does this PA handle that?",
-        "Will this PA resolve a 76 plan limits issue?",
-        "Is reject 75 PA required covered by this override?",
-        "The pharmacy is getting reject 70, will this PA take care of it?",
-        "Can this PA clear a reject 75 or 76?",
-        "Does this prior auth address the 70 reject?",
     ],
     "pa_field_help": [
         "What does the PA type field do?",
@@ -1228,22 +1193,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "What is the GPI override field used for?",
         "Describe what the PA status indicator means.",
         "What does the quantity limit override field do on this PA?",
-        # Real-world additions — why/when questions, casual tone
-        "Help me understand what this PA field means.",
-        "I don't get what this field is for — can you explain?",
-        "Why would I set this field on a PA?",
-        "When do I use this field on a PA override?",
-        "What's the purpose of this field on the override?",
-        "Can you explain what this field does?",
-        "I'm not sure what this field is — break it down for me.",
-        "What happens if I change this field on the PA?",
-        "Is this field important? What does it control?",
-        "Walk me through what this PA field means.",
-        "What is the point of this field on the PA record?",
-        "I see this field on the PA but I don't know what it does.",
-        "Explain this PA field in simple terms.",
-        "What is the impact of this field on claim processing?",
-        "Why would someone populate this field on a PA?",
     ],
     "pa_copay_pricing": [
         "Does this copay override influence the price?",
@@ -1251,17 +1200,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Will the PA copay change the member's out-of-pocket cost?",
         "Show me how the copay override impacts the final price.",
         "Does the copay field on this PA modify the claim price?",
-        # Real-world additions — conditional patterns, casual tone
-        "Does this copay affect the price, and if yes, how?",
-        "If the copay changes the cost, show me the impact.",
-        "Will the copay override influence the patient pay? Show how.",
-        "How does the copay on this PA interact with the plan pricing?",
-        "Does the PA copay actually change what the member pays?",
-        "Is the copay override going to lower the member's cost?",
-        "Tell me how this copay override impacts the final price.",
-        "Will this PA copay affect the dispensing fee or ingredient cost?",
-        "Does this copay override influence the coinsurance?",
-        "I need to know if this PA copay changes the claim payment.",
     ],
     "pa_drug_coverage": [
         "What drugs will this PA cover?",
@@ -1269,17 +1207,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Which medications are included under this PA?",
         "List the drugs that this PA authorizes.",
         "Display the GPI range covered by this PA.",
-        # Real-world additions — specific drug queries, casual tone
-        "Does this PA cover LISINOPRIL?",
-        "Is METFORMIN on the drug list for this PA?",
-        "Can I use this PA for ATORVASTATIN?",
-        "What meds does this PA apply to?",
-        "Drugs covered — give me the full list.",
-        "Show me every medication this PA authorizes.",
-        "Does this PA cover this specific drug?",
-        "What's the drug coverage scope for this PA?",
-        "Which NDCs or GPIs are on this PA?",
-        "I need to know what drugs fall under this PA.",
     ],
     "pa_claim_usage": [
         "How many claims used this PA?",
@@ -1287,17 +1214,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "How many times has this PA been applied to claims?",
         "Display the number of claims processed under this PA.",
         "Retrieve the claim usage count for this PA.",
-        # Real-world additions
-        "Is this PA heavily utilized?",
-        "How often has this PA been used?",
-        "What's the total utilization count for this PA?",
-        "How many fills hit this PA?",
-        "Has this PA been used a lot?",
-        "Tell me how many claims went through this PA.",
-        "PA usage count — how many claims?",
-        "How frequently is this PA being applied?",
-        "Total claims for this prior auth?",
-        "What's the volume of claims using this PA?",
     ],
     "pa_reason_code": [
         "What is the reason code on this PA?",
@@ -1305,17 +1221,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is the reason code U1 or LC on this PA?",
         "Which PAs have reason code OD?",
         "Display the reason code for this PA.",
-        # Real-world additions
-        "What reason code is set on this PA?",
-        "Tell me the override reason on this PA.",
-        "Is this PA set to OD or OA?",
-        "What's the reason code?",
-        "Show me the reason code — is it U1?",
-        "Why was this PA created? What's the reason code?",
-        "PA reason code for this override?",
-        "Which reason code is on this prior auth?",
-        "Is the reason code MB or ES on this PA?",
-        "What override reason was used when this PA was set up?",
     ],
     "pa_effective_dates": [
         "What are the effective dates for this PA?",
@@ -1323,17 +1228,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "When does this PA expire?",
         "Is this PA currently within its effective period?",
         "Display the dateBegin and dateEnd for this PA.",
-        # Real-world additions
-        "When does this PA start and end?",
-        "Is this PA still active?",
-        "Has this PA expired yet?",
-        "What's the date range on this PA?",
-        "Show me when this PA is valid.",
-        "PA effective period — is it still good?",
-        "When was this PA activated and when does it end?",
-        "Is this PA current or has it lapsed?",
-        "Tell me the effective dates — start to finish.",
-        "How long is this PA valid for?",
     ],
     "pa_agent_code": [
         "What is the agent code on this PA?",
@@ -1341,17 +1235,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Who created this PA based on the agent code?",
         "Which PAs were created by agent code C?",
         "Display the agent code for each PA on this member.",
-        # Real-world additions
-        "Who set up this PA?",
-        "Was this PA created automatically or manually?",
-        "Is the agent code A or C on this PA?",
-        "Tell me who entered this PA.",
-        "Is this an auto-generated PA or custom?",
-        "Agent code — was it system-created?",
-        "Who made this PA? Check the agent code.",
-        "Was this PA set up by the system or a user?",
-        "Show me the source code — who created this override?",
-        "Is this PA agent code A (auto) or C (custom)?",
     ],
     "pa_ignore_status": [
         "What is the ignore status code on this PA?",
@@ -1359,17 +1242,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is the ignore status code set to Y on this PA?",
         "Which PAs have ignore status P?",
         "Display the ignoreStatusCode for this PA.",
-        # Real-world additions
-        "What does Ignore PA Status do?",
-        "Is ignore status turned on for this PA?",
-        "What happens when ignore status is Y?",
-        "Tell me the ignore status setting.",
-        "Is ignore status active on this PA?",
-        "What does setting ignore status to Y mean?",
-        "Show me the ignore status flag.",
-        "Is the PA ignoring the drug status?",
-        "Ignore status — is it set to Y or N?",
-        "What is the purpose of the ignore status flag?",
     ],
     "pa_specialty_rx_override": [
         "Does this PA override the specialty prescription reject?",
@@ -1377,17 +1249,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is the specialty Rx reject indicator enabled on this PA?",
         "Which PAs have the specialty prescription override?",
         "Display the overrideSpecialtyPrescriptionRejectIndicator.",
-        # Real-world additions
-        "Is the specialty override turned on?",
-        "Can this PA bypass specialty Rx rejection?",
-        "Will the specialty reject be overridden by this PA?",
-        "Is specialty Rx override set to true?",
-        "Does this PA handle specialty prescription rejects?",
-        "Check if specialty override is enabled.",
-        "Is the specialty reject indicator on?",
-        "Will this PA let specialty scripts process?",
-        "Is the specialty prescription override active?",
-        "Show me if the specialty Rx flag is set.",
     ],
     "pa_clinical_admin_code": [
         "What is the clinical administration code on this PA?",
@@ -1395,17 +1256,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is there a clinical administration code set on this PA?",
         "Which PAs have clinical admin code C?",
         "Display the clinicalAdministrationCode for this PA.",
-        # Real-world additions
-        "What's the clinical admin code?",
-        "Is the clinical admin code blank or set to A?",
-        "Tell me the clinical admin code on this PA.",
-        "Why would I set a clinical admin code?",
-        "When do I use clinical admin code A vs C?",
-        "Is clinical admin code populated on this PA?",
-        "What does the clinical admin code do?",
-        "Check the clinical admin code setting.",
-        "Does this PA have a clinical admin code?",
-        "What is clinical admin code used for on a PA?",
     ],
     "pa_transform_care": [
         "What is the transform care type on this PA?",
@@ -1413,17 +1263,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is there a transform care type configured on this PA?",
         "Display the transformCare type for this prior authorization.",
         "Which PAs have a transform care type assigned?",
-        # Real-world additions
-        "What's the transform care setting?",
-        "Is transform care set up on this PA?",
-        "Tell me about the transform care type.",
-        "Is there a care program on this PA?",
-        "What does transform care do on a PA?",
-        "Is transform care blank or populated?",
-        "Check the transform care type.",
-        "Does this PA have a transform care designation?",
-        "What is the transform care program on this override?",
-        "When do I use the transform care field?",
     ],
     "pa_follow_me_logic": [
         "Is follow me logic enabled on this PA?",
@@ -1431,17 +1270,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Does this PA use follow me logic?",
         "Which PAs have the follow me indicator set to true?",
         "Display the followMeLogicIndicator for this PA.",
-        # Real-world additions
-        "Does this PA follow the member to a new plan?",
-        "Will this PA transfer if the member changes plans?",
-        "Is follow me turned on?",
-        "Does the PA persist across plan transitions?",
-        "Does this authorization carry over to a new plan?",
-        "Will this PA stick with the member if they switch plans?",
-        "Is the follow me flag set on this PA?",
-        "Check if this PA follows the member.",
-        "Is portability enabled for this PA?",
-        "Does this PA carry over during a plan change?",
     ],
     "pa_drug_type_indicator": [
         "What is the authorized drug type on this PA?",
@@ -1449,17 +1277,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is the drug type set to G for GPI or N for NDC?",
         "Which PAs use NDC-based drug matching?",
         "Display the authorizedDrugType for this PA.",
-        # Real-world additions
-        "Is this PA matching by GPI or NDC?",
-        "Drug type — GPI or NDC?",
-        "How does this PA match drugs?",
-        "Is this PA set up for GPI matching or NDC?",
-        "What type of drug matching is configured?",
-        "Tell me if this PA uses GPI or NDC.",
-        "Is the drug type G or N?",
-        "How are drugs being matched on this PA?",
-        "Check the drug matching method on this PA.",
-        "Is this PA using NDC-level or GPI-level matching?",
     ],
     "pa_modification_history": [
         "When was this PA last modified?",
@@ -1467,17 +1284,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Which PA was most recently modified?",
         "Display the modifyDateTime for this prior authorization.",
         "How recently was this PA updated?",
-        # Real-world additions
-        "When was this PA last changed?",
-        "Has this PA been modified recently?",
-        "What's the last update date on this PA?",
-        "When did someone last touch this PA?",
-        "Show me when this PA was last edited.",
-        "How old is this PA configuration?",
-        "Was this PA changed recently?",
-        "Tell me the last modified timestamp.",
-        "When was this PA record last updated?",
-        "What's the modification date?",
     ],
 
     # ── pa_contingent_therapy_override: bypass contingent therapy ────────
@@ -1497,12 +1303,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Set bypass contingent therapy flag for this PA record.",
         "Can a PA override waive the contingent therapy requirement?",
         "Steps to disable contingent therapy on PA.",
-        # Additional real-world conversational
-        "The member failed contingent therapy, how do I get around it with a PA?",
-        "Step therapy is blocking the claim — can the PA bypass it?",
-        "I need to override the step therapy edit, what do I do on the PA?",
-        "Member's claim is rejecting because of step therapy, how to use PA to fix it?",
-        "Contingent therapy is preventing the fill — PA override steps?",
     ],
 
     # ── pa_smart_pa_override: bypass Smart PA processing ────────────────
@@ -1522,12 +1322,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "What is the process for overriding Smart PA on a PA?",
         "How do I configure the Smart PA criteria number on the override?",
         "Set Smart PA bypass flag and criteria number.",
-        # Additional real-world conversational
-        "Smart PA is blocking the claim — can I override it with the PA?",
-        "The claim needs Smart PA but we want to bypass it, how?",
-        "I need to get past the Smart PA edit on this claim.",
-        "Member's claim is failing Smart PA — what do I set on the PA?",
-        "Smart PA criteria number — where do I put it on the override?",
     ],
 
     # ── pa_part_b_override: route claim to Medicare Part-B ──────────────
@@ -1547,12 +1341,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Steps to route a pharmacy claim to Part B using PA reason MB.",
         "Part B override setup — which reason code?",
         "Set up PA with reason code MB for Part B.",
-        # Additional real-world conversational
-        "This claim should be Part B not Part D — how do I fix it with a PA?",
-        "The claim needs to process under Medicare Part B, what PA reason code?",
-        "Member needs this to go through Part B — what do I enter?",
-        "Part B override — just tell me the reason code to use.",
-        "How do I get this pharmacy claim to pay under Part B?",
     ],
 
     # ── pa_esrd_override: override ESRD reject ─────────────────────────
@@ -1572,12 +1360,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Configure PA to override ESRD rejection.",
         "The ESRD reject is blocking the claim — PA override steps?",
         "Override End-Stage Renal Disease using reason code ES.",
-        # Additional real-world conversational
-        "Member has ESRD and the claim is rejecting — how do I fix it?",
-        "ESRD edit is stopping the claim — what PA do I need?",
-        "The claim failed because of ESRD — what override reason do I use?",
-        "How do I get past the ESRD edit? What reason code on the PA?",
-        "Claim rejected for ESRD — PA override steps?",
     ],
 
     # ── pa_skip_deductible: waive deductible via PA ─────────────────────
@@ -1597,12 +1379,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is there a PA flag that bypasses the deductible?",
         "Skip deductible indicator — how to set it on PA?",
         "Bypass deductible using PA skip DED flag.",
-        # Additional real-world conversational
-        "Member shouldn't have to pay the deductible — can the PA waive it?",
-        "The deductible is applying to this claim — how do I skip it with the PA?",
-        "I need to remove the deductible from this claim using PA.",
-        "Can I use a PA to zero out the deductible?",
-        "Deductible is too high for this member — PA skip option?",
     ],
 
     # ── pa_send_expiration: send PA expiration date on claim ────────────
@@ -1622,12 +1398,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Set the expiration date flag to Y on this PA.",
         "Send PA end date on claim — what flag to set?",
         "Include PA expiration in claim processing.",
-        # Additional real-world conversational
-        "The pharmacy needs the PA expiration date — how do I include it?",
-        "How do I get the PA end date to show up on the claim?",
-        "The claim should carry the PA expiration — what flag?",
-        "PA expiration date isn't showing on the claim — how to fix?",
-        "I need the end date from the PA to transmit with the claim.",
     ],
 
     # ── pa_tf_letter_setup: configure TF letter tag on PA ───────────────
@@ -1647,12 +1417,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Transition Fill letter configuration for PA.",
         "What TF letter types are available for this PA?",
         "Setup TF letter on the PA override record.",
-        # Additional real-world conversational
-        "I need to attach a transition fill letter to this PA.",
-        "Which letter type goes with a TF override reason?",
-        "Member needs a TF letter — where do I set that up on the PA?",
-        "Transition fill — how do I pick the right letter type?",
-        "The PA needs a TF letter tag — how do I add it?",
     ],
 
     # ── pa_copay_setup: configure copay schedule on PA ──────────────────
@@ -1672,12 +1436,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "How to change copay processing via PA?",
         "Configure the PA to use a different copay.",
         "Steps to set up copay override on PA.",
-        # Additional real-world conversational
-        "The member should be paying a different copay — can the PA change it?",
-        "How do I make the claim use a different copay through the PA?",
-        "Copay is wrong on this claim — can I fix it with the PA override?",
-        "I need to change what the member pays — copay override on PA?",
-        "Member's copay should be lower — how to set up the PA copay schedule?",
     ],
 
     # ── pa_suggest_override: find/recommend the right PA ────────────────
@@ -1697,12 +1455,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Guide me to the correct PA for this reject.",
         "Use suggest override to find the right PA.",
         "What PA should I create for this reject?",
-        # Additional real-world conversational
-        "The claim keeps rejecting — which PA do I need to enter?",
-        "I don't know what PA to use for this reject — help me out.",
-        "Claim is rejected and I need a PA — which one?",
-        "Tell me what PA to create to fix this rejection.",
-        "What override do I need to get this claim through?",
     ],
 
     # ── pa_reason_code_fields: fields required per reason code ──────────
@@ -1722,12 +1474,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Fields needed for this override reason code.",
         "What do I need to set up for reason code U3?",
         "Which fields are active for this PA override reason?",
-        # Additional real-world conversational
-        "I'm setting up reason code OD — what fields do I need to fill out?",
-        "Which fields are mandatory for this reason code on the PA?",
-        "I picked reason code MB — now what fields do I configure?",
-        "Setting up a PA with reason code ES — what fields apply?",
-        "Help me understand which fields go with this override reason.",
     ],
 
     # ══════════════════════════════════════════════════════════════════════

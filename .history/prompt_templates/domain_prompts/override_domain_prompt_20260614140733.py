@@ -33,7 +33,7 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
   - prior_auth_info (cap_api): PA status for ONE specific claim
   - PriorAuth (claim_history_search): SEARCH claims that required PA
 
-## OVERRIDE DOMAIN INTENTS (26 intents)
+## OVERRIDE DOMAIN INTENTS (16 intents)
 
 ### pa_summary
 **What it is:** High-level OVERVIEW of a Prior Authorization record. Summary of key fields,
@@ -269,157 +269,6 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
   - "Display the modifyDateTime for this prior authorization."
   - "How recently was this PA updated?"
 
-### pa_contingent_therapy_override
-**What it is:** HOW TO bypass/override the CONTINGENT THERAPY requirement on a PA.
-  Flip the bypass contingent therapy flag to "Y".
-**Trigger phrases:** "override contingent therapy", "bypass contingent therapy",
-  "contingent therapy flag", "skip contingent therapy", "step therapy override"
-**Examples:**
-  - "How can I override contingent therapy?"
-  - "How do I bypass the contingent therapy requirement on this PA?"
-  - "I need to flip the bypass contingent therapy flag to Y."
-  - "Steps to override contingent therapy for this member's PA."
-  - "Can this PA bypass the contingent therapy edit?"
-**DISAMBIGUATION from pa_smart_pa_override:**
-  - pa_contingent_therapy_override = bypassing contingent/step therapy check
-  - pa_smart_pa_override = bypassing Smart PA processing (different system)
-
-### pa_smart_pa_override
-**What it is:** HOW TO bypass/override SMART PA processing on a PA. Flip the bypass
-  Smart PA flag to "Y" or enter the Smart PA criteria number.
-**Trigger phrases:** "override Smart PA", "bypass Smart PA", "Smart PA flag",
-  "Smart PA criteria number", "skip Smart PA"
-**Examples:**
-  - "How can I override Smart PA?"
-  - "How do I bypass Smart PA processing on this PA?"
-  - "I need to enter the Smart PA criteria number on this override."
-  - "Flip bypass Smart PA flag to Y for this PA."
-  - "How do I override Smart PA when the criteria number is required?"
-**DISAMBIGUATION from prior_auth_info (cap_api):**
-  - pa_smart_pa_override = HOW TO BYPASS Smart PA on the PA config (override_domain)
-  - prior_auth_info = Was Smart PA APPLIED on a claim (cap_api)
-
-### pa_part_b_override
-**What it is:** HOW TO make a claim pay as MEDICARE PART-B using PA override reason "MB".
-**Trigger phrases:** "pay as Part-B", "Part B override", "reason code MB",
-  "Medicare Part B payment", "Part-B via PA"
-**Examples:**
-  - "How can I make the claim pay as Part-B?"
-  - "How do I use override reason MB to pay as Medicare Part B?"
-  - "Set the override reason to MB for Part-B payment."
-  - "Which PA reason code makes the claim pay Part-B?"
-  - "Override claim to Part B using PA reason code."
-**DISAMBIGUATION from medicare_part_d (cap_api):**
-  - pa_part_b_override = HOW TO ROUTE claim to Part-B using PA (override_domain)
-  - medicare_part_d = Part D pricing/PDE information for a claim (cap_api)
-
-### pa_esrd_override
-**What it is:** HOW TO override the ESRD (End-Stage Renal Disease) reject using PA
-  override reason "ES".
-**Trigger phrases:** "override ESRD", "ESRD reject", "reason code ES",
-  "End-Stage Renal Disease override", "bypass ESRD"
-**Examples:**
-  - "How can I override the ESRD reject?"
-  - "How do I bypass the ESRD rejection using a PA?"
-  - "Use override reason ES to override ESRD reject."
-  - "Set the PA reason code to ES for ESRD override."
-  - "Steps to override ESRD rejection on this claim."
-**DISAMBIGUATION from pa_override_reject:**
-  - pa_esrd_override = specifically ESRD reject override with reason code ES
-  - pa_override_reject = general "will PA override reject 75/70/76" question
-
-### pa_skip_deductible
-**What it is:** HOW TO skip the DEDUCTIBLE for a member using a PA. Flip the skip DED
-  flag to "Y".
-**Trigger phrases:** "skip deductible", "skip DED", "bypass deductible",
-  "waive deductible", "deductible override"
-**Examples:**
-  - "How can I skip the deductible for the member?"
-  - "How do I bypass the deductible using a PA?"
-  - "Flip skip DED flag to Y on this PA."
-  - "I need to waive the deductible for this member via PA override."
-  - "Steps to skip deductible using a PA override."
-
-### pa_send_expiration
-**What it is:** HOW TO send/include the PA EXPIRATION DATE on a claim. Flip the send
-  expiration date flag to "Y".
-**Trigger phrases:** "send expiration date", "PA expiration on claim",
-  "send PA end date", "expiration date flag", "transmit expiration"
-**Examples:**
-  - "How can I send the PA expiration date on a claim?"
-  - "How do I include the PA expiration date on a claim?"
-  - "Flip send expiration date flag to Y."
-  - "Steps to include PA expiration date on claim processing."
-  - "Configure PA to transmit expiration date."
-**DISAMBIGUATION from pa_effective_dates:**
-  - pa_send_expiration = HOW TO ENABLE sending the expiration date on claims
-  - pa_effective_dates = WHAT ARE the effective dates on the PA record
-  - "Send PA expiration date on claim" → pa_send_expiration
-  - "When does this PA expire?" → pa_effective_dates
-
-### pa_tf_letter_setup
-**What it is:** HOW TO setup a TF (Transition Fill) LETTER TAG on a PA. Choose the TF
-  letter type when using a TF override reason.
-**Trigger phrases:** "TF letter", "Transition Fill letter", "TF letter tag",
-  "TF letter type", "setup TF letter"
-**Examples:**
-  - "How can I setup a TF letter tag for a PA?"
-  - "How do I configure a Transition Fill letter tag?"
-  - "Choose the TF letter type with TF override reason."
-  - "Steps to add a TF letter tag to a PA override."
-  - "What TF letter type should I assign to this PA?"
-
-### pa_copay_setup
-**What it is:** HOW TO CONFIGURE a PA to process a DIFFERENT COPAY/COPAY SCHEDULE.
-  Setting up the specific copay schedule on the override.
-**Trigger phrases:** "setup copay on PA", "copay schedule", "configure copay override",
-  "different copay using PA", "change copay schedule", "custom copay on PA"
-**Examples:**
-  - "How can I setup a claim to process a different copay using a PA?"
-  - "How do I configure a copay schedule on a PA override?"
-  - "Setup the specific copay schedule on the override."
-  - "Steps to set up a different copay on a PA."
-  - "I want to process a different copay using a PA override."
-**DISAMBIGUATION from pa_copay_pricing:**
-  - pa_copay_setup = HOW TO CONFIGURE/SETUP a different copay (process/action)
-  - pa_copay_pricing = WHAT IS the copay IMPACT on pricing (information/analysis)
-  - "How do I set up a different copay?" → pa_copay_setup
-  - "Does this copay affect pricing?" → pa_copay_pricing
-
-### pa_suggest_override
-**What it is:** WHAT PA should be entered to override the reject on a claim. Uses the
-  "suggest override" feature to find and recommend the right PA.
-**Trigger phrases:** "suggest override", "what PA to enter", "recommend PA",
-  "find PA for reject", "suggest PA for override", "appropriate PA"
-**Examples:**
-  - "What PA should I enter to override the reject on this claim?"
-  - "Suggest an override for the reject situation on this claim."
-  - "Utilize suggest override feature to find the right PA."
-  - "Help me find the correct PA to override this reject."
-  - "Recommend a PA to override the reject on this claim."
-**DISAMBIGUATION from pa_override_reject:**
-  - pa_suggest_override = FIND/SUGGEST which PA to use (discovery)
-  - pa_override_reject = WILL a specific PA override a reject code (analysis)
-  - "What PA do I need for this reject?" → pa_suggest_override
-  - "Will this PA override reject 75?" → pa_override_reject
-
-### pa_reason_code_fields
-**What it is:** WHAT FIELDS are applicable/required for a specific PA OVERRIDE REASON CODE.
-  Maps reason codes to their required field configurations.
-**Trigger phrases:** "fields for reason code", "applicable fields", "required fields for reason",
-  "reason code fields", "what to fill for reason code"
-**Examples:**
-  - "What fields are applicable for this PA reason code?"
-  - "Which fields are required for override reason code OD?"
-  - "What fields do I need to fill out for reason code U1?"
-  - "Show me the applicable fields for this PA override reason."
-  - "What override fields are needed for reason code MB?"
-**DISAMBIGUATION from pa_reason_code:**
-  - pa_reason_code_fields = WHAT FIELDS to fill for a reason code (configuration guide)
-  - pa_reason_code = WHAT IS the reason code VALUE on this PA (data lookup)
-  - "What fields for reason code OD?" → pa_reason_code_fields
-  - "What is the reason code on this PA?" → pa_reason_code
-
 ## DECISION TREE
 1. Query asks for PA OVERVIEW / SUMMARY / KEY FIELDS → pa_summary
 2. Query asks about PA REJECTING / OVERRIDING REJECT CODES → pa_override_reject
@@ -427,7 +276,7 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
 4. Query asks about CLINICAL ADMIN CODE (even with "what is it for") → pa_clinical_admin_code
 5. Query asks about TRANSFORM CARE (even with "explain" or "purpose of") → pa_transform_care
 6. Query asks about FOLLOW ME LOGIC (even with "explain" or "what does it do") → pa_follow_me_logic
-7. Query asks about REASON CODE value (even with "explain" or "what is it for") → pa_reason_code
+7. Query asks about REASON CODE (even with "explain" or "what is it for") → pa_reason_code
 8. Query asks WHAT A GENERIC / UNNAMED PA FIELD MEANS / DOES → pa_field_help
 9. Query asks about PA COPAY IMPACT ON PRICING → pa_copay_pricing
 10. Query asks WHAT DRUGS PA COVERS / GPI / NDC LIST → pa_drug_coverage
@@ -437,16 +286,6 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
 14. Query asks about SPECIALTY RX REJECT OVERRIDE → pa_specialty_rx_override
 15. Query asks about DRUG TYPE INDICATOR (GPI vs NDC MATCHING) → pa_drug_type_indicator
 16. Query asks WHEN PA WAS LAST MODIFIED / UPDATE TIMESTAMP → pa_modification_history
-17. Query asks HOW TO BYPASS / OVERRIDE CONTINGENT THERAPY → pa_contingent_therapy_override
-18. Query asks HOW TO BYPASS / OVERRIDE SMART PA → pa_smart_pa_override
-19. Query asks HOW TO MAKE CLAIM PAY AS PART-B / REASON MB → pa_part_b_override
-20. Query asks HOW TO OVERRIDE ESRD REJECT / REASON ES → pa_esrd_override
-21. Query asks HOW TO SKIP / WAIVE DEDUCTIBLE → pa_skip_deductible
-22. Query asks HOW TO SEND PA EXPIRATION DATE ON CLAIM → pa_send_expiration
-23. Query asks HOW TO SETUP TF LETTER TAG → pa_tf_letter_setup
-24. Query asks HOW TO SETUP / CONFIGURE DIFFERENT COPAY SCHEDULE → pa_copay_setup
-25. Query asks WHAT PA TO ENTER / SUGGEST OVERRIDE FOR REJECT → pa_suggest_override
-26. Query asks WHAT FIELDS ARE REQUIRED FOR A REASON CODE → pa_reason_code_fields
 
 ## COMMON CONFUSION PAIRS
 
@@ -474,17 +313,4 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
 | "GPI or NDC matching?" | pa_drug_type_indicator | Drug matching method |
 | "When was PA modified?" | pa_modification_history | Last update timestamp |
 | "When was claim created?" | audit_info (benefits_api) | Claim-level audit |
-| "Override contingent therapy" | pa_contingent_therapy_override | Bypass contingent therapy flag |
-| "Override Smart PA" | pa_smart_pa_override | Bypass Smart PA processing |
-| "Make claim pay Part-B" | pa_part_b_override | Reason code MB for Part-B |
-| "Override ESRD reject" | pa_esrd_override | Reason code ES for ESRD |
-| "Skip deductible" | pa_skip_deductible | Skip DED flag on PA |
-| "Send PA expiration on claim" | pa_send_expiration | Send expiration date flag |
-| "Setup TF letter tag" | pa_tf_letter_setup | TF letter type config |
-| "Setup different copay on PA" | pa_copay_setup | Copay schedule configuration |
-| "Suggest PA for reject" | pa_suggest_override | Find right PA for reject |
-| "Fields for reason code OD" | pa_reason_code_fields | Required fields per reason |
-| "Does PA copay affect price?" | pa_copay_pricing | Copay impact (NOT setup) |
-| "What is the reason code?" | pa_reason_code | Reason code value (NOT fields) |
-| "When does PA expire?" | pa_effective_dates | Date values (NOT send flag) |
 """

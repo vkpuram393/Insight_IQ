@@ -474,17 +474,4 @@ and how it has been used. This is about MANAGING PAs, not about individual claim
 | "GPI or NDC matching?" | pa_drug_type_indicator | Drug matching method |
 | "When was PA modified?" | pa_modification_history | Last update timestamp |
 | "When was claim created?" | audit_info (benefits_api) | Claim-level audit |
-| "Override contingent therapy" | pa_contingent_therapy_override | Bypass contingent therapy flag |
-| "Override Smart PA" | pa_smart_pa_override | Bypass Smart PA processing |
-| "Make claim pay Part-B" | pa_part_b_override | Reason code MB for Part-B |
-| "Override ESRD reject" | pa_esrd_override | Reason code ES for ESRD |
-| "Skip deductible" | pa_skip_deductible | Skip DED flag on PA |
-| "Send PA expiration on claim" | pa_send_expiration | Send expiration date flag |
-| "Setup TF letter tag" | pa_tf_letter_setup | TF letter type config |
-| "Setup different copay on PA" | pa_copay_setup | Copay schedule configuration |
-| "Suggest PA for reject" | pa_suggest_override | Find right PA for reject |
-| "Fields for reason code OD" | pa_reason_code_fields | Required fields per reason |
-| "Does PA copay affect price?" | pa_copay_pricing | Copay impact (NOT setup) |
-| "What is the reason code?" | pa_reason_code | Reason code value (NOT fields) |
-| "When does PA expire?" | pa_effective_dates | Date values (NOT send flag) |
 """

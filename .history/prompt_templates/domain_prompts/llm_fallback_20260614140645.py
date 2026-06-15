@@ -227,22 +227,6 @@ When candidates span multiple domains, use these rules to pick the right one:
 - "Will PA override reject 75?" → pa_override_reject (override_domain)
 - "Why was claim rejected?" → rejection_reasons (cap_api)
 
-### override_domain: Informational vs Operational (How-To) intents
-- "What is the reason code on this PA?" → pa_reason_code (WHAT is the value)
-- "What fields are needed for reason code MB?" → pa_reason_code_fields (WHAT fields to fill)
-- "Does this copay influence price?" → pa_copay_pricing (WHAT is the impact)
-- "How do I set up a different copay schedule?" → pa_copay_setup (HOW to configure)
-- "When does this PA expire?" → pa_effective_dates (WHAT are the dates)
-- "How to send the PA expiration date on a claim?" → pa_send_expiration (HOW to enable flag)
-- "Will this PA override reject 75?" → pa_override_reject (WILL it override)
-- "What PA should I enter to fix this reject?" → pa_suggest_override (FIND the right PA)
-- "How to bypass contingent therapy?" → pa_contingent_therapy_override
-- "How to override Smart PA?" → pa_smart_pa_override
-- "How to make claim pay as Part-B?" → pa_part_b_override (reason code MB)
-- "How to override ESRD reject?" → pa_esrd_override (reason code ES)
-- "How to skip the deductible?" → pa_skip_deductible (skip DED flag)
-- "How to setup TF letter tag?" → pa_tf_letter_setup (TF letter type)
-
 ### claim_history_search vs override_domain
 - "Claims with reject code 75" → RejectCode (claim_history_search)
 - "Does PA handle reject 75?" → pa_override_reject (override_domain)

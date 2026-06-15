@@ -316,13 +316,11 @@ def format_overrides_text_fallback(
     Provides a usable response with no LLM dependency. Latency ~1ms.
     """
     if not slim_pa_records:
-        envelope = {
-            "render_mode": "text_only",
-            "response": "No Prior Authorization records were found for this claim. "
-                        "If you expected to see records, please contact member services.",
-            "recommendations": [],
-        }
-        return json.dumps(envelope)
+        envelope = {"render_mode": "text_only",
+                    "summary": "No Prior Authorization records found."}
+        return (json.dumps(envelope) +
+                "\n\nNo Prior Authorization records were found for this claim. "
+                "If you expected to see records, please contact member services.")
 
     lines = [f"Found {len(slim_pa_records)} Prior Authorization record(s):"]
     for i, rec in enumerate(slim_pa_records, 1):
@@ -336,12 +334,9 @@ def format_overrides_text_fallback(
         lines.append(f"  {i}. PA #{ref}: {drug} | Reason: {reason} | "
                      f"Effective: {eff} - {end}{agent_s}")
     body = "\n".join(lines)
-    envelope = {
-        "render_mode": "text_only",
-        "response": body,
-        "recommendations": [],
-    }
-    return json.dumps(envelope)
+    envelope = {"render_mode": "text_only",
+                "summary": f"Found {len(slim_pa_records)} PA record(s)."}
+    return json.dumps(envelope) + "\n\n" + body
 
 
 def answer_overrides_query(

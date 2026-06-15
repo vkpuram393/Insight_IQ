@@ -255,17 +255,6 @@ INTENT_DESCRIPTIONS: Dict[str, str] = {
     "pa_follow_me_logic": "Follow me logic indicator, PA follows member across plan changes",
     "pa_drug_type_indicator": "Authorized drug type (G=GPI, N=NDC), drug matching method",
     "pa_modification_history": "PA modification date/time (modifyDateTime), last update timestamp",
-    # ── override_domain (new operational how-to intents) ─────────────────
-    "pa_contingent_therapy_override": "How to bypass/override contingent therapy on a PA, flip contingent therapy flag",
-    "pa_smart_pa_override": "How to bypass/override Smart PA processing, enter Smart PA criteria number",
-    "pa_part_b_override": "How to make a claim pay as Medicare Part-B using PA override reason MB",
-    "pa_esrd_override": "How to override ESRD reject using PA override reason ES",
-    "pa_skip_deductible": "How to skip deductible for a member using PA, flip skip DED flag",
-    "pa_send_expiration": "How to send PA expiration date on a claim, flip send expiration date flag",
-    "pa_tf_letter_setup": "How to setup TF (Transition Fill) letter tag on a PA, TF letter type configuration",
-    "pa_copay_setup": "How to configure a different copay schedule on a PA override, copay setup process",
-    "pa_suggest_override": "What PA to enter for overriding a reject, suggest override feature, find appropriate PA",
-    "pa_reason_code_fields": "What fields are applicable or required for a specific PA override reason code",
 }
 
 

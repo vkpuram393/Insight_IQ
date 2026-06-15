@@ -1522,12 +1522,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "What is the process for overriding Smart PA on a PA?",
         "How do I configure the Smart PA criteria number on the override?",
         "Set Smart PA bypass flag and criteria number.",
-        # Additional real-world conversational
-        "Smart PA is blocking the claim — can I override it with the PA?",
-        "The claim needs Smart PA but we want to bypass it, how?",
-        "I need to get past the Smart PA edit on this claim.",
-        "Member's claim is failing Smart PA — what do I set on the PA?",
-        "Smart PA criteria number — where do I put it on the override?",
     ],
 
     # ── pa_part_b_override: route claim to Medicare Part-B ──────────────
@@ -1547,12 +1541,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Steps to route a pharmacy claim to Part B using PA reason MB.",
         "Part B override setup — which reason code?",
         "Set up PA with reason code MB for Part B.",
-        # Additional real-world conversational
-        "This claim should be Part B not Part D — how do I fix it with a PA?",
-        "The claim needs to process under Medicare Part B, what PA reason code?",
-        "Member needs this to go through Part B — what do I enter?",
-        "Part B override — just tell me the reason code to use.",
-        "How do I get this pharmacy claim to pay under Part B?",
     ],
 
     # ── pa_esrd_override: override ESRD reject ─────────────────────────
@@ -1572,12 +1560,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Configure PA to override ESRD rejection.",
         "The ESRD reject is blocking the claim — PA override steps?",
         "Override End-Stage Renal Disease using reason code ES.",
-        # Additional real-world conversational
-        "Member has ESRD and the claim is rejecting — how do I fix it?",
-        "ESRD edit is stopping the claim — what PA do I need?",
-        "The claim failed because of ESRD — what override reason do I use?",
-        "How do I get past the ESRD edit? What reason code on the PA?",
-        "Claim rejected for ESRD — PA override steps?",
     ],
 
     # ── pa_skip_deductible: waive deductible via PA ─────────────────────
@@ -1597,12 +1579,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Is there a PA flag that bypasses the deductible?",
         "Skip deductible indicator — how to set it on PA?",
         "Bypass deductible using PA skip DED flag.",
-        # Additional real-world conversational
-        "Member shouldn't have to pay the deductible — can the PA waive it?",
-        "The deductible is applying to this claim — how do I skip it with the PA?",
-        "I need to remove the deductible from this claim using PA.",
-        "Can I use a PA to zero out the deductible?",
-        "Deductible is too high for this member — PA skip option?",
     ],
 
     # ── pa_send_expiration: send PA expiration date on claim ────────────
@@ -1622,12 +1598,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Set the expiration date flag to Y on this PA.",
         "Send PA end date on claim — what flag to set?",
         "Include PA expiration in claim processing.",
-        # Additional real-world conversational
-        "The pharmacy needs the PA expiration date — how do I include it?",
-        "How do I get the PA end date to show up on the claim?",
-        "The claim should carry the PA expiration — what flag?",
-        "PA expiration date isn't showing on the claim — how to fix?",
-        "I need the end date from the PA to transmit with the claim.",
     ],
 
     # ── pa_tf_letter_setup: configure TF letter tag on PA ───────────────
@@ -1647,12 +1617,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Transition Fill letter configuration for PA.",
         "What TF letter types are available for this PA?",
         "Setup TF letter on the PA override record.",
-        # Additional real-world conversational
-        "I need to attach a transition fill letter to this PA.",
-        "Which letter type goes with a TF override reason?",
-        "Member needs a TF letter — where do I set that up on the PA?",
-        "Transition fill — how do I pick the right letter type?",
-        "The PA needs a TF letter tag — how do I add it?",
     ],
 
     # ── pa_copay_setup: configure copay schedule on PA ──────────────────
@@ -1672,12 +1636,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "How to change copay processing via PA?",
         "Configure the PA to use a different copay.",
         "Steps to set up copay override on PA.",
-        # Additional real-world conversational
-        "The member should be paying a different copay — can the PA change it?",
-        "How do I make the claim use a different copay through the PA?",
-        "Copay is wrong on this claim — can I fix it with the PA override?",
-        "I need to change what the member pays — copay override on PA?",
-        "Member's copay should be lower — how to set up the PA copay schedule?",
     ],
 
     # ── pa_suggest_override: find/recommend the right PA ────────────────
@@ -1697,12 +1655,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Guide me to the correct PA for this reject.",
         "Use suggest override to find the right PA.",
         "What PA should I create for this reject?",
-        # Additional real-world conversational
-        "The claim keeps rejecting — which PA do I need to enter?",
-        "I don't know what PA to use for this reject — help me out.",
-        "Claim is rejected and I need a PA — which one?",
-        "Tell me what PA to create to fix this rejection.",
-        "What override do I need to get this claim through?",
     ],
 
     # ── pa_reason_code_fields: fields required per reason code ──────────
@@ -1722,12 +1674,6 @@ AUGMENTED_EXAMPLES: Dict[str, List[str]] = {
         "Fields needed for this override reason code.",
         "What do I need to set up for reason code U3?",
         "Which fields are active for this PA override reason?",
-        # Additional real-world conversational
-        "I'm setting up reason code OD — what fields do I need to fill out?",
-        "Which fields are mandatory for this reason code on the PA?",
-        "I picked reason code MB — now what fields do I configure?",
-        "Setting up a PA with reason code ES — what fields apply?",
-        "Help me understand which fields go with this override reason.",
     ],
 
     # ══════════════════════════════════════════════════════════════════════
