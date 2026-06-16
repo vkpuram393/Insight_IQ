@@ -549,16 +549,20 @@ def train_and_evaluate():
     print("\nStep 1 — Loading cached embeddings...")
     all_emb = load_embeddings()
 
-    # Test data — prefer ImportantData/training_compatible_testset.csv, then fall back to combinedtestset.csv
+    # Test data — checked in priority order; last entry is the always-present fallback.
     for candidate in [
         os.path.join(os.path.dirname(BASE_DIR), "ImportantData", "trainingcomplete_set.csv"),
         os.path.join(os.path.dirname(BASE_DIR), "combinedtestset.csv"),
+        os.path.join(os.path.dirname(BASE_DIR), "Intent_detection_system", "Testdata.csv"),
     ]:
         if os.path.exists(candidate):
             TESTDATA = candidate
             break
     else:
-        print("No test dataset found (ImportantData/training_compatible_testset.csv / combinedtestset.csv)")
+        print("No test dataset found. Looked for:")
+        print("  ImportantData/trainingcomplete_set.csv")
+        print("  combinedtestset.csv")
+        print("  Intent_detection_system/Testdata.csv")
         return
 
     tdf = pd.read_csv(TESTDATA)

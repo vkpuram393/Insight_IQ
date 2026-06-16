@@ -531,3 +531,133 @@ I see claim 201533994612000 seq 004 has a denial status — can you pull the rej
 which prescriptions are showing as overdue for a refill based on the member with claim 201533994612000's fill timeline,Refills,claim_history_search
 give me the complete list of drugs the member with claim 201533994612000 received in November — filter by that month only,Month,claim_history_search
 How many times did the member with claim 201533994612000 fill a generic versus a brand in the past two years?,Generic,claim_history_search
+Provide the PA summary including effective dates and drug coverage for PA100123456.,pa_summary,override_domain
+Show a high-level overview of PA override PA200234567.,pa_summary,override_domain
+What are the key fields on PA300345678?,pa_summary,override_domain
+"PA summary — PA400456789, give me the TLDR.",pa_summary,override_domain
+Summary of prior authorization PA500567890.,pa_summary,override_domain
+Will PA100123456 fix the reject 75 on this claim?,pa_override_reject,override_domain
+Does PA200234567 override reject 70 plan exclusion?,pa_override_reject,override_domain
+Can PA300345678 clear a reject 75 or 76?,pa_override_reject,override_domain
+Will PA400456789 resolve a 76 plan limits issue?,pa_override_reject,override_domain
+Does PA500567890 handle reject 70 when it is plan exclusion?,pa_override_reject,override_domain
+Explain what the authorized drug type field does on PA100123456.,pa_field_help,override_domain
+What does the PA reason code field control on PA200234567?,pa_field_help,override_domain
+What is the clinical admin code field used for on a PA?,pa_field_help,override_domain
+Why would someone populate the send expiration date field on a PA?,pa_field_help,override_domain
+Help me understand the skip deductible field on PA500567890.,pa_field_help,override_domain
+Does PA100123456 copay modify the claim price?,pa_copay_pricing,override_domain
+How does the copay on PA200234567 affect the member's out-of-pocket?,pa_copay_pricing,override_domain
+Will the PA copay override on PA300345678 change what the member pays?,pa_copay_pricing,override_domain
+Does the copay on PA400456789 change the patient pay amount?,pa_copay_pricing,override_domain
+Show me the pricing impact of the copay override on PA500567890.,pa_copay_pricing,override_domain
+List the drugs that PA100123456 authorizes.,pa_drug_coverage,override_domain
+Does PA200234567 cover GABAPENTIN?,pa_drug_coverage,override_domain
+What drugs fall under PA300345678?,pa_drug_coverage,override_domain
+Show the GPI coverage on PA400456789.,pa_drug_coverage,override_domain
+Which medications are authorized under PA500567890?,pa_drug_coverage,override_domain
+How many times was PA100123456 applied to a claim?,pa_claim_usage,override_domain
+Claim count for PA200234567.,pa_claim_usage,override_domain
+What is the volume of claims using PA300345678?,pa_claim_usage,override_domain
+How frequently is PA400456789 being applied?,pa_claim_usage,override_domain
+Total claim volume for PA500567890.,pa_claim_usage,override_domain
+What is the reason code on PA100123456?,pa_reason_code,override_domain
+Is PA200234567 using reason code OD?,pa_reason_code,override_domain
+Override reason for PA300345678.,pa_reason_code,override_domain
+Show me the reason code on PA400456789.,pa_reason_code,override_domain
+Is the reason code U1 or LC on PA500567890?,pa_reason_code,override_domain
+Effective dates on PA100123456 — start to finish.,pa_effective_dates,override_domain
+Is PA200234567 still within its valid period?,pa_effective_dates,override_domain
+When does PA300345678 expire?,pa_effective_dates,override_domain
+Display the dateBegin and dateEnd for PA400456789.,pa_effective_dates,override_domain
+Is PA500567890 expired?,pa_effective_dates,override_domain
+Who entered PA100123456? Check the agent code.,pa_agent_code,override_domain
+Agent code on PA200234567 — A or C?,pa_agent_code,override_domain
+Was PA300345678 auto-generated or manually created?,pa_agent_code,override_domain
+Display the agent code for PA400456789.,pa_agent_code,override_domain
+Who created PA500567890 based on the agent code?,pa_agent_code,override_domain
+Ignore status on PA100123456 — Y or N?,pa_ignore_status,override_domain
+Is PA200234567 set to ignore the drug status?,pa_ignore_status,override_domain
+Show the ignoreStatusCode on PA300345678.,pa_ignore_status,override_domain
+Is the ignore status flag active on PA400456789?,pa_ignore_status,override_domain
+What is the ignore status setting on PA500567890?,pa_ignore_status,override_domain
+Is the specialty Rx override turned on for PA100123456?,pa_specialty_rx_override,override_domain
+Does PA200234567 bypass the specialty reject?,pa_specialty_rx_override,override_domain
+Show the specialty override indicator on PA300345678.,pa_specialty_rx_override,override_domain
+Is specialty override enabled on PA400456789?,pa_specialty_rx_override,override_domain
+Will PA500567890 clear a specialty prescription reject?,pa_specialty_rx_override,override_domain
+What is the clinical admin code on PA100123456?,pa_clinical_admin_code,override_domain
+Is the clinical admin code blank or A on PA200234567?,pa_clinical_admin_code,override_domain
+Show the clinicalAdministrationCode on PA300345678.,pa_clinical_admin_code,override_domain
+Does PA400456789 have a clinical administration code set?,pa_clinical_admin_code,override_domain
+What clinical admin code is on PA500567890?,pa_clinical_admin_code,override_domain
+Transform care type on PA100123456?,pa_transform_care,override_domain
+Is PA200234567 set up with a transform care program?,pa_transform_care,override_domain
+Show the transformCare field on PA300345678.,pa_transform_care,override_domain
+What care transformation type is on PA400456789?,pa_transform_care,override_domain
+Is transform care configured on PA500567890?,pa_transform_care,override_domain
+Does PA100123456 follow the member across plan changes?,pa_follow_me_logic,override_domain
+Is follow me logic active on PA200234567?,pa_follow_me_logic,override_domain
+Will PA300345678 carry over during a plan transition?,pa_follow_me_logic,override_domain
+Show the followMeLogicIndicator on PA400456789.,pa_follow_me_logic,override_domain
+Is follow me turned on for PA500567890?,pa_follow_me_logic,override_domain
+Drug type indicator on PA100123456 — GPI or NDC?,pa_drug_type_indicator,override_domain
+Is PA200234567 set to G or N for drug type?,pa_drug_type_indicator,override_domain
+How does PA300345678 match authorized drugs?,pa_drug_type_indicator,override_domain
+Show the authorizedDrugType for PA400456789.,pa_drug_type_indicator,override_domain
+Is PA500567890 using GPI-level matching?,pa_drug_type_indicator,override_domain
+When was PA100123456 last modified?,pa_modification_history,override_domain
+Show the modifyDateTime on PA200234567.,pa_modification_history,override_domain
+Has PA300345678 been changed recently?,pa_modification_history,override_domain
+Last modified timestamp on PA400456789.,pa_modification_history,override_domain
+When was PA500567890 last updated?,pa_modification_history,override_domain
+How do I bypass step therapy on a PA override?,pa_contingent_therapy_override,override_domain
+Flip the bypass contingent therapy flag to Y on PA100123456.,pa_contingent_therapy_override,override_domain
+The claim is failing contingent therapy — how do I fix it with the PA?,pa_contingent_therapy_override,override_domain
+How to override the contingent therapy edit on PA200234567?,pa_contingent_therapy_override,override_domain
+Member needs step therapy waived — what do I set on the PA?,pa_contingent_therapy_override,override_domain
+How do I bypass Smart PA processing on a PA override?,pa_smart_pa_override,override_domain
+Set bypass Smart PA to Y on PA100123456.,pa_smart_pa_override,override_domain
+The claim needs Smart PA but we want to bypass it — how?,pa_smart_pa_override,override_domain
+Smart PA is blocking this claim — how to get around it with a PA?,pa_smart_pa_override,override_domain
+Enter the Smart PA criteria number on PA200234567.,pa_smart_pa_override,override_domain
+Route this claim to Medicare Part B — which PA reason code?,pa_part_b_override,override_domain
+How do I set up a PA with reason code MB for Part B?,pa_part_b_override,override_domain
+This claim needs to pay under Part B — how do I set the PA?,pa_part_b_override,override_domain
+Part B override using reason MB on PA100123456.,pa_part_b_override,override_domain
+Set override reason MB for Part-B processing on PA200234567.,pa_part_b_override,override_domain
+How do I override an ESRD rejection with a PA?,pa_esrd_override,override_domain
+Set PA reason code ES to bypass ESRD on PA100123456.,pa_esrd_override,override_domain
+The ESRD edit is blocking the claim — which PA reason code?,pa_esrd_override,override_domain
+ESRD reject bypass — set up PA with reason ES on PA200234567.,pa_esrd_override,override_domain
+Which PA reason code overrides End-Stage Renal Disease?,pa_esrd_override,override_domain
+How do I skip the deductible using a PA override?,pa_skip_deductible,override_domain
+Set skip DED to Y on PA100123456.,pa_skip_deductible,override_domain
+Is there a PA flag that bypasses the deductible for this member?,pa_skip_deductible,override_domain
+Flip the skip deductible indicator to Y on PA200234567.,pa_skip_deductible,override_domain
+How to waive the deductible using PA300345678?,pa_skip_deductible,override_domain
+How do I send the PA expiration date on the claim?,pa_send_expiration,override_domain
+Set the send expiration date flag to Y on PA100123456.,pa_send_expiration,override_domain
+The PA end date is not transmitting — how to fix it on PA200234567?,pa_send_expiration,override_domain
+Enable send expiration on PA300345678 so the date goes to the claim.,pa_send_expiration,override_domain
+How do I include the PA end date during claim adjudication?,pa_send_expiration,override_domain
+How do I set up a TF letter tag on a PA override?,pa_tf_letter_setup,override_domain
+Configure the Transition Fill letter type on PA100123456.,pa_tf_letter_setup,override_domain
+Which TF letter type should I use with this PA?,pa_tf_letter_setup,override_domain
+Add a TF letter to PA200234567 — what type should I select?,pa_tf_letter_setup,override_domain
+Transition Fill letter setup on PA300345678.,pa_tf_letter_setup,override_domain
+How do I configure a different copay on a PA override?,pa_copay_setup,override_domain
+Set up a custom copay schedule on PA100123456.,pa_copay_setup,override_domain
+The member needs a lower copay — how to set it up via the PA?,pa_copay_setup,override_domain
+Change the copay processing via PA200234567.,pa_copay_setup,override_domain
+Configure a copay override schedule on PA300345678.,pa_copay_setup,override_domain
+What PA should I use to fix this reject?,pa_suggest_override,override_domain
+Suggest the right override for this rejection.,pa_suggest_override,override_domain
+Which PA resolves a reject 75?,pa_suggest_override,override_domain
+I need a PA recommendation — claim is rejecting for code 70.,pa_suggest_override,override_domain
+What override should I create to get this claim through?,pa_suggest_override,override_domain
+What fields do I need for PA reason code OD?,pa_reason_code_fields,override_domain
+Which PA fields are required for override reason U1?,pa_reason_code_fields,override_domain
+Fields needed for reason code MB on a PA override.,pa_reason_code_fields,override_domain
+What do I configure when reason code ES is selected?,pa_reason_code_fields,override_domain
+Which fields apply to PA reason code OA?,pa_reason_code_fields,override_domain
