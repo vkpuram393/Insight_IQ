@@ -1,0 +1,980 @@
+﻿Prompt,Intent,domain
+When was MUGARD taken last for the member with claim 201533994612000?,DrugLast,claim_history_search
+Show the latest claim for MUGARD for the member with claim 201533994612000 including status and fill details.,DrugLast,claim_history_search
+Give me all claims for the member with claim 201533994612000 for MUGARD.,DrugLast,claim_history_search
+Give me claims for the member with claim 201533994612000 for the last 2 months.,date_range_claims,claim_history_search
+Give me claims for the member with claim 201533994612000 in the last 90 days for MUGARD.,date_range_claims,claim_history_search
+Are there any MUGARD claims rejected for the member with claim 201533994612000?,Status,claim_history_search
+Any claim that was paid using Prior Authorization for MUGARD for the member with claim 201533994612000 in the last 30 days?,PriorAuth,claim_history_search
+Are there any claims with a transition fill (TF) tag this year for the member with claim 201533994612000?,Status,claim_history_search
+What was the last fill date for MUGARD for the member with claim 201533994612000?,DrugLast,claim_history_search
+Was the MUGARD claim on 03/15/2024 paid or rejected for the member with claim 201533994612000?,Status,claim_history_search
+Did the member with claim 201533994612000 get their MUGARD refill this month?,Refills,claim_history_search
+How much did the member with claim 201533994612000 pay out of pocket for MUGARD on the last fill?,Pricing,claim_history_search
+What has the member with claim 201533994612000 spent on prescriptions year-to-date?,Pricing,claim_history_search
+Show me all claims having deductible or out of pocket amount greater than zero for the member with claim 201533994612000.,Pricing,claim_history_search
+Show me all claims having a TrOOP amount for the member with claim 201533994612000.,Pricing,claim_history_search
+Show me all rejected claims with reject code 75 for the member with claim 201533994612000 in the last 6 months.,RejectCode,claim_history_search
+Was another claim ever submitted for the member with claim 201533994612000 after this rejection?,Status,claim_history_search
+Identify claims rejected for refill too soon or quantity limits or eligibility issues for the member with claim 201533994612000.,RejectCode,claim_history_search
+Summarize the claim history for the member with claim 201533994612000 for the last 90 days including total claims and rejected claims and reasons and PA-related claims and top medicines.,date_range_claims,claim_history_search
+"Provide the approval summary for claim 243122443413000 sequence 001, including any plan overrides triggered during adjudication.",approval_info,cap_api
+What transition fill type was applied when processing claim 198734561209000 seq 002?,approval_info,cap_api
+Show me the BPG configuration used to adjudicate claim 312045678934000 sequence 001.,approval_info,cap_api
+TF status for claim 267891234500000 seq 003 â€” was a transition fill override applied?,approval_info,cap_api
+I need to know if Smart PA or Member PA was applied during approval of claim 201533994612000 sequence 001.,approval_info,cap_api
+Retrieve the adjudication pathway and plan overrides for claim 389012456723000 seq 001.,approval_info,cap_api
+"Generate a TF summary for claim 456712309845000 sequence 002, specifically the transition fill type and whether accumulations were considered.",approval_info,cap_api
+Did claim 521098376412000 seq 001 go through a Smart PA approval? Show me the override logic.,approval_info,cap_api
+What plan options and BPG config were active when claim 634521890370000 seq 001 was processed?,approval_info,cap_api
+Fetch the transition fill details and approval info for claim 712340985621000 sequence 001.,approval_info,cap_api
+Approval details for claim 845609123478000 seq 002 â€” which overrides were triggered?,approval_info,cap_api
+Was a member PA or plan PA applied to claim 901234567890000 sequence 001 during adjudication?,approval_info,cap_api
+Show the transition fill configuration and BPG details for claim 123456789012000 seq 001.,approval_info,cap_api
+"I want the full approval record for claim 234509876543000 sequence 003, including all plan configuration overrides.",approval_info,cap_api
+Were accumulations bypassed during approval of claim 356789012340000 seq 001? Show approval pathway.,approval_info,cap_api
+Approval info for 478901234560000 seq 002 â€” was this a TF fill and what type?,approval_info,cap_api
+What approval logic and overrides affected the adjudication of claim 590123456789000 sequence 001?,approval_info,cap_api
+Retrieve transition fill type and Member PA details applied to claim 603457812309000 seq 001.,approval_info,cap_api
+Display the BPG override and Smart PA configuration used on claim 714598023614000 sequence 002.,approval_info,cap_api
+"Give me the complete approval summary â€” TF type, BPG setup, and any PA applied â€” for claim 826730145920000 seq 001.",approval_info,cap_api
+Pull the audit log for claim 243122443413000 sequence 001 â€” I need creation and last modification timestamps.,audit_info,cap_api
+When was claim 198734561209000 seq 002 first entered into the system and when was it last updated?,audit_info,cap_api
+Show the full change history for claim 312045678934000 sequence 001.,audit_info,cap_api
+Audit trail for claim 267891234500000 seq 003 â€” what system events and modifications are recorded?,audit_info,cap_api
+I need to see who modified claim 201533994612000 sequence 001 and when each change was made.,audit_info,cap_api
+"Generate the modification record for claim 389012456723000 seq 001, including all timestamps.",audit_info,cap_api
+Retrieve the edit history and audit details for claim 456712309845000 sequence 002.,audit_info,cap_api
+What timestamps are on record for the processing of claim 521098376412000 seq 001?,audit_info,cap_api
+Fetch the claim modification log for claim 634521890370000 sequence 001 â€” show create date and all edits.,audit_info,cap_api
+"Display the audit information for claim 712340985621000 seq 001, including any manual adjustments recorded.",audit_info,cap_api
+Audit record for 845609123478000 seq 002 â€” give me all processing timestamps and system events.,audit_info,cap_api
+Show the claim history and modification details for claim 901234567890000 sequence 001.,audit_info,cap_api
+Provide the full audit report including create and update timestamps for claim 123456789012000 seq 001.,audit_info,cap_api
+When was claim 234509876543000 seq 003 created and what changes have been made since then?,audit_info,cap_api
+Give me the update history and modification audit for claim 356789012340000 sequence 001.,audit_info,cap_api
+Show the timestamp history on claim record 478901234560000 seq 002.,audit_info,cap_api
+I need the audit summary and change log for claim 590123456789000 sequence 001.,audit_info,cap_api
+What system events and processing-time entries are logged against claim 603457812309000 seq 001?,audit_info,cap_api
+Modification history for claim 714598023614000 seq 002 â€” list all edits and who made them.,audit_info,cap_api
+Generate the audit trail for claim 826730145920000 sequence 001 showing all record changes and timestamps.,audit_info,cap_api
+"What benefit phase is this member in for claim 243122443413000 sequence 001 â€” deductible, coverage, gap, or catastrophic?",beneficiary_info,cap_api
+Show the beneficiary accumulation totals and coverage tier for claim 198734561209000 seq 002.,beneficiary_info,cap_api
+Retrieve the TrOOP amount and current benefit phase for the member on claim 312045678934000 sequence 001.,beneficiary_info,cap_api
+Display the linked LOE information and benefit phase classification for claim 267891234500000 seq 003.,beneficiary_info,cap_api
+I need to know the member's benefit phase and accumulator summary for claim 201533994612000 sequence 001.,beneficiary_info,cap_api
+Is medical dollars included in the accumulation for the beneficiary on claim 389012456723000 seq 001?,beneficiary_info,cap_api
+Benefit phase and LOE linkage for claim 456712309845000 sequence 002 â€” show the full beneficiary details.,beneficiary_info,cap_api
+How close is this member to the coverage gap based on claim 521098376412000 seq 001?,beneficiary_info,cap_api
+Fetch the member's current benefit phase and coverage tier for claim 634521890370000 sequence 001.,beneficiary_info,cap_api
+What is the Medicare member's benefit phase classification and accumulation breakdown for claim 712340985621000 seq 001?,beneficiary_info,cap_api
+Provide the accumulator totals and benefit phase progression for claim 845609123478000 seq 002.,beneficiary_info,cap_api
+Show the LOE linkage and TrOOP details for the beneficiary on claim 901234567890000 sequence 001.,beneficiary_info,cap_api
+Coverage tier and eligibility phase for the member associated with claim 123456789012000 seq 001.,beneficiary_info,cap_api
+Display the accumulator summary and benefit phase for claim 234509876543000 seq 003.,beneficiary_info,cap_api
+Tier and LOE breakdown for the beneficiary on claim 356789012340000 sequence 001 â€” is this a Medicare member?,beneficiary_info,cap_api
+What are the current accumulator amounts and benefit phase for the member on claim 478901234560000 seq 002?,beneficiary_info,cap_api
+Retrieve the benefit eligibility and phase information for the member on claim 590123456789000 sequence 001.,beneficiary_info,cap_api
+Show benefit phase and linked levels of evidence for claim 603457812309000 seq 001.,beneficiary_info,cap_api
+What is the member's TrOOP and benefit accumulation status for claim 714598023614000 seq 002?,beneficiary_info,cap_api
+"Generate the beneficiary coverage summary including benefit phase, LOE, and accumulator totals for claim 826730145920000 sequence 001.",beneficiary_info,cap_api
+"What is the overall adjudication status of claim 243122443413000 sequence 001 â€” paid, rejected, or pending?",claim_status,cap_api
+Provide a full claim summary for claim 198734561209000 seq 002.,claim_status,cap_api
+Show all details for claim 312045678934000 sequence 001 â€” what happened during processing?,claim_status,cap_api
+What happened on claim 267891234500000 seq 003? I need the complete claim record.,claim_status,cap_api
+Give me the current status and processing details for claim 201533994612000 sequence 001.,claim_status,cap_api
+Claim status for 389012456723000 seq 001 â€” was it paid or rejected?,claim_status,cap_api
+Retrieve the comprehensive summary and adjudication outcome for claim 456712309845000 sequence 002.,claim_status,cap_api
+Tell me everything that happened on claim 521098376412000 seq 001.,claim_status,cap_api
+Display the full adjudication details and status for claim 634521890370000 sequence 001.,claim_status,cap_api
+Claim 712340985621000 seq 001 â€” give me a quick rundown of the overall status.,claim_status,cap_api
+Fetch the complete claim record for claim 845609123478000 seq 002 including adjudication outcome.,claim_status,cap_api
+I need a breakdown of claim 901234567890000 sequence 001 â€” what is its current state?,claim_status,cap_api
+Show claim summary for 123456789012000 seq 001.,claim_status,cap_api
+What is the claim status for claim number 234509876543000 sequence 003?,claim_status,cap_api
+Pull up the full record for claim 356789012340000 seq 001 and tell me whether it was adjudicated successfully.,claim_status,cap_api
+"General claim summary for 478901234560000 seq 002 â€” paid, reversed, or something else?",claim_status,cap_api
+Show the status update and processing result for claim 590123456789000 sequence 001.,claim_status,cap_api
+Generate a comprehensive status report for claim 603457812309000 seq 001.,claim_status,cap_api
+What is the adjudication outcome and current status for claim 714598023614000 sequence 002?,claim_status,cap_api
+Give me the complete adjudication details and overall status summary for claim 826730145920000 seq 001.,claim_status,cap_api
+Show the coordination of benefits details for claim 243122443413000 sequence 001 â€” was there a secondary payer?,cob_info,cap_api
+How did another insurer affect the pricing on claim 198734561209000 seq 002?,cob_info,cap_api
+Retrieve the COB summary and other insurance information for claim 312045678934000 sequence 001.,cob_info,cap_api
+COB pricing breakdown for claim 267891234500000 seq 003 â€” show dual coverage details.,cob_info,cap_api
+Did a secondary insurer make a payment before this plan kicked in for claim 201533994612000 sequence 001?,cob_info,cap_api
+Provide the other payer information and COB calculation for claim 389012456723000 seq 001.,cob_info,cap_api
+Display the secondary insurance details and COB adjudication results for claim 456712309845000 sequence 002.,cob_info,cap_api
+Was coordination of benefits applied to claim 521098376412000 seq 001? Show me the primary and secondary payer breakdown.,cob_info,cap_api
+Fetch the dual coverage configuration and COB impact for claim 634521890370000 sequence 001.,cob_info,cap_api
+COB details for claim 712340985621000 seq 001 â€” what other insurance was on file and how was it applied?,cob_info,cap_api
+Show the coordination of benefits setup and other payer impact for claim 845609123478000 seq 002.,cob_info,cap_api
+"I need the COB pricing summary for claim 901234567890000 sequence 001, including secondary payer details.",cob_info,cap_api
+Generate the COB adjudication details for claim 123456789012000 seq 001.,cob_info,cap_api
+What other insurance affected the payment on claim 234509876543000 seq 003?,cob_info,cap_api
+Retrieve the coordination details and secondary payer information for claim 356789012340000 sequence 001.,cob_info,cap_api
+Show how COB was applied to claim 478901234560000 seq 002 â€” list all other insurers and their contributions.,cob_info,cap_api
+Tell me the COB setup and dual coverage breakdown for claim 590123456789000 sequence 001.,cob_info,cap_api
+Display the other payer coordination and COB pricing for claim 603457812309000 seq 001.,cob_info,cap_api
+Other insurance information and coordination of benefits report for claim 714598023614000 seq 002.,cob_info,cap_api
+"Provide the full COB summary â€” secondary payer details, coordination pricing, and how dual coverage was calculated â€” for claim 826730145920000 sequence 001.",cob_info,cap_api
+What is the compound medication breakdown for claim 243122443413000 sequence 001?,compound_info,cap_api
+Show me the MIC ingredient costs on claim 201533994612000 seq 001,compound_info,cap_api
+I need to see which ingredients in claim 318847221904000 seq 002 were funded versus unfunded,compound_info,cap_api
+compound drug formulation details â€” claim 256700112348000 sequence 001,compound_info,cap_api
+"Can you pull the compound ingredient breakdown for my claim number 198423657801000, seq 001?",compound_info,cap_api
+What were the funded ingredient costs versus the unfunded ones on claim 307541298634000 sequence 003?,compound_info,cap_api
+MIC breakdown for claim 243122443413000 seq 001 â€” how much was covered per ingredient?,compound_info,cap_api
+Provide the compounded drug formulation and ingredient-level pricing for claim 271983456120000 sequence 001,compound_info,cap_api
+"Is claim 188934120067000 seq 002 a compound prescription, and if so what ingredients make it up?",compound_info,cap_api
+I want to understand the ingredient cost split on that compound claim â€” 229847563012000 seq 001,compound_info,cap_api
+compound info claim 301122998843000 sequence 002,compound_info,cap_api
+Which of the ingredients in claim 265411230987000 seq 001 were not covered by the benefit?,compound_info,cap_api
+Detail the compounded formulation submitted under claim 244567890123000 sequence 001 â€” including each active ingredient and its cost,compound_info,cap_api
+I need the MIC data for every ingredient on claim 217834500912000 seq 003,compound_info,cap_api
+Fetch compound medication details including funded/unfunded split for claim 298763451200000 seq 001,compound_info,cap_api
+"For claim 312045678234000 sequence 001, tell me what the compounded drug contained",compound_info,cap_api
+"What ingredients were in the compound fill on claim 231987600045000 seq 002, and which ones were rejected?",compound_info,cap_api
+Compound claim 278340019823000 seq 001 â€” give me the full ingredient breakdown with costs,compound_info,cap_api
+I see claim 195682347001000 seq 001 is flagged as a compound. What are the ingredient details and their individual costs?,compound_info,cap_api
+Show funded vs unfunded ingredient amounts and the complete compound drug info for claim 266100345782000 sequence 001,compound_info,cap_api
+What is the DAW code on claim 243122443413000 sequence 001?,daw_info,cap_api
+Was generic substitution allowed on claim 201533994612000 seq 001?,daw_info,cap_api
+DAW code? Claim 318847221904000 seq 002,daw_info,cap_api
+I need to know whether the prescriber required brand-name dispensing on claim 256700112348000 sequence 001,daw_info,cap_api
+Provide the dispense-as-written code and its meaning for claim 198423657801000 seq 001,daw_info,cap_api
+"On claim 307541298634000 sequence 003, was the brand drug dispensed because the physician mandated it or the member requested it?",daw_info,cap_api
+What DAW value was submitted with claim 243122443413000 seq 001 and does it indicate the generic was blocked?,daw_info,cap_api
+Tell me if a brand-versus-generic substitution decision was made on claim 271983456120000 sequence 001,daw_info,cap_api
+DAW indicator for claim 188934120067000 seq 002 â€” what does it mean?,daw_info,cap_api
+I want to understand the dispense-as-written status on claim 229847563012000 seq 001. Was a generic available but not substituted?,daw_info,cap_api
+Retrieve the DAW code details for claim 301122998843000 sequence 002,daw_info,cap_api
+Did the pharmacy dispense a brand on claim 265411230987000 seq 001 because of a DAW 1 or DAW 2 instruction?,daw_info,cap_api
+"For claim 244567890123000 sequence 001, explain the dispense-as-written code that was applied and whether generic substitution was permitted",daw_info,cap_api
+Was there a brand-mandate or member-request DAW on claim 217834500912000 seq 003?,daw_info,cap_api
+Show the DAW code submitted by the pharmacy for claim 298763451200000 seq 001,daw_info,cap_api
+claim 312045678234000 seq 001 â€” did the prescriber write DAW on that script?,daw_info,cap_api
+Explain why a brand drug was dispensed instead of generic for claim 231987600045000 seq 002,daw_info,cap_api
+"I need the dispense-as-written detail for claim 278340019823000 seq 001, including whether it was physician-initiated or patient-requested",daw_info,cap_api
+What DAW code applies to claim 195682347001000 sequence 001 and does it block generic substitution?,daw_info,cap_api
+Generic substitution status and DAW code for claim 266100345782000 seq 001 â€” please provide full detail,daw_info,cap_api
+What drug was dispensed on claim 243122443413000 sequence 001?,drug_info,cap_api
+Give me the NDC for claim 201533994612000 seq 001,drug_info,cap_api
+What is the GPI and therapeutic class for the drug on claim 318847221904000 seq 002?,drug_info,cap_api
+drug info claim 256700112348000 sequence 001,drug_info,cap_api
+"Is the medication on claim 198423657801000 seq 001 a formulary drug, and what tier is it?",drug_info,cap_api
+"Provide the full drug details â€” name, NDC, and formulary tier â€” for claim 307541298634000 sequence 003",drug_info,cap_api
+What is the drug classification for the medication dispensed under claim 243122443413000 seq 001?,drug_info,cap_api
+I want to know the drug name and NDC number associated with claim 271983456120000 sequence 001,drug_info,cap_api
+"For claim 188934120067000 seq 002, what therapeutic category does the dispensed drug belong to?",drug_info,cap_api
+Show me the formulary status and drug tier for the medication on claim 229847563012000 seq 001,drug_info,cap_api
+What's the GPI code on claim 301122998843000 sequence 002?,drug_info,cap_api
+I need to confirm the NDC and drug name for claim 265411230987000 seq 001,drug_info,cap_api
+"Retrieve drug classification, formulary tier, and NDC for claim 244567890123000 sequence 001",drug_info,cap_api
+What is the drug's therapeutic class and GPI as submitted on claim 217834500912000 seq 003?,drug_info,cap_api
+"For claim 298763451200000 seq 001, is the drug on formulary and what tier does it fall under?",drug_info,cap_api
+"Pull the medication details including drug name, NDC, and tier for claim 312045678234000 seq 001",drug_info,cap_api
+"What's the drug classification â€” specialty, brand, generic â€” for claim 231987600045000 seq 002?",drug_info,cap_api
+NDC and formulary tier for claim 278340019823000 seq 001?,drug_info,cap_api
+"Tell me everything about the drug dispensed on claim 195682347001000 sequence 001 â€” name, NDC, GPI, class, and formulary tier",drug_info,cap_api
+What drug was used in claim 266100345782000 seq 001 and is it considered a specialty medication?,drug_info,cap_api
+Were there any drug interaction alerts on claim 243122443413000 sequence 001?,drug_interaction_info,cap_api
+Show me the DUR edits triggered for claim 201533994612000 seq 001,drug_interaction_info,cap_api
+Did claim 318847221904000 seq 002 flag any therapeutic duplication?,drug_interaction_info,cap_api
+DUR results for claim 256700112348000 sequence 001 â€” any clinical alerts?,drug_interaction_info,cap_api
+I need to know if there were drug utilization review edits on claim 198423657801000 seq 001,drug_interaction_info,cap_api
+Provide the drug interaction screening results for claim 307541298634000 sequence 003,drug_interaction_info,cap_api
+Were any DUR conflict codes returned at adjudication for claim 243122443413000 seq 001?,drug_interaction_info,cap_api
+Did the pharmacist override a drug-drug interaction alert on claim 271983456120000 sequence 001?,drug_interaction_info,cap_api
+What clinical screening edits were generated for claim 188934120067000 seq 002?,drug_interaction_info,cap_api
+Therapeutic duplication flag on claim 229847563012000 seq 001 â€” what was the conflict?,drug_interaction_info,cap_api
+I want to see any drug utilization review overrides or alerts that came back on claim 301122998843000 sequence 002,drug_interaction_info,cap_api
+Were there any DDI or DUR edits adjudicated on claim 265411230987000 seq 001?,drug_interaction_info,cap_api
+Retrieve the full DUR edit history including reason codes for claim 244567890123000 sequence 001,drug_interaction_info,cap_api
+Did claim 217834500912000 seq 003 trigger any drug-drug or drug-disease interaction alerts during adjudication?,drug_interaction_info,cap_api
+Show any therapeutic duplication or drug interaction DUR results for claim 298763451200000 seq 001,drug_interaction_info,cap_api
+"Were DUR clinical edits overridden on claim 312045678234000 seq 001, and if so what were the codes?",drug_interaction_info,cap_api
+I need to review the drug interaction info for claim 231987600045000 seq 002 to understand if there were any safety flags,drug_interaction_info,cap_api
+Drug interaction alerts â€” claim 278340019823000 seq 001,drug_interaction_info,cap_api
+Was a therapeutic duplication or contraindication DUR edit raised during processing of claim 195682347001000 sequence 001?,drug_interaction_info,cap_api
+"List all DUR edits, drug interaction flags, and clinical screening results for claim 266100345782000 seq 001",drug_interaction_info,cap_api
+What date was claim 243122443413000 sequence 001 filled?,fill_date_info,cap_api
+Give me the service date for claim 201533994612000 seq 001,fill_date_info,cap_api
+When was the prescription dispensed on claim 318847221904000 seq 002?,fill_date_info,cap_api
+fill date claim 256700112348000 sequence 001,fill_date_info,cap_api
+I need the dispensing date for claim 198423657801000 seq 001,fill_date_info,cap_api
+Provide the date of service and fill date for claim 307541298634000 sequence 003,fill_date_info,cap_api
+On what date was claim 243122443413000 seq 001 adjudicated at the pharmacy?,fill_date_info,cap_api
+I want to confirm when the pharmacy dispensed the medication on claim 271983456120000 sequence 001,fill_date_info,cap_api
+What is the prescription fill date shown on claim 188934120067000 seq 002?,fill_date_info,cap_api
+Tell me the service date associated with claim 229847563012000 seq 001 â€” when did the member pick up their prescription?,fill_date_info,cap_api
+Dispensing date for claim 301122998843000 sequence 002?,fill_date_info,cap_api
+Retrieve the fill date and service date for claim 265411230987000 seq 001,fill_date_info,cap_api
+When exactly was claim 244567890123000 sequence 001 filled at the pharmacy â€” I need the exact date,fill_date_info,cap_api
+What date of service is recorded for claim 217834500912000 seq 003?,fill_date_info,cap_api
+Show me the fill date for claim 298763451200000 seq 001,fill_date_info,cap_api
+I need to know the dispensing date on claim 312045678234000 seq 001 to verify timeline,fill_date_info,cap_api
+What was the date claim 231987600045000 seq 002 was processed and dispensed?,fill_date_info,cap_api
+Service date / fill date for claim 278340019823000 seq 001 please,fill_date_info,cap_api
+"On claim 195682347001000 sequence 001, I need to verify the prescription fill date for coordination of benefits purposes",fill_date_info,cap_api
+Confirm the dispensing date and date of service on claim 266100345782000 seq 001,fill_date_info,cap_api
+Are there any generic alternatives available for the drug on claim 243122443413000 sequence 001?,generic_availability,cap_api
+What therapeutic equivalents exist for the medication billed under claim 201533994612000 seq 001?,generic_availability,cap_api
+I need to know if a formulary-approved substitute is available for claim 318745621900000 sequence 002,generic_availability,cap_api
+Generic sub options for NDC on claim 243122443413000 seq 001?,generic_availability,cap_api
+Can you tell me whether the drug dispensed on claim 509871234560000 seq 001 has a generic equivalent covered under the formulary?,generic_availability,cap_api
+Is the brand drug on claim 412369874100000 sequence 001 substitutable with a lower-cost generic?,generic_availability,cap_api
+Check if a therapeutically equivalent drug is available for the item billed on claim 100045678900000 seq 001,generic_availability,cap_api
+DAW code and generic availability â€” claim 243122443413000 sequence 001,generic_availability,cap_api
+Pull up any approved formulary substitutes for the medication in claim 600012398700000 seq 002,generic_availability,cap_api
+"Provide generic alternative details for claim number 318745621900000, sequence 001",generic_availability,cap_api
+The member is asking why they paid so much â€” are there generics for the drug on claim 201533994612000 seq 001?,generic_availability,cap_api
+Is claim 755400123600000 sequence 001 dispensed as a brand when a generic is on formulary?,generic_availability,cap_api
+Therapeutic equivalent availability for the NDC on claim 509871234560000 seq 003,generic_availability,cap_api
+What is the generic status of the drug on claim 412369874100000 seq 001 â€” multi-source or single-source brand?,generic_availability,cap_api
+Is there a formulary-preferred generic that could replace the brand drug billed on claim 900112233440000 sequence 001?,generic_availability,cap_api
+Are generic options or therapeutic interchanges listed for claim 243122443413000 sequence 002?,generic_availability,cap_api
+I want to check DAW and generic availability flags for claim 100045678900000 sequence 001,generic_availability,cap_api
+Lookup: does the drug on claim 600012398700000 seq 001 have a BPG or generic interchange?,generic_availability,cap_api
+Confirm whether a covered generic substitute exists for the product on claim 755400123600000 seq 001,generic_availability,cap_api
+Show me the generic availability information tied to claim 201533994612000 sequence 003 â€” brand vs generic status and any alternatives on formulary,generic_availability,cap_api
+Is claim 243122443413000 sequence 001 classified as a government claim?,government_claim_type,cap_api
+What Medicare or Medicaid program type is associated with claim 201533994612000 seq 001?,government_claim_type,cap_api
+Is this claim Part D or Medicaid â€” claim 318745621900000 sequence 002?,government_claim_type,cap_api
+Govt claim type for claim 509871234560000 seq 001?,government_claim_type,cap_api
+Provide the government program classification for claim 412369874100000 sequence 001,government_claim_type,cap_api
+I need to know if claim 100045678900000 seq 001 is a Medicare Part D claim or a commercial claim,government_claim_type,cap_api
+Can you pull the government claim type indicator for claim 600012398700000 seq 002?,government_claim_type,cap_api
+"What is the program type â€” LIS, Medicaid, or standard Part D â€” on claim 755400123600000 sequence 001?",government_claim_type,cap_api
+Government claim type field on claim 900112233440000 seq 001,government_claim_type,cap_api
+Is claim 243122443413000 seq 002 identified as a federally funded benefit claim?,government_claim_type,cap_api
+"Classify whether claim 201533994612000 sequence 001 falls under Medicare, Medicaid, or neither",government_claim_type,cap_api
+The patient mentions Medicare coverage â€” is claim 318745621900000 seq 001 a Part D or Part B claim?,government_claim_type,cap_api
+PDE government claim type lookup for claim 509871234560000 sequence 001,government_claim_type,cap_api
+What federal benefit program category is tied to claim 412369874100000 seq 003?,government_claim_type,cap_api
+"Government program flag on claim 100045678900000 sequence 001 â€” is it Medicaid, Part D, or neither?",government_claim_type,cap_api
+Show me the government claim classification for claim 600012398700000 seq 001,government_claim_type,cap_api
+Is claim 755400123600000 sequence 002 billed under a state Medicaid program or CMS Part D?,government_claim_type,cap_api
+I need the government claim type code for claim number 900112233440000 seq 001,government_claim_type,cap_api
+Does claim 243122443413000 seq 001 qualify as a government-funded claim under any federal program?,government_claim_type,cap_api
+Retrieve the government claim type indicator and program classification details for claim 201533994612000 sequence 002,government_claim_type,cap_api
+Was claim 243122443413000 sequence 001 filled at a mail order pharmacy or retail?,mail_order_info,cap_api
+Is claim 201533994612000 seq 001 a home delivery prescription?,mail_order_info,cap_api
+What delivery channel was used for claim 318745621900000 sequence 002 â€” mail or retail?,mail_order_info,cap_api
+Mail order or retail? Claim 509871234560000 seq 001,mail_order_info,cap_api
+Provide the dispensing channel information for claim 412369874100000 sequence 001,mail_order_info,cap_api
+Was the prescription on claim 100045678900000 seq 001 shipped to the member's home?,mail_order_info,cap_api
+I need to know whether claim 600012398700000 seq 002 was dispensed via mail order or filled in-store,mail_order_info,cap_api
+Check if claim 755400123600000 sequence 001 is flagged as a mail service or specialty mail claim,mail_order_info,cap_api
+Dispensing channel and NCPDP pharmacy type for claim 900112233440000 seq 001,mail_order_info,cap_api
+Was this a CVS Caremark mail order fill â€” claim 243122443413000 seq 002?,mail_order_info,cap_api
+"Show the pharmacy dispensing type for claim 201533994612000 sequence 003 â€” retail, mail, or specialty",mail_order_info,cap_api
+The member says they received this by mail â€” verify the delivery channel on claim 318745621900000 seq 001,mail_order_info,cap_api
+Mail order indicator on claim 509871234560000 sequence 001?,mail_order_info,cap_api
+Is claim 412369874100000 seq 001 associated with a home delivery or a walk-in pharmacy fill?,mail_order_info,cap_api
+Retrieve mail service status and shipping information for claim 100045678900000 sequence 001,mail_order_info,cap_api
+Was claim 600012398700000 seq 001 filled through the specialty mail channel or a retail outlet?,mail_order_info,cap_api
+I want to confirm the dispensing method â€” mail vs retail â€” for claim 755400123600000 seq 002,mail_order_info,cap_api
+Look up whether the drug on claim 900112233440000 seq 001 was home-delivered or picked up at a pharmacy counter,mail_order_info,cap_api
+What NCPDP pharmacy type and dispensing channel are on claim 243122443413000 sequence 001?,mail_order_info,cap_api
+Tell me if claim 201533994612000 seq 001 went through the mail order fulfillment pipeline and whether it was shipped or awaiting shipment,mail_order_info,cap_api
+Give me the Medicare Part D details for claim 243122443413000 sequence 001,medicare_part_d,cap_api
+What are the PDE fields on claim 201533994612000 seq 001?,medicare_part_d,cap_api
+MEDD pricing and LICS tier for claim 318745621900000 sequence 002,medicare_part_d,cap_api
+N1 amounts on claim 509871234560000 seq 001?,medicare_part_d,cap_api
+Provide the Part D summary for claim 412369874100000 sequence 001 including low-income subsidy tier,medicare_part_d,cap_api
+I need the Medicare Part D cost-sharing breakdown for claim 100045678900000 seq 001,medicare_part_d,cap_api
+What is the LICS level applied to claim 600012398700000 seq 002?,medicare_part_d,cap_api
+Pull the PDE submission data for claim 755400123600000 sequence 001,medicare_part_d,cap_api
+MEDD and N1 amount details â€” claim 900112233440000 seq 001,medicare_part_d,cap_api
+Is claim 243122443413000 seq 002 in the coverage gap phase or catastrophic phase under Part D?,medicare_part_d,cap_api
+Show me the CMS Part D benefit phase and cost-sharing for claim 201533994612000 sequence 001,medicare_part_d,cap_api
+I need to verify the LICS subsidy tier and patient pay under Part D for claim 318745621900000 seq 001,medicare_part_d,cap_api
+What PDE event data was reported to CMS for claim 509871234560000 sequence 001?,medicare_part_d,cap_api
+Retrieve the Medicare Part D MEDD and N1 cost fields for claim 412369874100000 seq 003,medicare_part_d,cap_api
+Part D low-income cost-sharing subsidy applied to claim 100045678900000 sequence 001?,medicare_part_d,cap_api
+What is the Part D benefit stage and true out-of-pocket accumulator on claim 600012398700000 seq 001?,medicare_part_d,cap_api
+"LICS tier, MEDD price, and PDE details for claim 755400123600000 seq 002",medicare_part_d,cap_api
+Confirm the Medicare Part D N1 patient pay amount on claim 900112233440000 seq 001,medicare_part_d,cap_api
+Is this a LIS eligible claim â€” show the Part D summary for claim 243122443413000 sequence 001,medicare_part_d,cap_api
+"Provide full Medicare Part D details including PDE submission, LICS tier, MEDD pricing, and N1 amounts for claim 201533994612000 sequence 002",medicare_part_d,cap_api
+Show me all claims for member ID 123456789 â€” I need a full summary,multi_claim_summary,cap_api
+How many total claims has this member submitted in the last 12 months?,multi_claim_summary,cap_api
+Give me a summary of all prescriptions filled by member 987654321 this year,multi_claim_summary,cap_api
+List all claims for this member â€” I want the full claim history,multi_claim_summary,cap_api
+Pull every claim on file for member 456123789 and summarize the total cost,multi_claim_summary,cap_api
+What is the total number of claims and overall spend for this member across all their prescriptions?,multi_claim_summary,cap_api
+I need a multi-claim summary â€” all fills for member 654321987 from January through June,multi_claim_summary,cap_api
+"Summarize the entire claim history for this member, including all drugs, dates, and costs",multi_claim_summary,cap_api
+How many claims did member 321654987 have this quarter and what was the total member pay?,multi_claim_summary,cap_api
+"Show all prescription claims on record for this member â€” not a single claim, the whole list",multi_claim_summary,cap_api
+I want to review every claim this member has filed â€” provide a complete summary,multi_claim_summary,cap_api
+Full claim count and summary for member 789456123 over the past six months,multi_claim_summary,cap_api
+Can you aggregate all claims for this member and show me the breakdown by drug?,multi_claim_summary,cap_api
+Retrieve the complete claims list for member 852963741 and tell me the most recent fills,multi_claim_summary,cap_api
+"Member's entire claim history â€” all claims, not just one â€” for the current benefit year",multi_claim_summary,cap_api
+How many pharmacy claims does this member have on file and what do they total in cost?,multi_claim_summary,cap_api
+Give me an overview of all claims submitted for member 741852963 since plan inception,multi_claim_summary,cap_api
+"I need a full multi-claim report for this member â€” count, drugs, dates, amounts across all fills",multi_claim_summary,cap_api
+What is the total claim volume for member 963741852 and which drugs appear most frequently?,multi_claim_summary,cap_api
+Pull all claims for this member and give me a summary of their prescription utilization pattern over the past year,multi_claim_summary,cap_api
+Which network processed claim 243122443413000 sequence 001?,network_info,cap_api
+Provide the pharmacy network classification for claim 198374652901000 seq 001.,network_info,cap_api
+I need to know whether claim 201533994612000 sequence 001 was paid through an in-network or out-of-network pharmacy.,network_info,cap_api
+Network type? Claim 312847659023000 seq 002.,network_info,cap_api
+Was the pharmacy that processed claim 267489013456000 sequence 001 considered in-network under the member's plan?,network_info,cap_api
+Give me the network designation used to reimburse claim 430981276543000 seq 001.,network_info,cap_api
+What pharmacy chain network handled the payment for claim 509234781650000 sequence 003?,network_info,cap_api
+Display the network information that was active when claim 375916284073000 seq 001 adjudicated.,network_info,cap_api
+Retrieve the network status â€” in-network vs out-of-network â€” for claim 621847390125000 sequence 002.,network_info,cap_api
+"For claim 189034726518000 seq 001, tell me which CVS network tier the dispensing pharmacy fell under.",network_info,cap_api
+"Network classification on claim 453782910634000 seq 001 â€” preferred, standard, or out-of-network?",network_info,cap_api
+I'm trying to figure out if the pharmacy on claim 739018246501000 sequence 001 was part of the contracted network.,network_info,cap_api
+Fetch the network details and any network-based pricing adjustments applied to claim 284610937502000 seq 001.,network_info,cap_api
+Show me what network was used to pay claim 561284730918000 sequence 001 â€” was it a preferred pharmacy network?,network_info,cap_api
+Network info for claim 892345017263000 seq 001.,network_info,cap_api
+Can you confirm the pharmacy network that was billed for claim 317469028345000 sequence 002 and whether it matches the member's plan network?,network_info,cap_api
+What was the network reimbursement type for claim 643091827465000 seq 001 â€” standard MAC network or specialty network?,network_info,cap_api
+Pull the network designation from the claim record for 428019365784000 sequence 001.,network_info,cap_api
+"Generate a network summary for claim 780235641092000 seq 001, including whether the pharmacy is part of the preferred or non-preferred network tier.",network_info,cap_api
+Was claim 153902847631000 sequence 001 routed through a retail network or a specialty pharmacy network?,network_info,cap_api
+What pharmacy dispensed claim 243122443413000 sequence 001?,pharmacy_info,cap_api
+Provide the NCPDP number for the dispensing pharmacy on claim 198374652901000 seq 001.,pharmacy_info,cap_api
+I need the store address and name of the pharmacy that filled claim 312847659023000 sequence 002.,pharmacy_info,cap_api
+Pharmacy name? Claim 509234781650000 seq 001.,pharmacy_info,cap_api
+"Retrieve the dispensing pharmacy details â€” NCPDP, store number, and location â€” for claim 267489013456000 sequence 001.",pharmacy_info,cap_api
+Which CVS store filled the prescription on claim 430981276543000 seq 001 and what is its address?,pharmacy_info,cap_api
+Tell me where the member picked up the medication on claim 375916284073000 sequence 001.,pharmacy_info,cap_api
+"Give me the filling pharmacy information for claim 621847390125000 seq 002, including chain name and ZIP code.",pharmacy_info,cap_api
+NCPDP and store location for claim 189034726518000 sequence 001.,pharmacy_info,cap_api
+Display the dispensing location that processed claim 453782910634000 seq 001 â€” was it a retail store or mail-order facility?,pharmacy_info,cap_api
+Fetch the pharmacy name and chain code recorded on claim 739018246501000 sequence 001.,pharmacy_info,cap_api
+Show me the pharmacy NPI and NCPDP provider ID attached to claim 284610937502000 seq 001.,pharmacy_info,cap_api
+I'd like to know which pharmacy dispensed the medication on claim 561284730918000 sequence 001 and whether it's a specialty pharmacy.,pharmacy_info,cap_api
+"Generate the dispensing pharmacy report for claim 892345017263000 seq 001, including state and phone number if available.",pharmacy_info,cap_api
+Where was claim 317469028345000 sequence 002 filled â€” give me the complete pharmacy address.,pharmacy_info,cap_api
+Pharmacy details on claim 643091827465000 seq 001.,pharmacy_info,cap_api
+Can you look up the pharmacy store information tied to claim 428019365784000 sequence 001? I need the NCPDP and street address.,pharmacy_info,cap_api
+Which pharmacy chain and store number appears on claim 780235641092000 seq 001?,pharmacy_info,cap_api
+Show the dispensing pharmacy name and NCPDP identifier for claim 153902847631000 sequence 001.,pharmacy_info,cap_api
+"For claim 310928475630000 seq 001, I need to verify which pharmacy location processed the fill â€” provide the full store details.",pharmacy_info,cap_api
+Who prescribed the medication on claim 243122443413000 sequence 001?,prescriber_info,cap_api
+Provide the NPI number of the prescribing physician on claim 198374652901000 seq 001.,prescriber_info,cap_api
+I need the doctor's name and credentials who wrote the script for claim 312847659023000 sequence 002.,prescriber_info,cap_api
+Prescriber NPI? Claim 509234781650000 seq 001.,prescriber_info,cap_api
+"Retrieve the ordering provider details â€” name, NPI, and DEA â€” for claim 267489013456000 sequence 001.",prescriber_info,cap_api
+Tell me which physician wrote the prescription on claim 430981276543000 seq 001 and what their specialty is.,prescriber_info,cap_api
+"Display the prescriber information recorded on claim 375916284073000 sequence 001, including the doctor's address.",prescriber_info,cap_api
+Give me the prescribing provider's NPI and full name from claim 621847390125000 seq 002.,prescriber_info,cap_api
+Who wrote the Rx for claim 189034726518000 sequence 001?,prescriber_info,cap_api
+Fetch the DEA number and prescriber name associated with claim 453782910634000 seq 001.,prescriber_info,cap_api
+"Show me the ordering provider's NPI, name, and license type on claim 739018246501000 sequence 001.",prescriber_info,cap_api
+I want to verify which doctor ordered the medication on claim 284610937502000 seq 001 â€” please include their NPI.,prescriber_info,cap_api
+"Generate a prescriber summary for claim 561284730918000 sequence 001, including name, NPI, and prescriber type.",prescriber_info,cap_api
+Prescriber name and DEA on claim 892345017263000 seq 001.,prescriber_info,cap_api
+What are the provider credentials for the physician who prescribed the drug on claim 317469028345000 sequence 002?,prescriber_info,cap_api
+Pull the prescriber NPI and mailing address from the claim record for 643091827465000 seq 001.,prescriber_info,cap_api
+"For claim 428019365784000 sequence 001, I need the physician's name, NPI, and DEA number â€” who authorized this prescription?",prescriber_info,cap_api
+Show the prescribing physician recorded on claim 780235641092000 seq 001 â€” is it a MD or DO?,prescriber_info,cap_api
+"Retrieve ordering provider information, including NPI and practice address, for claim 153902847631000 sequence 001.",prescriber_info,cap_api
+Which provider NPI is on claim 310928475630000 seq 001 and what is that prescriber's name?,prescriber_info,cap_api
+What was the patient pay amount on claim 243122443413000 sequence 001?,pricing_info,cap_api
+Provide the ingredient cost and dispensing fee breakdown for claim 198374652901000 seq 001.,pricing_info,cap_api
+I need the copay and total cost details for claim 312847659023000 sequence 002.,pricing_info,cap_api
+Copay amount? Claim 509234781650000 seq 001.,pricing_info,cap_api
+Retrieve the pricing schedule and final out-of-pocket amount on claim 267489013456000 sequence 001.,pricing_info,cap_api
+"Show me the full pricing breakdown â€” AWP, ingredient cost, dispensing fee, and member liability â€” for claim 430981276543000 seq 001.",pricing_info,cap_api
+Display the co-pay modifier and its effect on the patient-pay amount for claim 375916284073000 sequence 001.,pricing_info,cap_api
+Give me the total charge and what the member owed on claim 621847390125000 seq 002.,pricing_info,cap_api
+"How much did the member pay for claim 189034726518000 sequence 001, including any coinsurance?",pricing_info,cap_api
+Fetch the MAC pricing or U&C price applied on claim 453782910634000 seq 001 and the final patient contribution.,pricing_info,cap_api
+What pricing schedule was used for claim 739018246501000 sequence 001 and what was the resulting member cost-share?,pricing_info,cap_api
+"Ingredient cost, dispensing fee, and member pay for claim 284610937502000 seq 001.",pricing_info,cap_api
+"I want a complete pricing summary for claim 561284730918000 sequence 001, including plan-paid amount and patient responsibility.",pricing_info,cap_api
+"Generate a cost breakdown for claim 892345017263000 seq 001 â€” show ingredient cost, dispensing fee, and OOP.",pricing_info,cap_api
+What was the total billed amount and the member's share on claim 317469028345000 sequence 002?,pricing_info,cap_api
+Pull the patient pay amount and the pricing details used during adjudication of claim 643091827465000 seq 001.,pricing_info,cap_api
+"For claim 428019365784000 sequence 001, what was the deductible contribution and the final copay the member was charged?",pricing_info,cap_api
+Show the negotiated price and the split between plan and member for claim 780235641092000 seq 001.,pricing_info,cap_api
+"Retrieve the BPG-driven pricing components on claim 153902847631000 sequence 001 â€” I need ingredient cost, fees, and copay.",pricing_info,cap_api
+"Display the full pricing detail including plan-paid, patient-paid, and dispensing fee for claim 310928475630000 seq 001.",pricing_info,cap_api
+Was prior authorization required for claim 243122443413000 sequence 001?,prior_auth_info,cap_api
+Provide the PA number and approval status recorded on claim 198374652901000 seq 001.,prior_auth_info,cap_api
+I need to know what type of prior auth was attached to claim 312847659023000 sequence 002 â€” Smart PA or Member PA?,prior_auth_info,cap_api
+PA status? Claim 509234781650000 seq 001.,prior_auth_info,cap_api
+"Retrieve the prior authorization details â€” PA number, type, and approved/denied status â€” for claim 267489013456000 sequence 001.",prior_auth_info,cap_api
+Show whether Smart PA was applied on claim 430981276543000 seq 001 and what the authorization outcome was.,prior_auth_info,cap_api
+Display the Member PA information embedded in claim 375916284073000 sequence 001.,prior_auth_info,cap_api
+"Give me the prior auth fields from claim 621847390125000 seq 002, including the PA reference number.",prior_auth_info,cap_api
+Is the PA on claim 189034726518000 sequence 001 showing approved or denied?,prior_auth_info,cap_api
+Fetch the authorization type and PA number from claim 453782910634000 seq 001.,prior_auth_info,cap_api
+What authorization was checked when claim 739018246501000 sequence 001 was processed â€” was a PA on file?,prior_auth_info,cap_api
+PA details for claim 284610937502000 seq 001.,prior_auth_info,cap_api
+"I want to verify whether a prior authorization was present on claim 561284730918000 sequence 001 and if so, whether it was a plan PA or member PA.",prior_auth_info,cap_api
+"Generate the prior authorization report for claim 892345017263000 seq 001, including auth number, effective dates, and approval status.",prior_auth_info,cap_api
+What PA type is recorded on claim 317469028345000 sequence 002 and was it approved prior to dispensing?,prior_auth_info,cap_api
+Pull prior auth status and number for claim 643091827465000 seq 001.,prior_auth_info,cap_api
+"For claim 428019365784000 sequence 001, did a Smart PA override or a Member PA govern the adjudication, and what was the result?",prior_auth_info,cap_api
+Show the PA fields on claim 780235641092000 seq 001 â€” specifically the authorization type code and denial reason if applicable.,prior_auth_info,cap_api
+Retrieve prior authorization status and approval details for claim 153902847631000 sequence 001.,prior_auth_info,cap_api
+"Was a member PA or plan PA used on claim 310928475630000 seq 001, and is the PA currently active?",prior_auth_info,cap_api
+What methodology â€” MAC or AWP â€” was used to reimburse the pharmacy on claim 243122443413000 sequence 001?,reimbursement_info,cap_api
+Reimbursement breakdown for claim 253603736282009 seq 001.,reimbursement_info,cap_api
+I need to understand why the pharmacy was paid what it was on this specific claim.,reimbursement_info,cap_api
+Provide the pharmacy payment rationale for claim 260021649904000 sequence 005.,reimbursement_info,cap_api
+How was the ingredient cost reimbursement calculated for this fill?,reimbursement_info,cap_api
+Total amount disbursed to the dispensing pharmacy on claim 191406379285000 seq 001.,reimbursement_info,cap_api
+Was MAC pricing used or was the pharmacy reimbursed at AWP minus a discount on this claim?,reimbursement_info,cap_api
+Pharmacy reimbursement rationale â€” claim 221172865083001 seq 001.,reimbursement_info,cap_api
+Give me the net payment to the pharmacy after all adjustments on claim 201533994612000.,reimbursement_info,cap_api
+Show the plan's reimbursement formula output for this specific prescription claim.,reimbursement_info,cap_api
+What was the U&C versus the reimbursed amount for the pharmacy on claim 160060096136030?,reimbursement_info,cap_api
+Reimbursement? Claim 231181462825000 sequence 001.,reimbursement_info,cap_api
+I want to know the exact dollar figure the plan sent to the pharmacy for claim 221775171449000 seq 003.,reimbursement_info,cap_api
+What is the ingredient cost reimbursement plus dispensing fee paid to the pharmacy on this claim?,reimbursement_info,cap_api
+Did the plan pay the pharmacy MAC rate or a different basis on claim 242831720377166 sequence 002?,reimbursement_info,cap_api
+Fetch the reimbursement details including pricing methodology for claim 130041467416065 seq 001.,reimbursement_info,cap_api
+Show what amount was transmitted to the dispensing location for this prescription.,reimbursement_info,cap_api
+Is this claim's pharmacy reimbursement based on a network MAC list or AWP-based formula?,reimbursement_info,cap_api
+Reimbursement info for claim 241774768475148 sequence 003 â€” I need the payment detail.,reimbursement_info,cap_api
+How much was the plan's remittance to the pharmacy for the fill on claim 180571470939000?,reimbursement_info,cap_api
+Which edits caused claim 243122443413000 sequence 001 to be rejected?,rejection_reasons,cap_api
+Reject code list for claim 253603736282009 seq 001.,rejection_reasons,cap_api
+I need to figure out why this claim got denied and what I can do to fix it.,rejection_reasons,cap_api
+Denial reason on claim 260021649904000 sequence 005 â€” please explain.,rejection_reasons,cap_api
+What NCPDP error codes came back when claim 221172865083001 was adjudicated?,rejection_reasons,cap_api
+Show the failed plan edits on claim 241774768475148 seq 003.,rejection_reasons,cap_api
+This prescription was not paid â€” what were the specific rejection reasons on claim 191406379285000?,rejection_reasons,cap_api
+Failed edits? Claim 242831720377166 seq 002.,rejection_reasons,cap_api
+I see this claim has a denial status â€” can you pull the rejection codes and describe how to override them?,rejection_reasons,cap_api
+What override options exist to resolve the denial on claim 221663541811000 sequence 001?,rejection_reasons,cap_api
+Claim 180571470939000 sequence 001 was rejected â€” show me the specific edit failures.,rejection_reasons,cap_api
+Why couldn't this medication be processed at adjudication for claim 160060096136030?,rejection_reasons,cap_api
+List every reject code returned on claim 201990819198000 seq 001 and their meanings.,rejection_reasons,cap_api
+The pharmacy says this was denied â€” what reason codes are on file for claim 230624075311000?,rejection_reasons,cap_api
+Show the error codes and remediation guidance for rejected claim 132435151040074 seq 001.,rejection_reasons,cap_api
+Rejection codes and fix steps â€” claim 231181462825000 sequence 001.,rejection_reasons,cap_api
+How do I overturn the rejection on this claim and what edit triggered it?,rejection_reasons,cap_api
+Show me the specific NCPDP 511 transaction reject codes for claim 201533994612000.,rejection_reasons,cap_api
+Why was claim 221775171449000 sequence 003 not adjudicated successfully?,rejection_reasons,cap_api
+Denial reason and resolution path for claim 240051073172000 sequence 001.,rejection_reasons,cap_api
+Was claim 243122443413000 sequence 001 reversed and resubmitted?,reversal_info,cap_api
+R&R status â€” claim 260021649904000 seq 005.,reversal_info,cap_api
+I need to know if a manual adjustment was applied to this claim at any point.,reversal_info,cap_api
+Provide the reversal and resubmission history for claim 241774768475148 sequence 003.,reversal_info,cap_api
+Was this fill ever reversed by the pharmacy or PBM on claim 221663541811000?,reversal_info,cap_api
+Show modification history and any R&R transactions for claim 191406379285000 seq 001.,reversal_info,cap_api
+Did this claim go through any reversal process? Claim 253603736282009 seq 001.,reversal_info,cap_api
+Claim 230624075311000 sequence 002: any reversals or manual rebills on record?,reversal_info,cap_api
+Give me the complete reversal detail including reason and rebill outcome for this claim.,reversal_info,cap_api
+Was a PBM-initiated reversal applied to claim 221775171449000 sequence 003?,reversal_info,cap_api
+Show me if there was an R&R event on claim 180571470939000 and why it was triggered.,reversal_info,cap_api
+Reversal? Claim 231181462825000 seq 001.,reversal_info,cap_api
+Has claim 201990819198000 sequence 001 been modified after original adjudication?,reversal_info,cap_api
+I'm trying to determine if the pharmacy reversed and rebilled this claim â€” can you check claim 160060096136030?,reversal_info,cap_api
+Reversal and resubmission details for claim 242831720377166 sequence 002.,reversal_info,cap_api
+Retrieve any manual adjustment records or reversal transactions tied to claim 132435151040074.,reversal_info,cap_api
+Was this claim recalled and readjudicated? Show me the R&R trail for claim 221172865083001 seq 001.,reversal_info,cap_api
+Any post-adjudication modification activity on claim 240051073172000 sequence 001?,reversal_info,cap_api
+Show the reversal codes and dates for claim 201533994612000.,reversal_info,cap_api
+R&R detail â€” was claim 130041467416065 seq 001 ever reversed by the plan?,reversal_info,cap_api
+What is the RX number on claim 243122443413000 sequence 001?,rx_details,cap_api
+Days supply and quantity dispensed â€” claim 253603736282009 seq 001.,rx_details,cap_api
+I need the prescription number and whether this is an original fill or a refill on claim 241774768475148.,rx_details,cap_api
+How many days worth of medication was dispensed on claim 260021649904000 sequence 005?,rx_details,cap_api
+Fetch the fill number for claim 221663541811000 seq 001 â€” is this fill 1 or a subsequent refill?,rx_details,cap_api
+What is the drug strength and dosage form recorded on this fill?,rx_details,cap_api
+RX number? Claim 231181462825000 seq 001.,rx_details,cap_api
+"Tell me the prescription details â€” quantity, days supply, and fill number â€” for claim 191406379285000.",rx_details,cap_api
+How much of the medication was dispensed in units on claim 221775171449000 seq 003?,rx_details,cap_api
+Show the fill details including RX number and refill count for claim 201533994612000.,rx_details,cap_api
+What fill number is claim 242831720377166 sequence 002 â€” original or which refill iteration?,rx_details,cap_api
+Prescription quantity dispensed for claim 230624075311000 sequence 002.,rx_details,cap_api
+"Show me the NDC, quantity, and days supply recorded on claim 160060096136030 seq 001.",rx_details,cap_api
+I want to confirm the supply duration â€” how many days supply is on claim 132435151040074?,rx_details,cap_api
+"Retrieve the prescription-level details for claim 221172865083001 â€” RX number, quantity, and fill indicator.",rx_details,cap_api
+Was this a 30-day or 90-day supply? Check claim 180571470939000 seq 001.,rx_details,cap_api
+RX fill count and days supply for this prescription â€” claim 201990819198000.,rx_details,cap_api
+How many units were dispensed and what was the prescribed days supply on claim 240051073172000 seq 001?,rx_details,cap_api
+"Give me the prescription specifics on this fill â€” I need the RX number, fill iteration, and quantity.",rx_details,cap_api
+What is the drug strength and fill number recorded in the claim record for claim 130041467416065?,rx_details,cap_api
+What settlement codes were transmitted back to the pharmacy for claim 243122443413000 sequence 001?,settlement_info,cap_api
+Pharmacy response codes â€” claim 253603736282009 seq 001.,settlement_info,cap_api
+I need to know what PBM feedback messages were returned to the dispensing pharmacy on this claim.,settlement_info,cap_api
+Show the NCPDP transaction response fields sent back to the pharmacy for claim 260021649904000 seq 005.,settlement_info,cap_api
+What settlement response did the pharmacy receive when this claim adjudicated?,settlement_info,cap_api
+Settlement codes and PBM message for claim 241774768475148 sequence 003.,settlement_info,cap_api
+Pull the pharmacy-facing response code for claim 191406379285000 sequence 001.,settlement_info,cap_api
+What was sent in the 835 settlement to the pharmacy on claim 221663541811000?,settlement_info,cap_api
+Settlement? Claim 201533994612000 seq 001.,settlement_info,cap_api
+Show the complete set of codes the PBM transmitted to the pharmacy upon claim adjudication for claim 221172865083001.,settlement_info,cap_api
+I'm looking for the pharmacy settlement feedback â€” what codes and messages were returned on claim 201990819198000 seq 001?,settlement_info,cap_api
+Retrieve the outbound NCPDP response segment sent to the pharmacy for claim 160060096136030.,settlement_info,cap_api
+What pharmacy response code is stored on claim 231181462825000 sequence 001?,settlement_info,cap_api
+Show the PBM-to-pharmacy settlement message including any additional info codes for claim 221775171449000 seq 003.,settlement_info,cap_api
+Settlement codes plus any informational messages sent downstream to the dispensing pharmacy on claim 180571470939000.,settlement_info,cap_api
+What response codes are stored in the settlement fields of claim 240051073172000 sequence 001?,settlement_info,cap_api
+Feedback and response codes for claim 230624075311000 â€” what did we send back to the pharmacy?,settlement_info,cap_api
+Give me the settlement summary â€” codes sent from PBM to pharmacy â€” for claim 132435151040074 seq 001.,settlement_info,cap_api
+What NCPDP response codes and additional messages were included in the settlement for claim 242831720377166?,settlement_info,cap_api
+Show any reject or informational codes sent as part of the settlement to the pharmacy on claim 130041467416065.,settlement_info,cap_api
+list all claims where this member had a refill authorized,Refills,claim_history_search
+how many refills has this member used across their METFORMIN prescription history,Refills,claim_history_search
+I need to know which fills in the member's history were refills versus original fills,Refills,claim_history_search
+refill counts across all scripts?,Refills,claim_history_search
+show refill frequency for LISINOPRIL and ATORVASTATIN in this member's claim history,Refills,claim_history_search
+pull up every claim in the history that was a second fill or later,Refills,claim_history_search
+which prescriptions in this member's history have zero refills remaining on file,Refills,claim_history_search
+display only the refill claims across this member's entire prescription history,Refills,claim_history_search
+filter claim history to show only fills marked as refill number 2 or higher,Refills,claim_history_search
+how frequently has GABAPENTIN been refilled for this member over the past year,Refills,claim_history_search
+are there any maintenance drug claims in this member's history that have run out of refills,Refills,claim_history_search
+retrieve claims showing refill number field greater than zero for this member,Refills,claim_history_search
+which OMEPRAZOLE claims in this member's history are refills,Refills,claim_history_search
+show a breakdown of first fills versus refills across this member's full prescription history,Refills,claim_history_search
+refills remaining on chronic meds?,Refills,claim_history_search
+I want to see which of this member's drugs have had the most refill activity in their claim history,Refills,claim_history_search
+retrieve claim history filtered to only refill fills and sort by refill count descending,Refills,claim_history_search
+which prescriptions are showing as overdue for a refill based on the member's fill timeline,Refills,claim_history_search
+list drugs in the member's history that have been refilled more than three times this year,Refills,claim_history_search
+"across all claims in this member's history, how many were fill number 1 versus fill number 2 or above",Refills,claim_history_search
+filter this member's claim history to only 90 day supply fills,DaysSupply,claim_history_search
+show all claims in the history where days supply equals 30,DaysSupply,claim_history_search
+which prescriptions in this member's claim history were dispensed as a 7 day emergency supply,DaysSupply,claim_history_search
+days supply 90 claims only,DaysSupply,claim_history_search
+list all fills in this member's history where the days supply field is 60 or above,DaysSupply,claim_history_search
+retrieve claims dispensed for exactly 14 days across this member's full claim history,DaysSupply,claim_history_search
+"I need to see which fills in the history were short-supply, meaning less than 15 days",DaysSupply,claim_history_search
+group this member's claims by days supply duration,DaysSupply,claim_history_search
+show the count of claims with 30-day versus 90-day supply across this member's history,DaysSupply,claim_history_search
+find all claims where the days supply is between 25 and 35 in the member's claim history,DaysSupply,claim_history_search
+"pull up all extended-supply fills in the member's history, anything over 84 days",DaysSupply,claim_history_search
+which claims in this member's history had a days supply of exactly 28,DaysSupply,claim_history_search
+"display claims in the history filtered by 3 day supply, likely urgent or hospital fills",DaysSupply,claim_history_search
+show me the maintenance med claims in this member's history that used a 90-day supply window,DaysSupply,claim_history_search
+list fills from this member's history where days supply is 45,DaysSupply,claim_history_search
+filter claim history by days supply less than 10,DaysSupply,claim_history_search
+"across all claims in this member's history, which drugs had a 180-day supply dispensed",DaysSupply,claim_history_search
+retrieve only the 30-day supply claims filed by this member this year,DaysSupply,claim_history_search
+"show claims broken down by supply length, 30, 60, and 90 day buckets, across the member's history",DaysSupply,claim_history_search
+how many claims in this member's history were filled with a sub-30-day supply,DaysSupply,claim_history_search
+which of this member's claims went through prior authorization,PriorAuth,claim_history_search
+show all fills in the member's history that required a PA,PriorAuth,claim_history_search
+filter claim history to only PA-required prescriptions for this member,PriorAuth,claim_history_search
+PA claims in history?,PriorAuth,claim_history_search
+list all specialty drug claims in this member's history that had a prior authorization attached,PriorAuth,claim_history_search
+retrieve claims across this member's history that show a Smart PA was applied,PriorAuth,claim_history_search
+I need to see which fills in this member's claim history had a prior auth on file at time of dispensing,PriorAuth,claim_history_search
+were there any HUMIRA or ENBREL claims in this member's history that needed PA,PriorAuth,claim_history_search
+show claims filtered by PA approval status across this member's full history,PriorAuth,claim_history_search
+how many of this member's claims required clinical prior authorization in the past 12 months,PriorAuth,claim_history_search
+pull up all claims in the member's history where PA was denied,PriorAuth,claim_history_search
+display claims in the history gated by a member PA or plan PA requirement,PriorAuth,claim_history_search
+list GLP-1 drug claims in this member's history that triggered a PA check,PriorAuth,claim_history_search
+which prescriptions in this member's history bypassed the PA requirement via an override,PriorAuth,claim_history_search
+show me claims where prior auth was still pending at the time of adjudication for this member,PriorAuth,claim_history_search
+filter the history to claims that passed PA review and were dispensed,PriorAuth,claim_history_search
+retrieve all claims in this member's history that processed under an active PA number,PriorAuth,claim_history_search
+show prior authorization outcomes across all claims on file for this member,PriorAuth,claim_history_search
+which fills in this member's history are flagged as having required clinical PA adjudication,PriorAuth,claim_history_search
+"across this member's claim history, how many prescriptions were processed with an active prior authorization on file",PriorAuth,claim_history_search
+filter this member's claim history by ICD-10 code E11.9,Diagnosis,claim_history_search
+show all claims in the history associated with diagnosis code I10,Diagnosis,claim_history_search
+which fills in this member's history carry the ICD-10 J45.909 diagnosis,Diagnosis,claim_history_search
+diagnosis E11.9 claims?,Diagnosis,claim_history_search
+retrieve claims across this member's history tagged with diagnosis code F32.9,Diagnosis,claim_history_search
+I need to see which of this member's prescriptions are linked to ICD-10 N18.3 across all fills,Diagnosis,claim_history_search
+list all claims in the member's history submitted under diagnosis M54.16,Diagnosis,claim_history_search
+display claims in this member's history where the diagnosis field contains Z79.82,Diagnosis,claim_history_search
+pull up fills filtered by ICD code G47.00 across this member's full claim history,Diagnosis,claim_history_search
+which drugs in this member's history map to diagnosis code E78.5 for hyperlipidemia,Diagnosis,claim_history_search
+filter claim history to all fills billed under ICD-10 K21.00,Diagnosis,claim_history_search
+show me all prescriptions in this member's history linked to diagnosis R06.00,Diagnosis,claim_history_search
+retrieve claims across this member's history where the attached diagnosis is L40.50,Diagnosis,claim_history_search
+which claims in this member's history carry the oncology diagnosis code C50.911,Diagnosis,claim_history_search
+list fills in the member's history where ICD-10 D64.9 is recorded as the diagnosis,Diagnosis,claim_history_search
+show claims filtered by diagnosis F41.1 across this member's claim history,Diagnosis,claim_history_search
+how many claims in this member's history are associated with any diabetes-related ICD-10 code,Diagnosis,claim_history_search
+display fills in this member's history tagged with musculoskeletal diagnosis code M79.12,Diagnosis,claim_history_search
+get all claims in this member's history submitted with ICD-10 E08.00 as the diagnosis,Diagnosis,claim_history_search
+"across this member's full claim history, list every unique ICD-10 diagnosis code that appears and the associated claims",Diagnosis,claim_history_search
+show all claims in this member's history that have settlement code 358,Settlement,claim_history_search
+filter claim history by settlement response code 425,Settlement,claim_history_search
+which fills in this member's history returned a settlement code of 001,Settlement,claim_history_search
+settlement code 358 in history?,Settlement,claim_history_search
+retrieve all claims across this member's history that carry pharmacy settlement response 200,Settlement,claim_history_search
+I need to find every claim in this member's history with settlement code 310,Settlement,claim_history_search
+list claims in this member's history where the settlement code field equals 099,Settlement,claim_history_search
+display fills filtered by pharmacy response code 750 across this member's full history,Settlement,claim_history_search
+pull up claims in the member's history closed under settlement response 112,Settlement,claim_history_search
+which of this member's claims had a pharmacy settlement code of 500 returned,Settlement,claim_history_search
+show all fills in this member's history carrying settlement code 044,Settlement,claim_history_search
+filter the claim history list to any record where settlement code is 275,Settlement,claim_history_search
+retrieve claims across this member's history tagged with pharmacy settlement code 633,Settlement,claim_history_search
+which claims in this member's history show settlement response code 088,Settlement,claim_history_search
+display fills in this member's history filtered by settlement code 560,Settlement,claim_history_search
+list claims in the member's history where the pharmacy response settlement code is 721,Settlement,claim_history_search
+search this member's claim history for any fills with settlement code 015 returned from the pharmacy,Settlement,claim_history_search
+how many claims in this member's history have a non-standard settlement code like 840,Settlement,claim_history_search
+pull up claims in the history where pharmacy settlement code 403 was sent back,Settlement,claim_history_search
+"across this member's full claim history, filter to all claims where the settlement response code is 225",Settlement,claim_history_search
+Show me all retail pharmacy claims for this member,PharmType,claim_history_search
+Filter the claim history to only mail-order fills,PharmType,claim_history_search
+How many specialty pharmacy claims has this member had over the past year?,PharmType,claim_history_search
+Pull up everything dispensed through a long-term care channel for member 987654321,PharmType,claim_history_search
+Which of this member's prescriptions were filled via home delivery?,PharmType,claim_history_search
+Compounding pharmacy claims â€” member 112233445566000,PharmType,claim_history_search
+I need to see all specialty channel fills in the claim history for this patient,PharmType,claim_history_search
+Break down this member's fills by pharmacy type across all their claims,PharmType,claim_history_search
+Retail vs mail-order split for member's prescription history â€” can you filter that?,PharmType,claim_history_search
+"LTC channel claims only please, member ID 334455667788000",PharmType,claim_history_search
+Are there any compound medication claims in the history for this member?,PharmType,claim_history_search
+"Pharm type = specialty, show all matching claims from claim history",PharmType,claim_history_search
+I want to isolate just the mail order fills this member has had since January,PharmType,claim_history_search
+Does this member have any home delivery claims on file?,PharmType,claim_history_search
+Filter claim history: pharmacy channel = retail,PharmType,claim_history_search
+Give me a count of how many specialty pharmacy fills member 556677889900000 has received this plan year,PharmType,claim_history_search
+"What pharmacy types appear in this member's claims â€” retail, mail, specialty, anything else?",PharmType,claim_history_search
+Long-term care fills â€” search the claim history for this nursing home patient,PharmType,claim_history_search
+"Member's compounding claims history, any MIC breakdowns available?",PharmType,claim_history_search
+"I need all non-retail fills â€” mail-order, specialty, LTC â€” listed for this member",PharmType,claim_history_search
+Show all claims under plan code STD2 for this member,Plan,claim_history_search
+Filter member claim history by plan FRM1,Plan,claim_history_search
+Which plan code was active for most of this member's fills last year?,Plan,claim_history_search
+I need claims billed under HMO1 for member 778899001122000,Plan,claim_history_search
+How many fills did this member have under the PPO3 plan across all claim history?,Plan,claim_history_search
+"Plan code = STD2, pull all matching claims from history",Plan,claim_history_search
+Did this member's plan change mid-year? Show me claims by plan across the history,Plan,claim_history_search
+Claims billed to FRM1 vs HMO1 â€” can you split the history by insurance plan?,Plan,claim_history_search
+Search claim history for all fills that processed under plan code EPO2,Plan,claim_history_search
+What plan were the majority of this member's prescriptions submitted under?,Plan,claim_history_search
+Member 223344556677000 â€” filter all claims to those under plan GRP4,Plan,claim_history_search
+I want to see every claim this member had while on plan STD2,Plan,claim_history_search
+How many different insurance plan codes appear across this member's claim history?,Plan,claim_history_search
+Claims under HMO1 for the last six months â€” member history search,Plan,claim_history_search
+"Insurance plan FRM1 claims, member 445566778899000, full history",Plan,claim_history_search
+Search for all prescriptions processed under plan code MED3 in this member's history,Plan,claim_history_search
+Can I see the claims that were adjudicated under plan PPO1 for this patient?,Plan,claim_history_search
+Group this member's claim history by plan code and show counts,Plan,claim_history_search
+Plan STD2 fills â€” how many has member 667788990011000 had in this benefit year?,Plan,claim_history_search
+"Filter claim history: insurance plan = HMO1, member ID 889900112233000",Plan,claim_history_search
+Show all claims filled at CVS #00610 for this member,Pharmacy,claim_history_search
+Which pharmacies has this member used across their claim history?,Pharmacy,claim_history_search
+Filter claim history to prescriptions dispensed at Walgreens,Pharmacy,claim_history_search
+How many fills came from Rite Aid in this member's history?,Pharmacy,claim_history_search
+Find all claims for member 112233445566000 that were processed at CVS store #01234,Pharmacy,claim_history_search
+Search the claim history for fills at any Walmart pharmacy location,Pharmacy,claim_history_search
+NCPDP 1234567 â€” how many claims are in this member's history from that store?,Pharmacy,claim_history_search
+"Pharmacy = CVS #00610, pull all matching history records",Pharmacy,claim_history_search
+I need to know which pharmacy dispensed the most claims for this patient,Pharmacy,claim_history_search
+Has this member ever filled at a specialty pharmacy called BioPlus? Check history.,Pharmacy,claim_history_search
+CVS #00610 vs CVS #02345 â€” compare claim counts for member 334455667788000,Pharmacy,claim_history_search
+"Claims dispensed by Costco pharmacy, member history search",Pharmacy,claim_history_search
+Which CVS store location has processed the most fills for this member?,Pharmacy,claim_history_search
+Search claim history: pharmacy name contains 'Express Scripts',Pharmacy,claim_history_search
+Show me all the stores where member 556677889900000 has picked up prescriptions,Pharmacy,claim_history_search
+Filter by dispensing pharmacy â€” I want only Kinney Drugs claims from the history,Pharmacy,claim_history_search
+Member 778899001122000 â€” find all claims processed at pharmacy NCPDP 9876543,Pharmacy,claim_history_search
+Any claims from an out-of-network pharmacy in this member's history?,Pharmacy,claim_history_search
+"CVS #00610, how many total fills for member this year?",Pharmacy,claim_history_search
+I want to isolate only Caremark mail service pharmacy claims in the history,Pharmacy,claim_history_search
+How many claims in this member's history were prescribed by Dr. Smith?,Prescriber,claim_history_search
+Filter claim history by prescriber NPI 1234567890,Prescriber,claim_history_search
+Show all prescriptions written by Dr. Johnson for member 112233445566000,Prescriber,claim_history_search
+Which doctors have prescribed medications for this member according to claim history?,Prescriber,claim_history_search
+NPI 9876543210 â€” how many fills in the member's claim history trace back to that provider?,Prescriber,claim_history_search
+Search claim history: prescriber last name = Williams,Prescriber,claim_history_search
+Who is the most frequent prescriber in this member's claim history?,Prescriber,claim_history_search
+Find all fills for member 334455667788000 ordered by Dr. Patel,Prescriber,claim_history_search
+"Prescriber NPI 1122334455, claims for this member from that provider",Prescriber,claim_history_search
+I need to see the full list of claims written by Dr. Martinez for this patient,Prescriber,claim_history_search
+Claims from a cardiologist named Dr. Lee across member 556677889900000's history,Prescriber,claim_history_search
+How many unique prescribers appear in this member's claim history this year?,Prescriber,claim_history_search
+Filter by ordering physician â€” show only claims from NPI 3344556677 in history,Prescriber,claim_history_search
+Any prescriptions written by a provider named Roberts in this member's history?,Prescriber,claim_history_search
+Member 778899001122000 â€” group claim history by prescriber and give counts,Prescriber,claim_history_search
+How many of this member's fills came from out-of-state prescribers?,Prescriber,claim_history_search
+"Prescriber name = Dr. Huang, filter all matching records from member claim history",Prescriber,claim_history_search
+"Search history for all claims ordered by Dr. Thompson, member 889900112233000",Prescriber,claim_history_search
+Which prescriber wrote the most Rx claims for this member in the last 12 months?,Prescriber,claim_history_search
+NPI 5566778899 â€” retrieve all claims tied to that provider across member's full history,Prescriber,claim_history_search
+What did this member pay in copays for Lipitor across all their claims?,Pricing,claim_history_search
+Search claim history for the cheapest fills of metformin for member 112233445566000,Pricing,claim_history_search
+How has the patient pay amount for Humira changed across multiple fills in the history?,Pricing,claim_history_search
+Total out-of-pocket cost for atorvastatin across all claims for this member,Pricing,claim_history_search
+Filter claim history: copay for Eliquis > $50 across all fills,Pricing,claim_history_search
+Ingredient cost trend for Ozempic â€” show across all dispensed claims for this patient,Pricing,claim_history_search
+What was the member's average copay for insulin across all their fills?,Pricing,claim_history_search
+Claims history pricing breakdown for Jardiance â€” all fills member 334455667788000,Pricing,claim_history_search
+I need to see the patient pay for every lisinopril fill this member has had,Pricing,claim_history_search
+Which drug in this member's claim history has cost them the most in total copays?,Pricing,claim_history_search
+MEDD pricing for Revlimid across member 556677889900000's full claim history,Pricing,claim_history_search
+Show the dispensing fee trend for amoxicillin fills across this member's claims,Pricing,claim_history_search
+What has the plan paid vs member paid for Trulicity across all claims in history?,Pricing,claim_history_search
+"Cost history for Keytruda â€” member 778899001122000, filter by drug pricing across fills",Pricing,claim_history_search
+Total ingredient cost billed for Xarelto across all claim history records,Pricing,claim_history_search
+Has this member's copay for Lantus been consistent or changed over their fill history?,Pricing,claim_history_search
+Sum of patient pay across all methotrexate claims for member 889900112233000,Pricing,claim_history_search
+Claims where member paid $0 copay for brand drugs â€” search across history,Pricing,claim_history_search
+What is the highest single copay this member has ever paid in their claims history?,Pricing,claim_history_search
+Pricing trend for Biktarvy across all fills â€” member claim history search,Pricing,claim_history_search
+list claims in paid status for this member,Status,claim_history_search
+which fills are currently showing a rejected adjudication status,Status,claim_history_search
+I need to see all the voided claims in this member's history,Status,claim_history_search
+pull up every claim that came back reversed across the full claim history,Status,claim_history_search
+show me pending claims only â€” nothing paid or rejected,Status,claim_history_search
+filter claim history to adjudication status = P for paid,Status,claim_history_search
+any claims sitting in a suspended state for this member?,Status,claim_history_search
+status filter across all claims â€” show me just the rejected ones,Status,claim_history_search
+Paid? Rejected? Give me a breakdown of claim statuses for this member.,Status,claim_history_search
+how many of this member's claims ended up in reversal status versus paid status,Status,claim_history_search
+retrieve all claims that were not successfully adjudicated â€” show me the non-paid ones,Status,claim_history_search
+filter by claim status code R across the member's entire prescription history,Status,claim_history_search
+were there any GLP-1 claims with a rejected status in the history,Status,claim_history_search
+show all claims marked as voided or reversed in the last year for this member,Status,claim_history_search
+list fills currently in submitted but not yet adjudicated status,Status,claim_history_search
+I want to see which claims are in a reprocessed status across the member's history,Status,claim_history_search
+display claims in closed status for member 44781239,Status,claim_history_search
+which claims have an overridden-and-paid status in the history,Status,claim_history_search
+show claims that are in a captured status across all fills,Status,claim_history_search
+group the member's entire claim history by adjudication status and show counts for each,Status,claim_history_search
+show claims with NCPDP reject code 79 across the member's history,RejectCode,claim_history_search
+filter claim history by rejection code 75,RejectCode,claim_history_search
+which fills came back with reject code MR in the member's claim list,RejectCode,claim_history_search
+retrieve all claims that hit reject code DG across this member's history,RejectCode,claim_history_search
+list claims rejected under NCPDP code 70 for this member,RejectCode,claim_history_search
+I need to see every claim that came back with a 76 reject,RejectCode,claim_history_search
+show me claims in the history flagged with reject code ET,RejectCode,claim_history_search
+reject code? Filter all claims that got NCPDP code 88.,RejectCode,claim_history_search
+how many claims in this member's history returned reject code 65,RejectCode,claim_history_search
+search claim history by NCPDP rejection response code NN,RejectCode,claim_history_search
+pull up all fills that returned reject code M1 in the adjudication response,RejectCode,claim_history_search
+any claims carrying reject code 7D in the member's prescription history,RejectCode,claim_history_search
+which prescriptions received NCPDP code QE as a rejection reason,RejectCode,claim_history_search
+tell me about all claims that got reject code PA across the claim list,RejectCode,claim_history_search
+filter history â€” show only claims where the adjudication response included rejection code 78,RejectCode,claim_history_search
+were there any claims in the history that came back with a 3G reject code,RejectCode,claim_history_search
+display fills across the full history that were turned away with reject FQ,RejectCode,claim_history_search
+break down the member's rejected claims by NCPDP reject code,RejectCode,claim_history_search
+how often does reject code RE appear in this member's claim history,RejectCode,claim_history_search
+show every instance in the claim history where NCPDP rejection code 8C was returned,RejectCode,claim_history_search
+when was ATORVASTATIN last dispensed for this member,DrugLast,claim_history_search
+what is the most recent fill date for METFORMIN in this member's history,DrugLast,claim_history_search
+show me the last time LISINOPRIL was picked up by this member,DrugLast,claim_history_search
+fetch the latest dispensing record for ELIQUIS,DrugLast,claim_history_search
+I need to know when GABAPENTIN was most recently filled for this member,DrugLast,claim_history_search
+pull up the most recent HUMIRA claim date for this member,DrugLast,claim_history_search
+how long ago was ROSUVASTATIN last filled â€” show the most recent date,DrugLast,claim_history_search
+last fill? OMEPRAZOLE for member 44781239,DrugLast,claim_history_search
+retrieve the last dispensed date for SERTRALINE from the member's claim history,DrugLast,claim_history_search
+give me the last date LOSARTAN was dispensed to this member,DrugLast,claim_history_search
+when did this member most recently receive their AMLODIPINE prescription,DrugLast,claim_history_search
+show the most recent service date across all INSULIN claims for this member,DrugLast,claim_history_search
+find the last claim in the history where DULOXETINE was dispensed,DrugLast,claim_history_search
+what was the last fill date for any GLP-1 medication for this member,DrugLast,claim_history_search
+tell me the most recent PANTOPRAZOLE dispense date across the claim history,DrugLast,claim_history_search
+last dispensing date for CLOPIDOGREL â€” searching across all fills,DrugLast,claim_history_search
+has ADALIMUMAB been dispensed recently? show me the most recent claim date,DrugLast,claim_history_search
+retrieve the last fill date for TAMSULOSIN in the member prescription history,DrugLast,claim_history_search
+most recent dispense date for HYDROCHLOROTHIAZIDE across the member's claim records,DrugLast,claim_history_search
+when was ESCITALOPRAM last filled? look through the entire history and give me the latest date,DrugLast,claim_history_search
+give me all claims for this member in January,Month,claim_history_search
+show fills from February for this member,Month,claim_history_search
+retrieve March claims across the full history,Month,claim_history_search
+list every prescription dispensed during the month of April,Month,claim_history_search
+I need all fills from May â€” filter the claim history to that month,Month,claim_history_search
+pull up claim records from June only,Month,claim_history_search
+what medications did the member receive in July,Month,claim_history_search
+show me everything processed in August for this member,Month,claim_history_search
+filter claim history to September fills,Month,claim_history_search
+get all October claims from the member's history,Month,claim_history_search
+list fills dispensed during November for member 44781239,Month,claim_history_search
+retrieve every December claim on file for this member,Month,claim_history_search
+which prescriptions were filled during the month of February this year,Month,claim_history_search
+claims in July â€” show the full list for this member,Month,claim_history_search
+narrow the history results to claims submitted or adjudicated in October,Month,claim_history_search
+I want to see the drug fills from last March in the claim history,Month,claim_history_search
+show me all claims adjudicated in the month of September 2024,Month,claim_history_search
+display the full list of claims that hit during December 2024,Month,claim_history_search
+which claims were processed in January 2025 for this member,Month,claim_history_search
+give me the complete list of drugs the member received in November â€” filter by that month only,Month,claim_history_search
+look up claim 201533994612000 in this member's history,ClaimNum,claim_history_search
+find claim number 243122443413000 in the claim history,ClaimNum,claim_history_search
+retrieve claim 392081547623918 from the member's records,ClaimNum,claim_history_search
+claim 853746291035824 â€” pull it up from the history,ClaimNum,claim_history_search
+I need to find claim number 480517832091643 in this member's claim list,ClaimNum,claim_history_search
+search the history for claim 710924356178502,ClaimNum,claim_history_search
+show claim 567832410298745 from the member's prescription history,ClaimNum,claim_history_search
+can you locate claim number 938271456082319 in the history records,ClaimNum,claim_history_search
+claim 641285739401562 â€” show me that entry from the claim list,ClaimNum,claim_history_search
+tell me about claim 205638914720483 in this member's history,ClaimNum,claim_history_search
+879143265098712 â€” find that claim in the member's history,ClaimNum,claim_history_search
+look up claim number 412067593841205 and tell me about it,ClaimNum,claim_history_search
+fetch claim 201503823714118 from the member's prescription records,ClaimNum,claim_history_search
+find claim 230381673488000 in the history and show its status,ClaimNum,claim_history_search
+search history for claim number 523781094265130,ClaimNum,claim_history_search
+display claim 847216305492871 from the member's claim list,ClaimNum,claim_history_search
+I want to locate claim 309854176230948 in the claim history records,ClaimNum,claim_history_search
+show me claim 211263773300000 â€” find it in the history,ClaimNum,claim_history_search
+pull claim number 985412370648215 from the member's fills,ClaimNum,claim_history_search
+search the member's claim history and locate claim 220992183436835,ClaimNum,claim_history_search
+Show me all claims for member 100234567 that have NDC 00093-0058-01,NDC,claim_history_search
+Filter this member's claim history by NDC 59762-0100-01 â€” how many fills came back?,NDC,claim_history_search
+"NDC 00228-2720-50, pull all matching claims for this member",NDC,claim_history_search
+I need to see every claim tied to national drug code 00006-0749-31 across the member's history,NDC,claim_history_search
+Search the full claim history for NDC 16714-0288-01 â€” member ID M987654321,NDC,claim_history_search
+Can you pull all fills where the NDC was 00071-0155-23 for this member?,NDC,claim_history_search
+00378-2160-05 NDC â€” list every claim that matched this code in the member's file,NDC,claim_history_search
+Look through member 200456789's history and find any claim with national drug code 68462-0168-01,NDC,claim_history_search
+How many times was NDC 00172-4061-70 dispensed across all claims for this member?,NDC,claim_history_search
+"Retrieve member claim records filtered to NDC 54868-5928-00, going back 24 months",NDC,claim_history_search
+I want the full list of adjudicated claims where NDC equals 00003-0895-20 for member 300112233,NDC,claim_history_search
+Which of this member's claims involved NDC 50458-0220-01? Pull everything.,NDC,claim_history_search
+Cross-reference this member's PDE records against NDC 00169-4175-11,NDC,claim_history_search
+Gimme all claims where the NDC was 00085-0019-01 for member number 400223344,NDC,claim_history_search
+Run an NDC filter â€” 45963-0483-11 â€” and show me everything in the member's history,NDC,claim_history_search
+Show claim history filtered by NDC 00069-0150-41 over the last plan year,NDC,claim_history_search
+"Member history search: NDC 72606-0130-01, all dates, all pharmacies",NDC,claim_history_search
+What claims in the member's history match NDC 00013-0010-94? Need a count and dates.,NDC,claim_history_search
+Filter member 500334455 claims by NDC â€” looking for 00781-1888-31 specifically,NDC,claim_history_search
+I have an NDC: 43598-0290-05. Can you find all the claims for this member that used it?,NDC,claim_history_search
+Show me all claims for this member that were filled with a Teva manufactured drug,Manufacturer,claim_history_search
+Filter the member's claim history to Mylan products only,Manufacturer,claim_history_search
+How many Pfizer fills does member 100234567 have in their history?,Manufacturer,claim_history_search
+Pull all Aurobindo claims from this member's pharmacy file,Manufacturer,claim_history_search
+I need to see every claim in the member's history where the manufacturer was Sandoz,Manufacturer,claim_history_search
+Search member claim history by manufacturer name â€” specifically Lupin Pharmaceuticals,Manufacturer,claim_history_search
+Manufacturer filter: Amneal â€” give me all matching claims for member 200456789,Manufacturer,claim_history_search
+Can you look through the claims history and find anything manufactured by Sun Pharma?,Manufacturer,claim_history_search
+I want to know every time this member got a drug made by Torrent Pharmaceuticals,Manufacturer,claim_history_search
+List all claims in member 300112233's history attributed to Glenmark as the manufacturer,Manufacturer,claim_history_search
+Cross-check this member's full claim history against Hikma manufactured products,Manufacturer,claim_history_search
+Zydus Pharmaceuticals â€” filter member claim history and pull everything with that manufacturer,Manufacturer,claim_history_search
+"All Cipla fills across the member's claim history, please",Manufacturer,claim_history_search
+Run a manufacturer filter on member 400223344's history â€” we're looking at AstraZeneca specifically,Manufacturer,claim_history_search
+How many claims in this member's file have Apotex listed as the drug manufacturer?,Manufacturer,claim_history_search
+Search the full claim history for any Merck-manufactured drugs dispensed to this member,Manufacturer,claim_history_search
+I need a manufacturer breakdown â€” starting with Novartis â€” from this member's claim records,Manufacturer,claim_history_search
+Identify all West-Ward manufactured claims in the member's history,Manufacturer,claim_history_search
+Any Bristol-Myers Squibb claims showing in the member's PBM history? Filter by that manufacturer.,Manufacturer,claim_history_search
+Filter member 500334455's claim history to only Breckenridge Pharmaceutical products,Manufacturer,claim_history_search
+Show only generic drug fills in this member's claim history,Generic,claim_history_search
+Filter member 100234567's claims to AB-rated generics only,Generic,claim_history_search
+I want to see every non-branded fill across the member's entire claim history,Generic,claim_history_search
+Pull all claims from member history where the drug was dispensed as a generic,Generic,claim_history_search
+How many generic substitutions did this member have in the last plan year?,Generic,claim_history_search
+Give me a list of all DAW code 1 overrides or generic claims for member 200456789,Generic,claim_history_search
+"Search the claim history â€” I only want the multi-source generics, not brand",Generic,claim_history_search
+Which of this member's claims were filled with a therapeutically equivalent generic?,Generic,claim_history_search
+Filter by drug type: generic â€” pull all records for member 300112233,Generic,claim_history_search
+I need the full list of GPI-matched generic fills in the member's PBM history,Generic,claim_history_search
+Narrow down the claim history to only non-proprietary drug fills for this member,Generic,claim_history_search
+How many times did this member fill a generic versus a brand in the past two years?,Generic,claim_history_search
+Run a claim history search for all tier-1 generic utilization for member 400223344,Generic,claim_history_search
+Show all claims in the member's file flagged as generic drug fills,Generic,claim_history_search
+I'm looking for every instance this member received an off-patent generic drug â€” pull the full list,Generic,claim_history_search
+Generics only â€” filter member 500334455's claim history accordingly,Generic,claim_history_search
+Which claims in the member's history had a DAW code indicating a generic was dispensed?,Generic,claim_history_search
+List all ANDA-approved generic fills from the full claim history for this member,Generic,claim_history_search
+What's the count of generic drug claims for this member over the last 12 months?,Generic,claim_history_search
+"Pull claim history, filter to generic only â€” I want NDC, date of service, and cost share for each",Generic,claim_history_search
+Show all brand name drug claims in this member's history,Brand,claim_history_search
+Filter member 100234567's claim history to proprietary brand fills only,Brand,claim_history_search
+Pull every innovator brand claim from this member's PBM file,Brand,claim_history_search
+"I need to see all trade name drug fills in the member's claim history, no generics",Brand,claim_history_search
+How many brand-only fills does member 200456789 have on record?,Brand,claim_history_search
+Give me all DAW 1 or DAW 2 claims in the member's history where the brand was dispensed,Brand,claim_history_search
+Narrow the claim history search to NDA-approved brand drugs for member 300112233,Brand,claim_history_search
+Which of this member's claims were for a brand drug that had a generic available?,Brand,claim_history_search
+List all BPG-tier brand fills from the member's full claim history,Brand,claim_history_search
+"Search member history for all non-generic, single-source brand medications dispensed",Brand,claim_history_search
+I want a count of specialty brand drug fills in member 400223344's claim records,Brand,claim_history_search
+Show claims where the member received a brand drug despite a generic equivalent existing on formulary,Brand,claim_history_search
+Filter the claim history to brand-only utilization â€” pull all relevant records for this member,Brand,claim_history_search
+Which brand name drugs were dispensed to this member over the last 24 months? Pull from history.,Brand,claim_history_search
+All tier-2 and tier-3 brand claims for member 500334455 from the full history,Brand,claim_history_search
+Run a brand drug filter across the member's PBM claim history,Brand,claim_history_search
+How many of this member's claims involved a formulary brand product? Show me the list.,Brand,claim_history_search
+Pull all claims coded as brand dispensed (not substituted) in the member's history,Brand,claim_history_search
+I need to identify every branded biologic fill in the member's claim history,Brand,claim_history_search
+"Show member 200456789 all brand fills â€” include cost share, date of service, and prescriber NPI",Brand,claim_history_search
+Which claims did this member have between January 1 and March 31 that applied to their deductible?,date_range_claims,claim_history_search
+Pull all member claims from Q1 of the current plan year and show OOP accumulation impact,date_range_claims,claim_history_search
+Show me member 100234567's claim history from 01/01/2025 through 06/30/2025,date_range_claims,claim_history_search
+I need to review all claims for this member between February and April to analyze LICS accumulation,date_range_claims,claim_history_search
+Date range filter: 03/15/2024 to 09/15/2024 â€” pull all claims for member 200456789,date_range_claims,claim_history_search
+What claims did this member have in the last 90 days that counted toward their OOP max?,date_range_claims,claim_history_search
+Show a cross-claim analysis of all fills from July through December 2024 for this member,date_range_claims,claim_history_search
+I'm investigating deductible accumulation â€” can you pull all claims between 01/01/2024 and 03/31/2024?,date_range_claims,claim_history_search
+Member 300112233: retrieve every claim processed in the 12-month period ending 12/31/2024,date_range_claims,claim_history_search
+Filter the claim history from the past plan year â€” specifically anything that hit the MEDD or TrOOP,date_range_claims,claim_history_search
+List all claims for this member filed between April 2025 and the current date,date_range_claims,claim_history_search
+I need a window of claims from 06/01/2024 through 08/31/2024 to check for coverage gap entry,date_range_claims,claim_history_search
+Pull member 400223344's entire claim history for 2024 â€” I want to trace TrOOP accumulation quarter by quarter,date_range_claims,claim_history_search
+Show claims in a date window from the start of benefit year through today for OOP reconciliation,date_range_claims,claim_history_search
+Which of this member's claims fell within the creditable coverage period of 01/01/2025â€“12/31/2025?,date_range_claims,claim_history_search
+Date range: last six months. Pull all claims for member 500334455 that affected their accumulators.,date_range_claims,claim_history_search
+I'm doing a PDE reconciliation â€” need all claims between 01/01/2024 and 06/30/2024 for this member,date_range_claims,claim_history_search
+Search member history for claims dated after 09/01/2024 that pushed them past the OOPM threshold,date_range_claims,claim_history_search
+What's the full list of adjudicated claims for member 200456789 between Q3 and Q4 last year?,date_range_claims,claim_history_search
+Run a claim history search for date of service between 02/01/2025 and 05/31/2025 â€” I need to check deductible and LICS phase transitions,date_range_claims,claim_history_search
+Hello there!,greeting,general
+Hi!,greeting,general
+Good morning,greeting,general
+Good afternoon,greeting,general
+Good evening,greeting,general
+Hey there,greeting,general
+Howdy!,greeting,general
+Greetings!,greeting,general
+"Hey, how's it going?",greeting,general
+"Hi, good to be here",greeting,general
+Hello! Nice to meet you.,greeting,general
+Good day!,greeting,general
+Hey hey hey,greeting,general
+"Hi there, hope you're well",greeting,general
+Yo!,greeting,general
+Hello hello,greeting,general
+"Good morning, hope the day is going well",greeting,general
+Salutations!,greeting,general
+Hiya!,greeting,general
+"Hey, just dropping in to say hi",greeting,general
+What can I ask this system?,help,general
+How do I submit a claim correctly?,help,general
+What steps should I follow to avoid claim rejection?,help,general
+Can you explain how to use this tool?,help,general
+What are the common reasons my claims get denied?,help,general
+How do I file a pharmacy claim without errors?,help,general
+What types of questions can I ask here?,help,general
+I need help understanding how to use this assistant,help,general
+Walk me through the claim submission process,help,general
+What information do I need to have ready before filing a claim?,help,general
+Help me understand how this system works,help,general
+What can you help me with?,help,general
+How do I avoid getting my claim rejected?,help,general
+Is there a guide for submitting claims through this tool?,help,general
+Tell me about the capabilities of this system,help,general
+What are the best practices for submitting a clean claim?,help,general
+I keep making mistakes when filing. Can you guide me step by step?,help,general
+How do I get started using this assistant?,help,general
+What topics does this tool cover?,help,general
+I'm new here â€” what should I know about filing claims correctly?,help,general
+What is the weather like in New York today?,out_of_scope,general
+How do I make spaghetti carbonara?,out_of_scope,general
+Who won the Super Bowl last year?,out_of_scope,general
+What is 347 multiplied by 89?,out_of_scope,general
+Tell me about the French Revolution,out_of_scope,general
+What are the best hiking trails in Colorado?,out_of_scope,general
+asdjklasd fjklasjdf lkajsdf,out_of_scope,general
+What is the capital of Australia?,out_of_scope,general
+Can you recommend a good Netflix show?,out_of_scope,general
+How do I train for a marathon?,out_of_scope,general
+Write me a poem about autumn leaves,out_of_scope,general
+What is the square root of 144?,out_of_scope,general
+blorp zizzle flonk wonk,out_of_scope,general
+What time is it in Tokyo right now?,out_of_scope,general
+Who painted the Mona Lisa?,out_of_scope,general
+What is the best way to invest in stocks?,out_of_scope,general
+How long does it take to fly from LA to London?,out_of_scope,general
+Give me a chocolate chip cookie recipe,out_of_scope,general
+What are the rules of cricket?,out_of_scope,general
+Tell me a joke,out_of_scope,general
